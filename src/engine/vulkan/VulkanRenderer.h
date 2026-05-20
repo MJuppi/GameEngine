@@ -1,0 +1,102 @@
+#pragma once
+
+// =============================================================================
+// VulkanRenderer.h — Frame loop: sync, command buffers, draw calls
+// =============================================================================
+// Owns everything needed to render one frame: acquire swapchain image, record
+// commands, submit to GPU, present. Also holds mesh buffers and descriptor sets.
+// =============================================================================
+
+#include <vulkan/vulkan.h>
+#include <glm/glm.hpp>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "engine/mesh/Material.h"
+#include "engine/mesh/MeshData.h"
+
+struct GLFWwindow;
+
+namespace ge {
+
+class Window;
+class VulkanContext;
+class VulkanDevice;
+class VulkanSwapchain;
+class VulkanPipeline;
+class VulkanBuffer;
+
+/// Scene uniform — must match GLSL SceneUbo in basic.vert / basic.frag.
+struct SceneUbo {
+    alignas(16) glm::mat4 model;
+    alignas(16) glm::mat4 viewProj;
+    alignas(16) glm::vec4 lightDir;
+};
+
+class VulkanRenderer {
+public:
+    VulkanRenderer(Window& window, MeshData mesh);
+    ~VulkanRenderer();
+
+    VulkanRenderer(const VulkanRenderer&) = delete;
+    VulkanRenderer& operator=(const VulkanRenderer&) = delete;
+
+    void drawFrame();
+    void onFramebufferResize();
+
+private:
+    void initVulkan();
+    void createCommandPool();
+    void createCommandBuffers();
+    void createSyncObjects();
+    void destroySyncObjects();
+    void createMeshBuffers();
+    void createSceneBuffers();
+    void createMaterialBuffer();
+    void createDescriptorPool();
+    void createDescriptorSets();
+    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+
+    void recreateSwapchain();
+    void cleanupSwapchain();
+
+    Window& m_window;
+    MeshData m_mesh;
+    std::string m_shaderDir;
+
+    std::unique_ptr<VulkanContext> m_context;
+    std::unique_ptr<VulkanDevice> m_device;
+    std::unique_ptr<VulkanSwapchain> m_swapchain;
+    std::unique_ptr<VulkanPipeline> m_pipeline;
+
+    VkCommandPool m_commandPool = VK_NULL_HANDLE;
+    std::vector<VkCommandBuffer> m_commandBuffers;
+
+    std::unique_ptr<VulkanBuffer> m_vertexBuffer;
+    std::unique_ptr<VulkanBuffer> m_indexBuffer;
+    uint32_t m_indexCount = 0;
+
+    std::vector<std::unique_ptr<VulkanBuffer>> m_sceneBuffers;
+    std::vector<void*> m_sceneBuffersMapped;
+
+    std::unique_ptr<VulkanBuffer> m_materialBuffer;
+    MaterialBufferObject m_materialGpu{};
+
+    VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
+    std::vector<VkDescriptorSet> m_descriptorSets;
+
+    // Per in-flight frame: acquire + fence. Per swapchain image: present semaphore.
+    std::vector<VkSemaphore> m_imageAvailableSemaphores;
+    std::vector<VkSemaphore> m_renderFinishedSemaphores;
+    std::vector<VkFence> m_inFlightFences;
+    std::vector<VkFence> m_imagesInFlight;
+
+    static constexpr int kMaxFramesInFlight = 2;
+    size_t m_currentFrame = 0;
+    bool m_framebufferResized = false;
+    float m_rotation = 0.0f;
+    float m_meshRadius = 1.0f;
+};
+
+} // namespace ge
