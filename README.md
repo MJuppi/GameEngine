@@ -38,7 +38,9 @@ src/
     Engine.*               # Top-level loop: window + renderer
     Window.*               # GLFW wrapper
     mesh/
+      Material.*            # Materials
       MeshData.*            # CPU mesh + unit cube + normalize-to-fit
+      MtlLoader.*           # Material loader
       ObjMeshLoader.*       # Minimal Wavefront OBJ parser
     math/Types.h           # Vertex layout (position + color)
     vulkan/
