@@ -65,7 +65,7 @@ shaders/
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build
+cmake --build build -j 8
 ```
 
 Run from the project root (so shader paths resolve if you run without installing):

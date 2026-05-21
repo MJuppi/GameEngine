@@ -417,7 +417,7 @@ void VulkanRenderer::drawFrame() {
     }
 
     // Camera fits the mesh bounding sphere (no vertex scaling — proportions stay true).
-    m_rotation += 0.01f;
+    m_rotation += 0.0f;
     const float r = m_meshRadius;
     const float aspect =
         m_swapchain->extent().width / static_cast<float>(m_swapchain->extent().height);
