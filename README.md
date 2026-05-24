@@ -63,6 +63,19 @@ shaders/
 
 ## Build
 
+Change accordingly based on your own install locations, this is my setup.
+
+First time building:
+```bash
+$env:VULKAN_SDK = "C:\VulkanSDK\1.4.350.0"
+$env:PATH = "$env:VULKAN_SDK\Bin;C:\msys64\ucrt64\bin;$env:PATH"
+cmake -B build -G "MinGW Makefiles" `
+  -DCMAKE_BUILD_TYPE=Debug `
+  -DCMAKE_CXX_COMPILER="C:/msys64/ucrt64/bin/g++.exe" `
+  -DCMAKE_MAKE_PROGRAM="C:/msys64/ucrt64/bin/mingw32-make.exe"
+```
+
+after first build:
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j 8
