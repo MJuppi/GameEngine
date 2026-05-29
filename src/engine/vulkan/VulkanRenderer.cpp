@@ -25,6 +25,7 @@ namespace ge {
 namespace {
 
 void framebufferResizeCallback(GLFWwindow* window, int /*width*/, int /*height*/) {
+    // GLFW framebuffer resize callback: notify the renderer to recreate swapchain.
     auto* renderer = reinterpret_cast<VulkanRenderer*>(glfwGetWindowUserPointer(window));
     if (renderer) {
         renderer->onFramebufferResize();
@@ -38,6 +39,7 @@ VulkanRenderer::VulkanRenderer(Window& window, MeshData mesh)
     , m_mesh(std::move(mesh))
     , m_shaderDir(SHADER_DIR)
 {
+    // Compute mesh bounds, register resize callback, and initialize Vulkan resources.
     const MeshBounds bounds = computeMeshBounds(m_mesh);
     m_meshRadius = bounds.radius;
     glfwSetWindowUserPointer(m_window.handle(), this);
@@ -46,6 +48,7 @@ VulkanRenderer::VulkanRenderer(Window& window, MeshData mesh)
 }
 
 VulkanRenderer::~VulkanRenderer() {
+    // Ensure GPU is idle and clean up all Vulkan resources and buffers.
     if (m_device) {
         vkDeviceWaitIdle(m_device->logical());
     }
@@ -94,6 +97,7 @@ void VulkanRenderer::initVulkan() {
     const bool enableValidation = false;
 #endif
 
+    // Create Vulkan context, device, swapchain, pipeline and all render resources.
     m_context = std::make_unique<VulkanContext>(enableValidation);
     m_context->init(m_window.handle());
 
@@ -122,12 +126,14 @@ void VulkanRenderer::createCommandPool() {
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     poolInfo.queueFamilyIndex = m_device->queueFamilies().graphics.value();
 
+    // Allocate a command pool for transient command buffers used for transfers and drawing.
     if (vkCreateCommandPool(m_device->logical(), &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create command pool");
     }
 }
 
 void VulkanRenderer::createMeshBuffers() {
+    // Upload vertex and index data to GPU buffers using staging buffers.
     if (m_mesh.vertices.empty() || m_mesh.indices.empty()) {
         throw std::runtime_error("Mesh has no vertices or indices");
     }

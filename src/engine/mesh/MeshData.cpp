@@ -9,6 +9,7 @@ namespace ge {
 namespace {
 
 Vertex makeVertex(float x, float y, float z, float nx, float ny, float nz, uint32_t materialIndex) {
+    // Helper to create a Vertex value with position, normal and material index.
     Vertex v{};
     v.position[0] = x;
     v.position[1] = y;
@@ -23,6 +24,7 @@ Vertex makeVertex(float x, float y, float z, float nx, float ny, float nz, uint3
 } // namespace
 
 MeshData makeUnitCubeMesh() {
+    // Produce a simple unit cube mesh centered at origin with one default material.
     MeshData mesh;
     mesh.materials = {makeDefaultMaterial("default")};
 
@@ -50,6 +52,7 @@ MeshData makeUnitCubeMesh() {
 }
 
 void centerMesh(MeshData& mesh) {
+    // Translate mesh so its bounding box is centered at the origin.
     if (mesh.vertices.empty()) {
         return;
     }
@@ -82,6 +85,7 @@ void centerMesh(MeshData& mesh) {
 }
 
 void orientMeshYUpToZUp(MeshData& mesh) {
+    // Convert vertex coordinates/normals from Y-up convention to Z-up used by renderer.
     for (Vertex& v : mesh.vertices) {
         const float x = v.position[0];
         const float y = v.position[1];
@@ -100,12 +104,14 @@ void orientMeshYUpToZUp(MeshData& mesh) {
 }
 
 void flipMeshWinding(MeshData& mesh) {
+    // Flip triangle winding order for each triangle (swap second and third index).
     for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
         std::swap(mesh.indices[i + 1], mesh.indices[i + 2]);
     }
 }
 
 MeshBounds computeMeshBounds(const MeshData& mesh) {
+    // Compute bounding radius from vertex positions; fall back to 1.0 if too small.
     MeshBounds bounds;
     float maxDistSq = 0.0f;
 

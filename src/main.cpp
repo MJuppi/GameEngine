@@ -32,6 +32,7 @@ std::string findDefaultModelPath() {
         return {};
     }
 
+    // Return the first .obj found in the models directory.
     for (const auto& entry : fs::directory_iterator(modelsDir)) {
         if (entry.is_regular_file() && entry.path().extension() == ".obj") {
             return entry.path().string();
@@ -41,6 +42,7 @@ std::string findDefaultModelPath() {
 }
 
 bool tryLoadObj(const std::string& path, ge::MeshData& outMesh) {
+    // Attempt to load an OBJ file, orient it for the renderer, and report info.
     try {
         outMesh = ge::loadObjFile(path);
         ge::orientMeshYUpToZUp(outMesh);

@@ -5,12 +5,14 @@
 namespace ge {
 
 Material makeDefaultMaterial(const std::string& name) {
+    // Construct a Material with default parameters and given name.
     Material m;
     m.name = name;
     return m;
 }
 
 void fillMaterialBuffer(const std::vector<Material>& materials, MaterialBufferObject& out) {
+    // Convert CPU-side Material instances into the packed GPU-friendly MaterialBufferObject.
     const uint32_t count =
         static_cast<uint32_t>(std::min(materials.size(), size_t{kMaxGpuMaterials}));
 

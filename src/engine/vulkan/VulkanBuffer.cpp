@@ -8,7 +8,7 @@
 namespace ge {
 
 VulkanBuffer::~VulkanBuffer() {
-    // Caller must call destroy() with a valid VulkanDevice before destruction.
+    // Destructor intentionally empty: caller must call destroy() before the VulkanDevice is torn down.
 }
 
 void VulkanBuffer::create(
@@ -17,6 +17,8 @@ void VulkanBuffer::create(
     VkBufferUsageFlags usage,
     VkMemoryPropertyFlags properties)
 {
+    // Create a VkBuffer and allocate device memory for it.
+    // Memory type is selected via VulkanDevice::findMemoryType.
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size = size;
@@ -44,6 +46,7 @@ void VulkanBuffer::create(
 }
 
 void VulkanBuffer::destroy(VulkanDevice& device) {
+    // Free buffer and associated memory from the logical device.
     if (m_buffer != VK_NULL_HANDLE) {
         vkDestroyBuffer(device.logical(), m_buffer, nullptr);
         m_buffer = VK_NULL_HANDLE;
@@ -61,6 +64,7 @@ void VulkanBuffer::write(
     const void* data,
     VkDeviceSize size)
 {
+    // Map host-visible memory and copy CPU-side data into it.
     void* mapped = nullptr;
     vkMapMemory(device.logical(), memory, 0, size, 0, &mapped);
     std::memcpy(mapped, data, static_cast<size_t>(size));
@@ -76,6 +80,7 @@ void VulkanBuffer::copyBuffer(
     VkBuffer dst,
     VkDeviceSize size)
 {
+    // Record and submit a short-lived command buffer to copy buffer contents on the GPU.
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -108,6 +113,7 @@ void VulkanBuffer::copyBuffer(
 }
 
 std::vector<char> readSpvFile(const std::string& path) {
+    // Read a SPIR-V binary file entirely into a byte vector.
     std::ifstream file(path, std::ios::ate | std::ios::binary);
     if (!file.is_open()) {
         throw std::runtime_error("Failed to open file: " + path);

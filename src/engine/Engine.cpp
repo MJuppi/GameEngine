@@ -23,6 +23,7 @@ public:
     }
 
     void run() {
+        // Main loop: poll OS events, handle escape key, and render each frame.
         while (!window.shouldClose()) {
             window.pollEvents();
 

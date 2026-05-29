@@ -10,6 +10,7 @@ namespace ge {
 namespace {
 
 void trimInPlace(std::string& s) {
+    // Trim leading and trailing whitespace and CR/LF from a line.
     while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) {
         s.erase(s.begin());
     }
@@ -24,6 +25,7 @@ bool startsWith(std::string_view line, std::string_view prefix) {
 }
 
 Material& currentOrCreate(std::vector<Material>& materials) {
+    // Return the last material in the list, creating a default one if the list is empty.
     if (materials.empty()) {
         materials.push_back(makeDefaultMaterial());
     }
@@ -33,6 +35,7 @@ Material& currentOrCreate(std::vector<Material>& materials) {
 } // namespace
 
 std::vector<Material> loadMtlFile(const std::string& path) {
+    // Parse a Wavefront .mtl file and return all Material entries. Throws on error.
     std::ifstream file(path);
     if (!file) {
         throw std::runtime_error("Could not open MTL file: " + path);

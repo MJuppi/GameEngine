@@ -22,6 +22,7 @@ struct Vec3 {
 };
 
 int resolveIndex(int rawIndex, size_t count) {
+    // Convert OBJ's 1-based or negative indices into zero-based indices.
     if (rawIndex > 0) {
         return rawIndex - 1;
     }
@@ -32,6 +33,7 @@ int resolveIndex(int rawIndex, size_t count) {
 }
 
 void trimInPlace(std::string& s) {
+    // Trim leading/trailing whitespace and CR/LF from a line.
     while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) {
         s.erase(s.begin());
     }
@@ -46,6 +48,7 @@ bool startsWith(std::string_view line, std::string_view prefix) {
 }
 
 std::vector<std::string> splitByChar(const std::string& s, char delim) {
+    // Split a string by a single character delimiter (used for corner tokens like "v/vt/vn").
     std::vector<std::string> parts;
     std::string token;
     for (char c : s) {
@@ -65,6 +68,7 @@ uint32_t resolveMaterialIndex(
     const std::vector<Material>& materials,
     std::unordered_map<std::string, uint32_t>& cache)
 {
+    // Map material name to its index in the materials vector (with simple caching).
     const auto found = cache.find(name);
     if (found != cache.end()) {
         return found->second;
@@ -86,6 +90,7 @@ Vertex makeVertexFromCorner(
     const std::vector<Vec3>& normals,
     uint32_t materialIndex)
 {
+    // Parse a face corner token like "1/2/3" and construct a Vertex with position and normal.
     const std::vector<std::string> parts = splitByChar(cornerToken, '/');
     if (parts.empty() || parts[0].empty()) {
         throw std::runtime_error("OBJ face corner is missing a vertex index");
@@ -132,6 +137,7 @@ Vertex makeVertexFromCorner(
 } // namespace
 
 MeshData loadObjFile(const std::string& path) {
+    // Load a Wavefront OBJ file, its optional MTL library and convert to MeshData.
     std::ifstream file(path);
     if (!file) {
         throw std::runtime_error("Could not open OBJ file: " + path);

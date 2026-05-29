@@ -16,6 +16,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
     void* /*userData*/)
 {
+    // Log validation messages (warnings and errors) to stderr.
     if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
         std::cerr << "[Vulkan] " << callbackData->pMessage << '\n';
     }
@@ -28,6 +29,7 @@ VkResult createDebugUtilsMessengerEXT(
     const VkAllocationCallbacks* allocator,
     VkDebugUtilsMessengerEXT* messenger)
 {
+    // Wrapper to load the extension function dynamically and create the debug messenger.
     auto func = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
         vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
     if (func) {
@@ -41,6 +43,7 @@ void destroyDebugUtilsMessengerEXT(
     VkDebugUtilsMessengerEXT messenger,
     const VkAllocationCallbacks* allocator)
 {
+    // Wrapper to optionally destroy the debug messenger if the extension is available.
     auto func = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
         vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
     if (func) {
@@ -59,11 +62,13 @@ VulkanContext::VulkanContext(bool enableValidation)
 }
 
 void VulkanContext::init(GLFWwindow* window) {
+    // Create Vulkan instance and, if enabled, set up the validation debug messenger.
     createInstance(window);
     createDebugMessenger();
 }
 
 VulkanContext::~VulkanContext() {
+    // Tear down debug messenger and destroy the Vulkan instance.
     destroyDebugMessenger();
     if (m_instance != VK_NULL_HANDLE) {
         vkDestroyInstance(m_instance, nullptr);
@@ -76,6 +81,7 @@ std::vector<const char*> VulkanContext::requiredExtensions(GLFWwindow* /*window*
 
     std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
+    // Include debug utils extension when validation is enabled.
     if (m_enableValidation) {
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
@@ -118,6 +124,7 @@ void VulkanContext::createInstance(GLFWwindow* window) {
         createInfo.pNext = &debugCreateInfo;
     }
 
+    // Create the VkInstance; throw on failure.
     if (vkCreateInstance(&createInfo, nullptr, &m_instance) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create Vulkan instance");
     }
@@ -125,6 +132,7 @@ void VulkanContext::createInstance(GLFWwindow* window) {
 
 // Called from VulkanDevice after we have GLFW window — instance needs surface extensions.
 void VulkanContext::createDebugMessenger() {
+    // Create the debug messenger used to receive validation messages; no-op if validation disabled.
     if (!m_enableValidation) {
         return;
     }
@@ -146,6 +154,7 @@ void VulkanContext::createDebugMessenger() {
 }
 
 void VulkanContext::destroyDebugMessenger() {
+    // Destroy the debug messenger if it was created.
     if (m_debugMessenger != VK_NULL_HANDLE) {
         destroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
         m_debugMessenger = VK_NULL_HANDLE;
@@ -158,6 +167,7 @@ bool VulkanContext::checkValidationLayerSupport() const {
     std::vector<VkLayerProperties> available(layerCount);
     vkEnumerateInstanceLayerProperties(&layerCount, available.data());
 
+    // Ensure all requested validation layers are available on this system.
     for (const char* layerName : m_validationLayers) {
         bool found = false;
         for (const auto& layer : available) {

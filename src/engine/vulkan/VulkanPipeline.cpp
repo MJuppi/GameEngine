@@ -36,6 +36,7 @@ void VulkanPipeline::recreate(VulkanSwapchain& swapchain) {
 }
 
 VkVertexInputBindingDescription VulkanPipeline::vertexBindingDescription() {
+    // Describe how vertex data is laid out in memory: stride and input rate.
     VkVertexInputBindingDescription binding{};
     binding.binding = 0;
     binding.stride = sizeof(Vertex);
@@ -44,6 +45,7 @@ VkVertexInputBindingDescription VulkanPipeline::vertexBindingDescription() {
 }
 
 std::array<VkVertexInputAttributeDescription, 3> VulkanPipeline::vertexAttributeDescriptions() {
+    // Describe per-vertex attributes: position, normal and material index.
     std::array<VkVertexInputAttributeDescription, 3> attrs{};
 
     attrs[0].binding = 0;
@@ -65,6 +67,8 @@ std::array<VkVertexInputAttributeDescription, 3> VulkanPipeline::vertexAttribute
 }
 
 void VulkanPipeline::createDescriptorSetLayout() {
+    // Create a descriptor set layout describing two uniform buffers:
+    // binding 0 = scene UBO, binding 1 = material UBO.
     VkDescriptorSetLayoutBinding bindings[2]{};
 
     bindings[0].binding = 0;
@@ -89,6 +93,7 @@ void VulkanPipeline::createDescriptorSetLayout() {
 }
 
 VkShaderModule VulkanPipeline::createShaderModule(VulkanDevice& device, const std::vector<char>& code) {
+    // Create a VkShaderModule from SPIR-V bytecode.
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = code.size();
@@ -102,6 +107,7 @@ VkShaderModule VulkanPipeline::createShaderModule(VulkanDevice& device, const st
 }
 
 void VulkanPipeline::createGraphicsPipeline(VulkanSwapchain& swapchain) {
+    // Load SPIR-V, create shader modules and assemble the fixed-function pipeline state.
     auto vertCode = readSpvFile(m_vertPath);
     auto fragCode = readSpvFile(m_fragPath);
 

@@ -36,6 +36,7 @@ void VulkanSwapchain::recreate(GLFWwindow* window) {
 }
 
 SwapchainSupportDetails VulkanSwapchain::querySupport() const {
+    // Query the physical device for surface capabilities, formats and present modes.
     SwapchainSupportDetails details;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
         m_device.physical(), m_device.surface(), &details.capabilities);
@@ -61,6 +62,7 @@ SwapchainSupportDetails VulkanSwapchain::querySupport() const {
 }
 
 VkSurfaceFormatKHR VulkanSwapchain::chooseFormat(const std::vector<VkSurfaceFormatKHR>& formats) const {
+    // Prefer SRGB surface format if available, otherwise use the first format.
     for (const auto& available : formats) {
         if (available.format == VK_FORMAT_B8G8R8A8_SRGB &&
             available.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
@@ -71,7 +73,7 @@ VkSurfaceFormatKHR VulkanSwapchain::chooseFormat(const std::vector<VkSurfaceForm
 }
 
 VkPresentModeKHR VulkanSwapchain::choosePresentMode(const std::vector<VkPresentModeKHR>& modes) const {
-    // MAILBOX = low latency (may drop frames). FIFO = vsync. Prefer MAILBOX if present.
+    // Prefer MAILBOX (low-latency) present mode when available, fall back to FIFO (vsync).
     for (VkPresentModeKHR mode : modes) {
         if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
             return mode;
@@ -84,6 +86,8 @@ VkExtent2D VulkanSwapchain::chooseExtent(
     const VkSurfaceCapabilitiesKHR& capabilities,
     GLFWwindow* window) const
 {
+    // Choose the swapchain extent: use the surface currentExtent when defined, otherwise
+    // query the framebuffer size and clamp to supported min/max extents.
     if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
         return capabilities.currentExtent;
     }
@@ -104,6 +108,7 @@ VkExtent2D VulkanSwapchain::chooseExtent(
 }
 
 void VulkanSwapchain::createSwapchain(GLFWwindow* window) {
+    // Create a VkSwapchainKHR sized and configured based on physical device support.
     auto support = querySupport();
     auto surfaceFormat = chooseFormat(support.formats);
     auto presentMode = choosePresentMode(support.presentModes);
@@ -153,6 +158,7 @@ void VulkanSwapchain::createSwapchain(GLFWwindow* window) {
 }
 
 void VulkanSwapchain::createImageViews() {
+    // Create VkImageView for each swapchain image so shaders can sample/render to them.
     m_imageViews.resize(m_images.size());
     for (size_t i = 0; i < m_images.size(); ++i) {
         VkImageViewCreateInfo viewInfo{};
@@ -171,6 +177,7 @@ void VulkanSwapchain::createImageViews() {
 }
 
 VkFormat VulkanSwapchain::findDepthFormat() const {
+    // Pick a supported depth format suitable for depth/stencil attachment.
     return m_device.findSupportedFormat(
         {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
         VK_IMAGE_TILING_OPTIMAL,

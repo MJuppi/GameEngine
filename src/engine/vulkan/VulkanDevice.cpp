@@ -11,6 +11,7 @@ namespace ge {
 VulkanDevice::VulkanDevice(VulkanContext& context, GLFWwindow* window)
     : m_context(context)
 {
+    // Create a presentation surface, choose a suitable GPU, and create a logical device.
     createSurface(window);
     pickPhysicalDevice();
     createLogicalDevice();
@@ -26,6 +27,7 @@ VulkanDevice::~VulkanDevice() {
 }
 
 void VulkanDevice::createSurface(GLFWwindow* window) {
+    // Use GLFW to create a VkSurfaceKHR tied to the native window.
     if (glfwCreateWindowSurface(m_context.instance(), window, nullptr, &m_surface) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create window surface");
     }
@@ -41,6 +43,7 @@ void VulkanDevice::pickPhysicalDevice() {
     std::vector<VkPhysicalDevice> devices(deviceCount);
     vkEnumeratePhysicalDevices(m_context.instance(), &deviceCount, devices.data());
 
+    // Iterate available GPUs and select the first one that meets swapchain and queue requirements.
     for (VkPhysicalDevice device : devices) {
         if (isDeviceSuitable(device)) {
             m_physicalDevice = device;
@@ -52,6 +55,7 @@ void VulkanDevice::pickPhysicalDevice() {
 }
 
 bool VulkanDevice::isDeviceSuitable(VkPhysicalDevice device) const {
+    // Check that the device exposes required queue families, extensions, and swapchain support.
     QueueFamilyIndices indices = findQueueFamilies(device);
     bool extensionsSupported = checkDeviceExtensionSupport(device);
 
@@ -68,6 +72,7 @@ bool VulkanDevice::isDeviceSuitable(VkPhysicalDevice device) const {
 }
 
 QueueFamilyIndices VulkanDevice::findQueueFamilies(VkPhysicalDevice device) const {
+    // Inspect queue families to locate graphics and present queues.
     QueueFamilyIndices indices;
 
     uint32_t queueFamilyCount = 0;
@@ -94,6 +99,7 @@ QueueFamilyIndices VulkanDevice::findQueueFamilies(VkPhysicalDevice device) cons
 }
 
 bool VulkanDevice::checkDeviceExtensionSupport(VkPhysicalDevice device) const {
+    // Verify that the device supports required Vulkan device extensions (e.g. swapchain).
     uint32_t extensionCount = 0;
     vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
     std::vector<VkExtensionProperties> available(extensionCount);
@@ -107,6 +113,7 @@ bool VulkanDevice::checkDeviceExtensionSupport(VkPhysicalDevice device) const {
 }
 
 void VulkanDevice::createLogicalDevice() {
+    // Create a VkDevice with the chosen queue families and required extensions.
     m_queueFamilies = findQueueFamilies(m_physicalDevice);
 
     std::set<uint32_t> uniqueFamilies = {m_queueFamilies.graphics.value(), m_queueFamilies.present.value()};
@@ -149,6 +156,7 @@ VkFormat VulkanDevice::findSupportedFormat(
     VkImageTiling tiling,
     VkFormatFeatureFlags features) const
 {
+    // Find the first candidate format that supports the requested tiling and features.
     for (VkFormat format : candidates) {
         VkFormatProperties props;
         vkGetPhysicalDeviceFormatProperties(m_physicalDevice, format, &props);
@@ -166,6 +174,7 @@ VkFormat VulkanDevice::findSupportedFormat(
 }
 
 uint32_t VulkanDevice::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const {
+    // Find a memory type index on the physical device that matches the requirements.
     VkPhysicalDeviceMemoryProperties memProperties;
     vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
 
