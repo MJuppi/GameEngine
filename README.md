@@ -38,26 +38,41 @@ The loader triangulates face lines (`f`) with a fan, reads **`mtllib` / `usemtl`
 ## Project layout
 
 ```
-src/
-  main.cpp                 # Entry point (+ optional OBJ path argv[1])
+assets/                  # runtime assets loaded by the engine
+  audio/
+  fonts/
+  models/
+  shaders/               # GLSL source for shader compilation
+  textures/
+build/                   # out-of-source CMake build output
+include/
   engine/
-    Engine.*               # Top-level loop: window + renderer
-    Window.*               # GLFW wrapper
+    Engine.h
+    Window.h
+    math/
+      Types.h
     mesh/
-      Material.*            # Materials
-      MeshData.*            # CPU mesh + unit cube + normalize-to-fit
-      MtlLoader.*           # Material loader
-      ObjMeshLoader.*       # Minimal Wavefront OBJ parser
-    math/Types.h           # Vertex layout (position + color)
     vulkan/
-      VulkanContext.*      # VkInstance, debug messenger
-      VulkanDevice.*         # GPU selection, VkDevice, queues
-      VulkanSwapchain.*      # Images, views, render pass, framebuffers
-      VulkanPipeline.*       # Pipeline layout, graphics pipeline
-      VulkanBuffer.*         # Buffers + memory allocation
-      VulkanRenderer.*       # Per-frame recording, draw mesh
-shaders/
-  basic.vert / basic.frag  # GLSL (compiled to .spv at build time)
+src/
+  main.cpp               # entry point (+ optional OBJ path argv[1])
+  game/
+    main.cpp             # optional game executable entry point
+  engine/
+    lib/
+      Engine.cpp
+      Window.cpp
+      mesh/
+        Material.cpp
+        MeshData.cpp
+        MtlLoader.cpp
+        ObjMeshLoader.cpp
+      vulkan/
+        VulkanContext.cpp
+        VulkanDevice.cpp
+        VulkanSwapchain.cpp
+        VulkanPipeline.cpp
+        VulkanBuffer.cpp
+        VulkanRenderer.cpp
 ```
 
 ## Prerequisites
@@ -147,15 +162,3 @@ Guidelines:
 - Normalized model unit: export meshes so that 1 unit == 1 meter (or document chosen convention) and center meshes on origin when appropriate.
 - Texture units: use sRGB for color maps and linear for normal/roughness/metallic maps; name textures alongside material entries (e.g. `mesh_albedo.png`, `mesh_normal.png`).
 
-## Project TODOs
-
-Short actionable items to get started building a small game on top of this engine:
-
-- [ ] Draft folder structure and repository layout (move assets into `assets/`)  
-- [ ] Organize assets into `assets/models`, `assets/textures`, `assets/shaders`, etc.  
-- [ ] Separate engine (`src/engine`) and game (`src/game`) code; add a small `game` target in CMake  
-- [ ] Add CMake build targets for runtime asset packaging and shader compilation  
-- [ ] Create a minimal game skeleton in `src/game` showing an entry-level scene and input handling  
-- [ ] Update README with structure, conventions, and next development steps  
-
-If you want, I can: create the directories, add a minimal `src/game` skeleton, and update `CMakeLists.txt` to build a second target for game code.
