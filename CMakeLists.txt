@@ -44,8 +44,8 @@ find_package(Vulkan REQUIRED)
 # -----------------------------------------------------------------------------
 
 set(SHADER_SOURCES
-    ${CMAKE_SOURCE_DIR}/shaders/basic.vert
-    ${CMAKE_SOURCE_DIR}/shaders/basic.frag
+    ${CMAKE_SOURCE_DIR}/assets/shaders/basic.vert
+    ${CMAKE_SOURCE_DIR}/assets/shaders/basic.frag
 )
 
 set(SHADER_SPV "")
@@ -65,43 +65,56 @@ endforeach()
 add_custom_target(CompileShaders ALL DEPENDS ${SHADER_SPV})
 
 # -----------------------------------------------------------------------------
-# Engine executable
+# Engine library
 # -----------------------------------------------------------------------------
 
 set(ENGINE_SOURCES
-    src/main.cpp
-    src/engine/mesh/MeshData.cpp
-    src/engine/mesh/Material.cpp
-    src/engine/mesh/MtlLoader.cpp
-    src/engine/mesh/ObjMeshLoader.cpp
-    src/engine/Engine.cpp
-    src/engine/Window.cpp
-    src/engine/vulkan/VulkanContext.cpp
-    src/engine/vulkan/VulkanDevice.cpp
-    src/engine/vulkan/VulkanSwapchain.cpp
-    src/engine/vulkan/VulkanPipeline.cpp
-    src/engine/vulkan/VulkanBuffer.cpp
-    src/engine/vulkan/VulkanRenderer.cpp
+    src/engine/lib/mesh/MeshData.cpp
+    src/engine/lib/mesh/Material.cpp
+    src/engine/lib/mesh/MtlLoader.cpp
+    src/engine/lib/mesh/ObjMeshLoader.cpp
+    src/engine/lib/Engine.cpp
+    src/engine/lib/Window.cpp
+    src/engine/lib/vulkan/VulkanContext.cpp
+    src/engine/lib/vulkan/VulkanDevice.cpp
+    src/engine/lib/vulkan/VulkanSwapchain.cpp
+    src/engine/lib/vulkan/VulkanPipeline.cpp
+    src/engine/lib/vulkan/VulkanBuffer.cpp
+    src/engine/lib/vulkan/VulkanRenderer.cpp
 )
 
-add_executable(GameEngine ${ENGINE_SOURCES})
-add_dependencies(GameEngine CompileShaders)
+add_library(game_engine_lib STATIC ${ENGINE_SOURCES})
+add_dependencies(game_engine_lib CompileShaders)
 
-target_include_directories(GameEngine PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
+target_include_directories(game_engine_lib PUBLIC
+    ${CMAKE_SOURCE_DIR}/include
     ${Vulkan_INCLUDE_DIRS}
 )
 
-target_link_libraries(GameEngine PRIVATE
+target_link_libraries(game_engine_lib PUBLIC
     glfw
     glm::glm
     Vulkan::Vulkan
 )
 
-# Shaders are loaded from CMAKE_BINARY_DIR/shaders at runtime.
-target_compile_definitions(GameEngine PRIVATE
+target_compile_definitions(game_engine_lib PUBLIC
     SHADER_DIR="${CMAKE_BINARY_DIR}/shaders"
+    $<$<CONFIG:Debug>:GE_DEBUG=1>
 )
+
+if(MSVC)
+    target_compile_options(game_engine_lib PUBLIC /W4 /permissive-)
+else()
+    target_compile_options(game_engine_lib PUBLIC -Wall -Wextra -Wpedantic)
+endif()
+
+# -----------------------------------------------------------------------------
+# Engine applications
+# -----------------------------------------------------------------------------
+
+add_executable(GameEngine src/main.cpp)
+add_dependencies(GameEngine CompileShaders)
+target_link_libraries(GameEngine PRIVATE game_engine_lib)
 
 if(MSVC)
     target_compile_options(GameEngine PRIVATE /W4 /permissive-)
@@ -109,7 +122,12 @@ else()
     target_compile_options(GameEngine PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Debug builds enable Vulkan validation layers in code (see VulkanContext.cpp).
-target_compile_definitions(GameEngine PRIVATE
-    $<$<CONFIG:Debug>:GE_DEBUG=1>
-)
+add_executable(Game src/game/main.cpp)
+add_dependencies(Game CompileShaders)
+target_link_libraries(Game PRIVATE game_engine_lib)
+
+if(MSVC)
+    target_compile_options(Game PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(Game PRIVATE -Wall -Wextra -Wpedantic)
+endif()

@@ -22,11 +22,22 @@ namespace {
 std::string findDefaultModelPath() {
     namespace fs = std::filesystem;
 
-    const fs::path preferred = "models/SuomiKP.obj";
-    if (fs::exists(preferred)) {
-        return preferred.string();
+    // Prefer the new assets path, fall back to legacy `models/` for compatibility.
+    const fs::path preferredAssets = "assets/models/SuomiKP.obj";
+    if (fs::exists(preferredAssets)) {
+        return preferredAssets.string();
     }
 
+    const fs::path assetsDir = "assets/models";
+    if (fs::is_directory(assetsDir)) {
+        for (const auto& entry : fs::directory_iterator(assetsDir)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".obj") {
+                return entry.path().string();
+            }
+        }
+    }
+
+    // Legacy fallback for older layouts.
     const fs::path modelsDir = "models";
     if (!fs::is_directory(modelsDir)) {
         return {};

@@ -60,6 +60,9 @@ private:
 
     void recreateSwapchain();
     void cleanupSwapchain();
+    void updateCamera(float deltaTime);
+    void resetCamera(const MeshBounds& bounds);
+    void updateCameraVectors();
 
     Window& m_window;
     MeshData m_mesh;
@@ -95,8 +98,24 @@ private:
     static constexpr int kMaxFramesInFlight = 2;
     size_t m_currentFrame = 0;
     bool m_framebufferResized = false;
-    float m_rotation = 0.0f;
     float m_meshRadius = 1.0f;
+
+    glm::vec3 m_cameraPosition = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 m_cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+    glm::vec3 m_cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+    glm::vec3 m_cameraRight = glm::vec3(1.0f, 0.0f, 0.0f);
+    glm::vec3 m_cameraWorldUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    float m_cameraYaw = -90.0f;
+    float m_cameraPitch = 0.0f;
+    float m_cameraSpeed = 5.0f;
+    float m_mouseSensitivity = 0.15f;
+
+    double m_lastCursorX = 0.0;
+    double m_lastCursorY = 0.0;
+    bool m_firstMouse = true;
+    bool m_mouseCaptured = false;
+    double m_lastFrameTime = 0.0;
 };
 
 } // namespace ge
