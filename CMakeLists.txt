@@ -37,6 +37,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
+# tinygltf — header-only glTF 2.0 file format loader.
+FetchContent_Declare(
+    tinygltf
+    GIT_REPOSITORY https://github.com/syoyo/tinygltf.git
+    GIT_TAG        v2.8.21
+)
+FetchContent_MakeAvailable(tinygltf)
+
 find_package(Vulkan REQUIRED)
 
 # -----------------------------------------------------------------------------
@@ -73,6 +81,7 @@ set(ENGINE_SOURCES
     src/engine/lib/mesh/Material.cpp
     src/engine/lib/mesh/MtlLoader.cpp
     src/engine/lib/mesh/ObjMeshLoader.cpp
+    src/engine/lib/mesh/GltfMeshLoader.cpp
     src/engine/lib/Engine.cpp
     src/engine/lib/Window.cpp
     src/engine/lib/vulkan/VulkanContext.cpp
@@ -88,6 +97,7 @@ add_dependencies(game_engine_lib CompileShaders)
 
 target_include_directories(game_engine_lib PUBLIC
     ${CMAKE_SOURCE_DIR}/include
+    ${tinygltf_SOURCE_DIR}/include
     ${Vulkan_INCLUDE_DIRS}
 )
 
