@@ -23,7 +23,8 @@ public:
         VulkanDevice& device,
         VulkanSwapchain& swapchain,
         const std::string& vertSpvPath,
-        const std::string& fragSpvPath);
+        const std::string& fragSpvPath,
+        bool useUi = false);
     ~VulkanPipeline();
 
     VulkanPipeline(const VulkanPipeline&) = delete;
@@ -38,8 +39,8 @@ public:
     }
 
     /// Describes how vertex buffer data maps to vertex shader inputs.
-    static VkVertexInputBindingDescription vertexBindingDescription();
-    static std::array<VkVertexInputAttributeDescription, 3> vertexAttributeDescriptions();
+    VkVertexInputBindingDescription vertexBindingDescription();
+    std::vector<VkVertexInputAttributeDescription> vertexAttributeDescriptions();
 
 private:
     void createDescriptorSetLayout();
@@ -51,6 +52,7 @@ private:
     VulkanDevice& m_device;
     std::string m_vertPath;
     std::string m_fragPath;
+    bool m_useUi = false;
 
     VkDescriptorSetLayout m_descriptorSetLayout = VK_NULL_HANDLE;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;

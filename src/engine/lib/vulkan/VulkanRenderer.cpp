@@ -25,6 +25,116 @@ namespace ge {
 
 namespace {
 
+struct UiVertex {
+    glm::vec2 position;
+    glm::vec4 color;
+};
+
+static constexpr std::array<std::array<uint8_t, 7>, 10> kDigitGlyphs = {
+    std::array<uint8_t, 7>{0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110},
+    std::array<uint8_t, 7>{0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110},
+    std::array<uint8_t, 7>{0b01110, 0b10001, 0b00001, 0b00010, 0b00100, 0b01000, 0b11111},
+    std::array<uint8_t, 7>{0b01110, 0b10001, 0b00001, 0b00110, 0b00001, 0b10001, 0b01110},
+    std::array<uint8_t, 7>{0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010},
+    std::array<uint8_t, 7>{0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110},
+    std::array<uint8_t, 7>{0b00110, 0b01000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110},
+    std::array<uint8_t, 7>{0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000},
+    std::array<uint8_t, 7>{0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110},
+    std::array<uint8_t, 7>{0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100},
+};
+
+static constexpr std::array<uint8_t, 7> kFontF = {0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000};
+static constexpr std::array<uint8_t, 7> kFontP = {0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000};
+static constexpr std::array<uint8_t, 7> kFontS = {0b01110, 0b10000, 0b10000, 0b01110, 0b00001, 0b00001, 0b11110};
+
+static glm::vec2 pixelToNdc(float x, float y, uint32_t width, uint32_t height) {
+    return {
+        (x / static_cast<float>(width)) * 2.0f - 1.0f,
+        1.0f - (y / static_cast<float>(height)) * 2.0f,
+    };
+}
+
+static void appendQuad(
+    std::vector<UiVertex>& vertices,
+    float left,
+    float top,
+    float right,
+    float bottom,
+    glm::vec4 color,
+    uint32_t screenWidth,
+    uint32_t screenHeight)
+{
+    const glm::vec2 tl = pixelToNdc(left, top, screenWidth, screenHeight);
+    const glm::vec2 bl = pixelToNdc(left, bottom, screenWidth, screenHeight);
+    const glm::vec2 br = pixelToNdc(right, bottom, screenWidth, screenHeight);
+    const glm::vec2 tr = pixelToNdc(right, top, screenWidth, screenHeight);
+
+    vertices.push_back({tl, color});
+    vertices.push_back({bl, color});
+    vertices.push_back({br, color});
+    vertices.push_back({tl, color});
+    vertices.push_back({br, color});
+    vertices.push_back({tr, color});
+}
+
+static bool getGlyphPattern(char c, std::array<uint8_t, 7>& pattern, uint32_t& width) {
+    if (c >= '0' && c <= '9') {
+        pattern = kDigitGlyphs[static_cast<size_t>(c - '0')];
+        width = 5;
+        return true;
+    }
+
+    switch (c) {
+    case 'F':
+        pattern = kFontF;
+        width = 5;
+        return true;
+    case 'P':
+        pattern = kFontP;
+        width = 5;
+        return true;
+    case 'S':
+        pattern = kFontS;
+        width = 5;
+        return true;
+    case ' ':
+        pattern.fill(0);
+        width = 3;
+        return true;
+    default:
+        return false;
+    }
+}
+
+static void appendGlyph(
+    std::vector<UiVertex>& vertices,
+    char c,
+    float x,
+    float y,
+    float pixelSize,
+    glm::vec4 color,
+    uint32_t screenWidth,
+    uint32_t screenHeight)
+{
+    std::array<uint8_t, 7> pattern{};
+    uint32_t glyphWidth = 0;
+    if (!getGlyphPattern(c, pattern, glyphWidth)) {
+        return;
+    }
+
+    for (uint32_t row = 0; row < 7; ++row) {
+        for (uint32_t col = 0; col < glyphWidth; ++col) {
+            if ((pattern[row] >> (glyphWidth - 1 - col)) & 1u) {
+                float left = x + col * pixelSize;
+                float top = y + row * pixelSize;
+                float right = left + pixelSize;
+                float bottom = top + pixelSize;
+                appendQuad(vertices, left, top, right, bottom, color, screenWidth, screenHeight);
+            }
+        }
+    }
+}
+
 void framebufferResizeCallback(GLFWwindow* window, int /*width*/, int /*height*/) {
     // GLFW framebuffer resize callback: notify the renderer to recreate swapchain.
     auto* renderer = reinterpret_cast<VulkanRenderer*>(glfwGetWindowUserPointer(window));
@@ -119,6 +229,8 @@ void VulkanRenderer::initVulkan() {
     createDescriptorPool();
     createDescriptorSets();
     createCommandBuffers();
+    createUiPipeline();
+    createUiBuffers();
     createSyncObjects();
 }
 
@@ -233,6 +345,87 @@ void VulkanRenderer::createMaterialBuffer() {
         m_materialBuffer->memory(),
         &m_materialGpu,
         sizeof(MaterialBufferObject));
+}
+
+void VulkanRenderer::createUiPipeline() {
+    m_uiPipeline = std::make_unique<VulkanPipeline>(
+        *m_device,
+        *m_swapchain,
+        m_shaderDir + "/ui.vert.spv",
+        m_shaderDir + "/ui.frag.spv",
+        true);
+}
+
+void VulkanRenderer::createUiBuffers() {
+    const VkDeviceSize bufferSize = sizeof(UiVertex) * 2048;
+    m_uiVertexBuffer = std::make_unique<VulkanBuffer>();
+    m_uiVertexBuffer->create(
+        *m_device,
+        bufferSize,
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+}
+
+void VulkanRenderer::updateUiVertexBuffer(uint32_t width, uint32_t height, float fps) {
+    std::vector<UiVertex> vertices;
+    vertices.reserve(1024);
+
+    std::string text = "FPS " + std::to_string(static_cast<int>(std::round(fps)));
+    constexpr float pixelSize = 4.0f;
+    constexpr float charSpacing = 1.0f;
+    constexpr float textPadding = 6.0f;
+    constexpr float margin = 16.0f;
+
+    float textWidth = 0.0f;
+    for (char c : text) {
+        std::array<uint8_t, 7> pattern;
+        uint32_t glyphWidth = 0;
+        if (!getGlyphPattern(c, pattern, glyphWidth)) {
+            continue;
+        }
+        textWidth += (glyphWidth * pixelSize) + charSpacing;
+    }
+    if (textWidth > 0.0f) {
+        textWidth -= charSpacing;
+    }
+
+    const float textHeight = 7.0f * pixelSize;
+    const float xStart = static_cast<float>(width) - margin - textWidth - textPadding * 2.0f;
+    const float yStart = margin + textPadding;
+    const float panelLeft = xStart - textPadding;
+    const float panelTop = margin;
+    const float panelRight = static_cast<float>(width) - margin;
+    const float panelBottom = yStart + textHeight + textPadding;
+
+    appendQuad(
+        vertices,
+        panelLeft,
+        panelTop,
+        panelRight,
+        panelBottom,
+        glm::vec4(0.0f, 0.0f, 0.0f, 0.55f),
+        width,
+        height);
+
+    float cursorX = xStart;
+    for (char c : text) {
+        appendGlyph(vertices, c, cursorX, yStart, pixelSize, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), width, height);
+        std::array<uint8_t, 7> pattern;
+        uint32_t glyphWidth = 0;
+        if (getGlyphPattern(c, pattern, glyphWidth)) {
+            cursorX += (glyphWidth * pixelSize) + charSpacing;
+        }
+    }
+
+    m_uiVertexCount = static_cast<uint32_t>(vertices.size());
+    if (m_uiVertexCount > 0) {
+        VulkanBuffer::write(
+            *m_device,
+            m_uiVertexBuffer->handle(),
+            m_uiVertexBuffer->memory(),
+            vertices.data(),
+            sizeof(UiVertex) * m_uiVertexCount);
+    }
 }
 
 void VulkanRenderer::createDescriptorPool() {
@@ -385,6 +578,9 @@ void VulkanRenderer::recreateSwapchain() {
 
     m_swapchain->recreate(m_window.handle());
     m_pipeline->recreate(*m_swapchain);
+    if (m_uiPipeline) {
+        m_uiPipeline->recreate(*m_swapchain);
+    }
 
     vkDestroyCommandPool(m_device->logical(), m_commandPool, nullptr);
     createCommandPool();
@@ -394,6 +590,7 @@ void VulkanRenderer::recreateSwapchain() {
 
 void VulkanRenderer::cleanupSwapchain() {
     m_pipeline.reset();
+    m_uiPipeline.reset();
     m_swapchain.reset();
 }
 
@@ -527,6 +724,9 @@ void VulkanRenderer::drawFrame() {
 
     std::memcpy(m_sceneBuffersMapped[m_currentFrame], &scene, sizeof(scene));
 
+    const float fps = deltaTime > 0.0f ? 1.0f / deltaTime : 0.0f;
+    updateUiVertexBuffer(m_swapchain->extent().width, m_swapchain->extent().height, fps);
+
     vkResetFences(m_device->logical(), 1, &m_inFlightFences[m_currentFrame]);
     vkResetCommandBuffer(m_commandBuffers[imageIndex], 0);
     recordCommandBuffer(m_commandBuffers[imageIndex], imageIndex);
@@ -615,6 +815,15 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
         nullptr);
 
     vkCmdDrawIndexed(commandBuffer, m_indexCount, 1, 0, 0, 0);
+
+    if (m_uiPipeline && m_uiVertexCount > 0) {
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_uiPipeline->handle());
+        VkBuffer uiBuffers[] = {m_uiVertexBuffer->handle()};
+        VkDeviceSize uiOffsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, uiBuffers, uiOffsets);
+        vkCmdDraw(commandBuffer, m_uiVertexCount, 1, 0, 0);
+    }
+
     vkCmdEndRenderPass(commandBuffer);
 
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {

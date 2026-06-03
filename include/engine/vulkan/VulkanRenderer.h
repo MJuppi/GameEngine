@@ -56,6 +56,9 @@ private:
     void createMaterialBuffer();
     void createDescriptorPool();
     void createDescriptorSets();
+    void createUiPipeline();
+    void createUiBuffers();
+    void updateUiVertexBuffer(uint32_t width, uint32_t height, float fps);
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
     void recreateSwapchain();
@@ -72,6 +75,7 @@ private:
     std::unique_ptr<VulkanDevice> m_device;
     std::unique_ptr<VulkanSwapchain> m_swapchain;
     std::unique_ptr<VulkanPipeline> m_pipeline;
+    std::unique_ptr<VulkanPipeline> m_uiPipeline;
 
     VkCommandPool m_commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> m_commandBuffers;
@@ -79,6 +83,9 @@ private:
     std::unique_ptr<VulkanBuffer> m_vertexBuffer;
     std::unique_ptr<VulkanBuffer> m_indexBuffer;
     uint32_t m_indexCount = 0;
+
+    std::unique_ptr<VulkanBuffer> m_uiVertexBuffer;
+    uint32_t m_uiVertexCount = 0;
 
     std::vector<std::unique_ptr<VulkanBuffer>> m_sceneBuffers;
     std::vector<void*> m_sceneBuffersMapped;

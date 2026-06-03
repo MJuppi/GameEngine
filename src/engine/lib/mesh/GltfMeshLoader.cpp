@@ -2,6 +2,9 @@
 
 #include "engine/mesh/Material.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#define TINYGLTF_IMPLEMENTATION
 #include <tiny_gltf.h>
 
 #include <glm/glm.hpp>
@@ -129,9 +132,9 @@ MeshData loadGltfFile(const std::string& path) {
     std::string err, warn;
     
     bool loaded = false;
-    if (path.ends_with(".glb")) {
+    if (path.size() >= 4 && path.compare(path.size() - 4, 4, ".glb") == 0) {
         loaded = loader.LoadBinaryFromFile(&model, &err, &warn, path);
-    } else if (path.ends_with(".gltf")) {
+    } else if (path.size() >= 5 && path.compare(path.size() - 5, 5, ".gltf") == 0) {
         loaded = loader.LoadASCIIFromFile(&model, &err, &warn, path);
     } else {
         throw std::runtime_error("Unsupported file format: " + path + " (expected .gltf or .glb)");

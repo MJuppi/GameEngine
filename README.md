@@ -105,15 +105,8 @@ cmake --build build -j 8
 Run from the project root so the asset-relative paths resolve correctly:
 
 ```bash
-./build/GameEngine        # Linux / macOS
-build\GameEngine.exe      # Windows (MinGW generator)
-```
-
-If you are using the `Game` target instead of `GameEngine`:
-
-```bash
-./build/Game              # Linux / macOS
-build\Game.exe           # Windows (MinGW generator)
+./build/GameE        # Linux / macOS
+build\Game.exe      # Windows (MinGW generator)
 ```
 
 Press **Escape** or close the window to quit.

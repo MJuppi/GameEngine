@@ -54,6 +54,8 @@ find_package(Vulkan REQUIRED)
 set(SHADER_SOURCES
     ${CMAKE_SOURCE_DIR}/assets/shaders/basic.vert
     ${CMAKE_SOURCE_DIR}/assets/shaders/basic.frag
+    ${CMAKE_SOURCE_DIR}/assets/shaders/ui.vert
+    ${CMAKE_SOURCE_DIR}/assets/shaders/ui.frag
 )
 
 set(SHADER_SPV "")
@@ -97,7 +99,7 @@ add_dependencies(game_engine_lib CompileShaders)
 
 target_include_directories(game_engine_lib PUBLIC
     ${CMAKE_SOURCE_DIR}/include
-    ${tinygltf_SOURCE_DIR}/include
+    ${tinygltf_SOURCE_DIR}
     ${Vulkan_INCLUDE_DIRS}
 )
 
@@ -121,16 +123,6 @@ endif()
 # -----------------------------------------------------------------------------
 # Engine applications
 # -----------------------------------------------------------------------------
-
-add_executable(GameEngine src/main.cpp)
-add_dependencies(GameEngine CompileShaders)
-target_link_libraries(GameEngine PRIVATE game_engine_lib)
-
-if(MSVC)
-    target_compile_options(GameEngine PRIVATE /W4 /permissive-)
-else()
-    target_compile_options(GameEngine PRIVATE -Wall -Wextra -Wpedantic)
-endif()
 
 add_executable(Game src/game/main.cpp)
 add_dependencies(Game CompileShaders)

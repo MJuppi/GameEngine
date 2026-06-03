@@ -8,18 +8,31 @@
 #include <cstddef>
 #include <stdexcept>
 
+namespace {
+
+struct UiVertex {
+    float position[2];
+    float color[4];
+};
+
+} // namespace
+
 namespace ge {
 
 VulkanPipeline::VulkanPipeline(
     VulkanDevice& device,
     VulkanSwapchain& swapchain,
     const std::string& vertSpvPath,
-    const std::string& fragSpvPath)
+    const std::string& fragSpvPath,
+    bool useUi)
     : m_device(device)
     , m_vertPath(vertSpvPath)
     , m_fragPath(fragSpvPath)
+    , m_useUi(useUi)
 {
-    createDescriptorSetLayout();
+    if (!m_useUi) {
+        createDescriptorSetLayout();
+    }
     createGraphicsPipeline(swapchain);
 }
 
@@ -39,15 +52,27 @@ VkVertexInputBindingDescription VulkanPipeline::vertexBindingDescription() {
     // Describe how vertex data is laid out in memory: stride and input rate.
     VkVertexInputBindingDescription binding{};
     binding.binding = 0;
-    binding.stride = sizeof(Vertex);
     binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    binding.stride = m_useUi ? sizeof(UiVertex) : sizeof(Vertex);
     return binding;
 }
 
-std::array<VkVertexInputAttributeDescription, 3> VulkanPipeline::vertexAttributeDescriptions() {
-    // Describe per-vertex attributes: position, normal and material index.
-    std::array<VkVertexInputAttributeDescription, 3> attrs{};
+std::vector<VkVertexInputAttributeDescription> VulkanPipeline::vertexAttributeDescriptions() {
+    if (m_useUi) {
+        std::vector<VkVertexInputAttributeDescription> attrs(2);
+        attrs[0].binding = 0;
+        attrs[0].location = 0;
+        attrs[0].format = VK_FORMAT_R32G32_SFLOAT;
+        attrs[0].offset = offsetof(UiVertex, position);
 
+        attrs[1].binding = 0;
+        attrs[1].location = 1;
+        attrs[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        attrs[1].offset = offsetof(UiVertex, color);
+        return attrs;
+    }
+
+    std::vector<VkVertexInputAttributeDescription> attrs(3);
     attrs[0].binding = 0;
     attrs[0].location = 0;
     attrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
@@ -67,6 +92,10 @@ std::array<VkVertexInputAttributeDescription, 3> VulkanPipeline::vertexAttribute
 }
 
 void VulkanPipeline::createDescriptorSetLayout() {
+    if (m_useUi) {
+        return;
+    }
+
     // Create a descriptor set layout describing two uniform buffers:
     // binding 0 = scene UBO, binding 1 = material UBO.
     VkDescriptorSetLayoutBinding bindings[2]{};
@@ -135,7 +164,7 @@ void VulkanPipeline::createGraphicsPipeline(VulkanSwapchain& swapchain) {
     vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInput.vertexBindingDescriptionCount = 1;
     vertexInput.pVertexBindingDescriptions = &bindingDescription;
-    vertexInput.vertexAttributeDescriptionCount = 3;
+    vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
     vertexInput.pVertexAttributeDescriptions = attributeDescriptions.data();
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -165,8 +194,7 @@ void VulkanPipeline::createGraphicsPipeline(VulkanSwapchain& swapchain) {
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
-    // orientMeshYUpToZUp flips winding; flipMeshWinding restores it — same as pre-orient (CW front).
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.cullMode = m_useUi ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT;
     rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
 
     VkPipelineMultisampleStateCreateInfo multisampling{};
@@ -176,6 +204,15 @@ void VulkanPipeline::createGraphicsPipeline(VulkanSwapchain& swapchain) {
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
     colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                           VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    if (m_useUi) {
+        colorBlendAttachment.blendEnable = VK_TRUE;
+        colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+        colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    }
 
     VkPipelineColorBlendStateCreateInfo colorBlending{};
     colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -184,16 +221,16 @@ void VulkanPipeline::createGraphicsPipeline(VulkanSwapchain& swapchain) {
 
     VkPipelineDepthStencilStateCreateInfo depthStencil{};
     depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depthStencil.depthTestEnable = VK_TRUE;
-    depthStencil.depthWriteEnable = VK_TRUE;
+    depthStencil.depthTestEnable = m_useUi ? VK_FALSE : VK_TRUE;
+    depthStencil.depthWriteEnable = m_useUi ? VK_FALSE : VK_TRUE;
     depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable = VK_FALSE;
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
+    pipelineLayoutInfo.setLayoutCount = m_useUi ? 0 : 1;
+    pipelineLayoutInfo.pSetLayouts = m_useUi ? nullptr : &m_descriptorSetLayout;
 
     if (vkCreatePipelineLayout(m_device.logical(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout) !=
         VK_SUCCESS) {
