@@ -6,37 +6,59 @@
 
 #include <filesystem>
 #include <iostream>
+#include <algorithm>
 
-int main(int argc, char** argv) {
+int main(int /*argc*/, char** /*argv*/) {
     using namespace ge;
     namespace fs = std::filesystem;
 
-    MeshData mesh;
-    if (argc > 1) {
-        try {
-            const auto ext = fs::path(argv[1]).extension();
-            if (ext == ".gltf" || ext == ".glb") {
-                mesh = loadGltfFile(argv[1]);
-            } else {
-                mesh = loadObjFile(argv[1]);
+    MeshData mesh = makeUnitCubeMesh();
+    const fs::path modelDir = "assets/models";
+    std::vector<fs::path> modelFiles;
+
+    if (fs::exists(modelDir) && fs::is_directory(modelDir)) {
+        for (const auto& entry : fs::directory_iterator(modelDir)) {
+            if (!entry.is_regular_file()) {
+                continue;
             }
-        } catch (const std::exception& e) {
-            std::cerr << "Failed to load model '" << argv[1] << "': " << e.what() << '\n';
+
+            const auto ext = entry.path().extension();
+            if (ext == ".obj" || ext == ".gltf" || ext == ".glb") {
+                modelFiles.push_back(entry.path());
+            }
+        }
+    }
+
+    if (!modelFiles.empty()) {
+        std::sort(modelFiles.begin(), modelFiles.end());
+        bool loadedModel = false;
+
+        for (const auto& selectedModel : modelFiles) {
+            try {
+                const auto ext = selectedModel.extension();
+                if (ext == ".gltf" || ext == ".glb") {
+                    mesh = loadGltfFile(selectedModel.string());
+                } else {
+                    mesh = loadObjFile(selectedModel.string());
+                }
+                std::cout << "Loaded model: " << selectedModel.string() << '\n';
+                loadedModel = true;
+                break;
+            } catch (const std::exception& e) {
+                std::cerr << "Failed to load model '" << selectedModel.string() << "': " << e.what() << '\n';
+            }
+        }
+
+        if (!loadedModel) {
+            std::cerr << "All supported models in " << modelDir.string() << " failed to load. Falling back to unit cube." << '\n';
             mesh = makeUnitCubeMesh();
+        } else {
+            centerMesh(mesh);
+            orientMeshYUpToZUp(mesh);
+            flipMeshWinding(mesh);
         }
     } else {
-        const fs::path defaultModel = "assets/models/SuomiKP.obj";
-        if (fs::exists(defaultModel)) {
-            try {
-                mesh = loadObjFile(defaultModel.string());
-                std::cout << "Loaded default scene: " << defaultModel.string() << '\n';
-            } catch (const std::exception& e) {
-                std::cerr << "Failed to load default model: " << e.what() << '\n';
-                mesh = makeUnitCubeMesh();
-            }
-        } else {
-            mesh = makeUnitCubeMesh();
-        }
+        std::cerr << "No supported models found in " << modelDir.string() << ". Falling back to unit cube." << '\n';
     }
 
     Engine engine(std::move(mesh));
