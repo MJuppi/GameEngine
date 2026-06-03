@@ -48,9 +48,10 @@ static constexpr std::array<uint8_t, 7> kFontP = {0b11110, 0b10001, 0b10001, 0b1
 static constexpr std::array<uint8_t, 7> kFontS = {0b01110, 0b10000, 0b10000, 0b01110, 0b00001, 0b00001, 0b11110};
 
 static glm::vec2 pixelToNdc(float x, float y, uint32_t width, uint32_t height) {
+    // Vulkan clip space uses Y-down, so top-of-screen maps to -1 and bottom to +1.
     return {
         (x / static_cast<float>(width)) * 2.0f - 1.0f,
-        1.0f - (y / static_cast<float>(height)) * 2.0f,
+        (y / static_cast<float>(height)) * 2.0f - 1.0f,
     };
 }
 
