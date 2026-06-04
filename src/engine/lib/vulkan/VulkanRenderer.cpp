@@ -16,6 +16,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <vector>
+#include <algorithm>
 
 #ifndef SHADER_DIR
 #define SHADER_DIR "shaders"
@@ -46,6 +47,32 @@ static constexpr std::array<std::array<uint8_t, 7>, 10> kDigitGlyphs = {
 static constexpr std::array<uint8_t, 7> kFontF = {0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000};
 static constexpr std::array<uint8_t, 7> kFontP = {0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000};
 static constexpr std::array<uint8_t, 7> kFontS = {0b01110, 0b10000, 0b10000, 0b01110, 0b00001, 0b00001, 0b11110};
+static constexpr std::array<uint8_t, 7> kFontA = {0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001};
+static constexpr std::array<uint8_t, 7> kFontI = {0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b11111};
+static constexpr std::array<uint8_t, 7> kFontM = {0b10001, 0b11011, 0b10101, 0b10101, 0b10001, 0b10001, 0b10001};
+static constexpr std::array<uint8_t, 7> kFontN = {0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001, 0b10001};
+static constexpr std::array<uint8_t, 7> kFontX = {0b10001, 0b01010, 0b00100, 0b00100, 0b01010, 0b10001, 0b10001};
+static constexpr std::array<uint8_t, 7> kFontDot = {0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00100, 0b00100};
+
+static std::string formatFixed(float value, int decimals) {
+    if (decimals <= 0) {
+        return std::to_string(static_cast<int>(std::round(value)));
+    }
+    const float absValue = std::fabs(value);
+    int whole = static_cast<int>(absValue);
+    float fracFloat = absValue - whole;
+    int fraction = static_cast<int>(std::round(fracFloat * std::pow(10.0f, decimals)));
+    if (fraction >= static_cast<int>(std::pow(10.0f, decimals))) {
+        whole += 1;
+        fraction = 0;
+    }
+    std::string result = std::to_string(whole) + ".";
+    result += std::to_string(fraction);
+    while (static_cast<int>(result.size()) - static_cast<int>(result.find('.')) - 1 < decimals) {
+        result += '0';
+    }
+    return result;
+}
 
 static glm::vec2 pixelToNdc(float x, float y, uint32_t width, uint32_t height) {
     // Vulkan clip space uses Y-down, so top-of-screen maps to -1 and bottom to +1.
@@ -97,6 +124,30 @@ static bool getGlyphPattern(char c, std::array<uint8_t, 7>& pattern, uint32_t& w
     case 'S':
         pattern = kFontS;
         width = 5;
+        return true;
+    case 'A':
+        pattern = kFontA;
+        width = 5;
+        return true;
+    case 'I':
+        pattern = kFontI;
+        width = 5;
+        return true;
+    case 'M':
+        pattern = kFontM;
+        width = 5;
+        return true;
+    case 'N':
+        pattern = kFontN;
+        width = 5;
+        return true;
+    case 'X':
+        pattern = kFontX;
+        width = 5;
+        return true;
+    case '.':
+        pattern = kFontDot;
+        width = 3;
         return true;
     case ' ':
         pattern.fill(0);
@@ -358,7 +409,7 @@ void VulkanRenderer::createUiPipeline() {
 }
 
 void VulkanRenderer::createUiBuffers() {
-    const VkDeviceSize bufferSize = sizeof(UiVertex) * 2048;
+    const VkDeviceSize bufferSize = sizeof(UiVertex) * kMaxUiVertices;
     m_uiVertexBuffer = std::make_unique<VulkanBuffer>();
     m_uiVertexBuffer->create(
         *m_device,
@@ -367,11 +418,19 @@ void VulkanRenderer::createUiBuffers() {
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 }
 
-void VulkanRenderer::updateUiVertexBuffer(uint32_t width, uint32_t height, float fps) {
+void VulkanRenderer::updateUiVertexBuffer(
+    uint32_t width,
+    uint32_t height,
+    float fps,
+    float minFrameTimeMs,
+    float maxFrameTimeMs)
+{
     std::vector<UiVertex> vertices;
-    vertices.reserve(1024);
+    vertices.reserve(kMaxUiVertices);
 
-    std::string text = "FPS " + std::to_string(static_cast<int>(std::round(fps)));
+    std::string text = "FPS " + std::to_string(static_cast<int>(std::round(fps))) +
+        " MIN " + formatFixed(minFrameTimeMs, 1) + "MS" +
+        " MAX " + formatFixed(maxFrameTimeMs, 1) + "MS";
     constexpr float pixelSize = 4.0f;
     constexpr float charSpacing = 1.0f;
     constexpr float textPadding = 6.0f;
@@ -418,7 +477,7 @@ void VulkanRenderer::updateUiVertexBuffer(uint32_t width, uint32_t height, float
         }
     }
 
-    m_uiVertexCount = static_cast<uint32_t>(vertices.size());
+    m_uiVertexCount = static_cast<uint32_t>(std::min<size_t>(vertices.size(), kMaxUiVertices));
     if (m_uiVertexCount > 0) {
         VulkanBuffer::write(
             *m_device,
@@ -661,6 +720,9 @@ void VulkanRenderer::resetCamera(const MeshBounds& bounds) {
     m_cameraPitch = glm::degrees(std::asin(m_cameraFront.y));
     updateCameraVectors();
     m_lastFrameTime = glfwGetTime();
+    m_frameTimeWindowStart = m_lastFrameTime;
+    m_minFrameTimeMs = std::numeric_limits<float>::infinity();
+    m_maxFrameTimeMs = 0.0f;
 }
 
 void VulkanRenderer::updateCameraVectors() {
@@ -703,6 +765,20 @@ void VulkanRenderer::drawFrame() {
     const double currentFrameTime = glfwGetTime();
     const float deltaTime = static_cast<float>(currentFrameTime - m_lastFrameTime);
     m_lastFrameTime = currentFrameTime;
+    const float frameTimeMs = deltaTime * 1000.0f;
+
+    if (currentFrameTime - m_frameTimeWindowStart >= 1.0) {
+        m_frameTimeWindowStart = currentFrameTime;
+        m_minFrameTimeMs = std::numeric_limits<float>::infinity();
+        m_maxFrameTimeMs = 0.0f;
+    }
+
+    if (frameTimeMs < m_minFrameTimeMs) {
+        m_minFrameTimeMs = frameTimeMs;
+    }
+    if (frameTimeMs > m_maxFrameTimeMs) {
+        m_maxFrameTimeMs = frameTimeMs;
+    }
 
     updateCamera(deltaTime);
 
@@ -726,7 +802,12 @@ void VulkanRenderer::drawFrame() {
     std::memcpy(m_sceneBuffersMapped[m_currentFrame], &scene, sizeof(scene));
 
     const float fps = deltaTime > 0.0f ? 1.0f / deltaTime : 0.0f;
-    updateUiVertexBuffer(m_swapchain->extent().width, m_swapchain->extent().height, fps);
+    updateUiVertexBuffer(
+        m_swapchain->extent().width,
+        m_swapchain->extent().height,
+        fps,
+        m_minFrameTimeMs,
+        m_maxFrameTimeMs);
 
     vkResetFences(m_device->logical(), 1, &m_inFlightFences[m_currentFrame]);
     vkResetCommandBuffer(m_commandBuffers[imageIndex], 0);

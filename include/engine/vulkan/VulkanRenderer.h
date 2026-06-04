@@ -9,6 +9,7 @@
 
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -58,7 +59,12 @@ private:
     void createDescriptorSets();
     void createUiPipeline();
     void createUiBuffers();
-    void updateUiVertexBuffer(uint32_t width, uint32_t height, float fps);
+    void updateUiVertexBuffer(
+        uint32_t width,
+        uint32_t height,
+        float fps,
+        float minFrameTimeMs,
+        float maxFrameTimeMs);
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
     void recreateSwapchain();
@@ -84,6 +90,8 @@ private:
     std::unique_ptr<VulkanBuffer> m_indexBuffer;
     uint32_t m_indexCount = 0;
 
+    static constexpr uint32_t kMaxUiVertices = 16384;
+
     std::unique_ptr<VulkanBuffer> m_uiVertexBuffer;
     uint32_t m_uiVertexCount = 0;
 
@@ -106,6 +114,10 @@ private:
     size_t m_currentFrame = 0;
     bool m_framebufferResized = false;
     float m_meshRadius = 1.0f;
+
+    float m_minFrameTimeMs = std::numeric_limits<float>::infinity();
+    float m_maxFrameTimeMs = 0.0f;
+    double m_frameTimeWindowStart = 0.0;
 
     glm::vec3 m_cameraPosition = glm::vec3(0.0f, 0.0f, 0.0f);
     glm::vec3 m_cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
