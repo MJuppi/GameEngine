@@ -124,7 +124,14 @@ endif()
 # Engine applications
 # -----------------------------------------------------------------------------
 
-add_executable(Game src/game/main.cpp)
+set(GAME_SOURCES
+    src/game/main.cpp
+    src/game/Game.cpp
+    src/game/Level.cpp
+    src/game/LevelManager.cpp
+)
+
+add_executable(Game ${GAME_SOURCES})
 add_dependencies(Game CompileShaders)
 target_link_libraries(Game PRIVATE game_engine_lib)
 
