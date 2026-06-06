@@ -16,7 +16,7 @@ A **lightweight 3D game engine** built with **C++20** and **Vulkan**. The codeba
 Pass an **OBJ** file path as the first argument (absolute or relative to your current working directory):
 
 ```bash
-./build/GameEngine path/to/mesh.obj
+./build/Game path/to/mesh.obj
 ```
 
 If you run with **no arguments** from the project root and `assets/models/SuomiKP.obj` exists, that model is loaded automatically.
@@ -30,10 +30,10 @@ Camera controls in the viewer:
 Quick check without opening the window:
 
 ```bash
-./build/GameEngine --check models/SuomiKP.obj
+./build/Game --check models/SuomiKP.obj
 ```
 
-The loader triangulates face lines (`f`) with a fan, reads **`mtllib` / `usemtl`**, and loads companion **`.mtl`** files (`Kd`, `Ks`, `Ns`, …). Shading uses a simple **Blinn-Phong** model per material. Models are **centered** (not squashed), oriented from Blender **Y-up** to **Z-up**, and the camera is fitted to the mesh bounding sphere. A **depth buffer** sorts front/back faces correctly. Texture maps (`map_Kd`) are not loaded yet.
+The loader triangulates face lines (`f`) with a fan, reads **`mtllib` / `usemtl`**, and loads companion **`.mtl`** files (`Kd`, `Ks`, `Ns`, …). Shading uses a simple **Blinn-Phong** model per material. Models are **centered** (not squashed), oriented from Blender **Y-up** to **Z-up**, and the camera is fitted to the mesh bounding sphere. A **depth buffer** sorts front/back faces correctly. OBJ texture maps (`map_Kd`) are not loaded yet; the glTF loader reads base color factors but does not sample external image textures yet.
 
 ## Project layout
 
@@ -54,9 +54,8 @@ include/
     mesh/
     vulkan/
 src/
-  main.cpp               # entry point (+ optional OBJ path argv[1])
   game/
-    main.cpp             # optional game executable entry point
+    main.cpp             # entry point (Game executable)
   engine/
     lib/
       Engine.cpp
@@ -105,15 +104,14 @@ cmake --build build -j 8
 Run from the project root so the asset-relative paths resolve correctly:
 
 ```bash
-./build/GameE        # Linux / macOS
-build\Game.exe      # Windows (MinGW generator)
+./build/Game         # Linux / macOS
+.\build\Game.exe    # Windows (MinGW generator)
 ```
 
 Press **Escape** or close the window to quit.
 
 ## Next steps (ideas)
 
-- Depth buffer (`VK_FORMAT_D32_SFLOAT`) to sort front/back faces correctly
 - Texture sampling (use `vt` from OBJ + `.mtl`)
 - Descriptor sets for materials
 - Entity / scene graph
