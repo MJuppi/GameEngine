@@ -51,6 +51,59 @@ MeshData makeUnitCubeMesh() {
     return mesh;
 }
 
+MeshData makeSkyboxMesh(uint32_t materialIndex, float size) {
+    MeshData mesh;
+    mesh.materials = {makeDefaultMaterial("default")};
+
+    const float h = size * 0.5f;
+
+    auto makeV = [&](float x, float y, float z, float nx, float ny, float nz) {
+        return makeVertex(x, y, z, nx, ny, nz, materialIndex);
+    };
+
+    // Create a cube but invert normals so the inside is visible.
+    mesh.vertices = {
+        makeV(-h, -h, -h, 0, 0, 1),
+        makeV( h, -h, -h, 0, 0, 1),
+        makeV( h,  h, -h, 0, 0, 1),
+        makeV(-h,  h, -h, 0, 0, 1),
+        makeV(-h, -h,  h, 0, 0, -1),
+        makeV( h, -h,  h, 0, 0, -1),
+        makeV( h,  h,  h, 0, 0, -1),
+        makeV(-h,  h,  h, 0, 0, -1),
+    };
+
+    // Use same index order but winding will be flipped later if needed.
+    mesh.indices = {
+        0, 2, 1, 2, 0, 3,
+        4, 6, 5, 6, 4, 7,
+        0, 7, 4, 7, 0, 3,
+        1, 6, 5, 6, 1, 2,
+        3, 6, 2, 6, 3, 7,
+        0, 5, 1, 5, 0, 4,
+    };
+
+    return mesh;
+}
+
+MeshData makeGroundPlaneMesh(uint32_t materialIndex, float size, float y) {
+    MeshData mesh;
+    mesh.materials = {makeDefaultMaterial("default")};
+
+    const float h = size * 0.5f;
+
+    // Simple quad (two triangles) lying on XZ plane at height y.
+    Vertex v0 = makeVertex(-h, y, -h, 0, 1, 0, materialIndex);
+    Vertex v1 = makeVertex( h, y, -h, 0, 1, 0, materialIndex);
+    Vertex v2 = makeVertex( h, y,  h, 0, 1, 0, materialIndex);
+    Vertex v3 = makeVertex(-h, y,  h, 0, 1, 0, materialIndex);
+
+    mesh.vertices = {v0, v1, v2, v3};
+    mesh.indices = {0, 1, 2, 2, 3, 0};
+
+    return mesh;
+}
+
 void centerMesh(MeshData& mesh) {
     // Translate mesh so its bounding box is centered at the origin.
     if (mesh.vertices.empty()) {
