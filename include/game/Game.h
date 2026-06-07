@@ -38,7 +38,6 @@ public:
     
 private:
     void initializeLevels();
-    void loadModelsFromDirectory();
     
     GameState state_;
     LevelManager levelManager_;

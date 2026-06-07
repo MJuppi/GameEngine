@@ -3,7 +3,6 @@
 
 #include <iostream>
 #include <filesystem>
-#include <algorithm>
 
 namespace fs = std::filesystem;
 namespace ge {
@@ -25,7 +24,6 @@ void Game::initialize() {
     state_ = GameState::Loading;
     
     initializeLevels();
-    loadModelsFromDirectory();
     
     // Create engine with the current level's mesh
     auto currentLevel = levelManager_.getCurrentLevel();
@@ -66,58 +64,12 @@ void Game::shutdown() {
 }
 
 void Game::initializeLevels() {
-    // Create default levels
-    // TODO: Load level definitions from configuration or files
-    
+    // Create a single default level. The level itself will choose a model from
+    // assets/models if one is available, otherwise it will fall back to the
+    // built-in scene.
     auto defaultLevel = std::make_shared<Level>("Default");
-    const fs::path modelDir = "assets/models";
-    
-    // Try to find first available model
-    if (fs::exists(modelDir) && fs::is_directory(modelDir)) {
-        for (const auto& entry : fs::directory_iterator(modelDir)) {
-            if (!entry.is_regular_file()) {
-                continue;
-            }
-
-            const auto ext = entry.path().extension();
-            if (ext == ".obj" || ext == ".gltf" || ext == ".glb") {
-                defaultLevel->setMeshPath(entry.path().string());
-                break;
-            }
-        }
-    }
-    
     levelManager_.addLevel(defaultLevel);
 }
 
-void Game::loadModelsFromDirectory() {
-    const fs::path modelDir = "assets/models";
-    std::vector<fs::path> modelFiles;
-
-    if (fs::exists(modelDir) && fs::is_directory(modelDir)) {
-        for (const auto& entry : fs::directory_iterator(modelDir)) {
-            if (!entry.is_regular_file()) {
-                continue;
-            }
-
-            const auto ext = entry.path().extension();
-            if (ext == ".obj" || ext == ".gltf" || ext == ".glb") {
-                modelFiles.push_back(entry.path());
-            }
-        }
-    }
-
-    if (!modelFiles.empty()) {
-        std::sort(modelFiles.begin(), modelFiles.end());
-        std::cout << "Found " << modelFiles.size() << " model(s) in " << modelDir.string() << '\n';
-        
-        // Log available models
-        for (const auto& model : modelFiles) {
-            std::cout << "  - " << model.filename().string() << '\n';
-        }
-    } else {
-        std::cout << "No models found in " << modelDir.string() << '\n';
-    }
-}
 
 }  // namespace ge

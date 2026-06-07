@@ -12,13 +12,37 @@ Level::Level(const std::string& name, const std::string& meshPath)
     : name_(name), meshPath_(meshPath), loaded_(false) {
 }
 
+static std::string findModelInAssetDirectory() {
+    const std::filesystem::path modelDir = "assets/models";
+    if (!std::filesystem::exists(modelDir) || !std::filesystem::is_directory(modelDir)) {
+        return {};
+    }
+
+    for (const auto& entry : std::filesystem::directory_iterator(modelDir)) {
+        if (!entry.is_regular_file()) {
+            continue;
+        }
+
+        const auto ext = entry.path().extension();
+        if (ext == ".obj" || ext == ".gltf" || ext == ".glb") {
+            return entry.path().string();
+        }
+    }
+
+    return {};
+}
+
 void Level::load() {
     if (loaded_) {
         return;  // Already loaded
     }
 
     if (meshPath_.empty()) {
-        // No mesh path provided — build a small example level composed of
+        meshPath_ = findModelInAssetDirectory();
+    }
+
+    if (meshPath_.empty()) {
+        // No mesh path found — build a small example level composed of
         // a unit cube (as a placeholder), a large inverted skybox cube and
         // a ground plane. Assign distinct materials for each part.
         MeshData cube = makeUnitCubeMesh();
@@ -97,9 +121,10 @@ void Level::load() {
         loaded_ = true;
     } catch (const std::exception& e) {
         std::cerr << "Failed to load level '" << name_ << "': " << e.what() << '\n';
-        std::cerr << "Falling back to unit cube for level '" << name_ << "'.\n";
-        mesh_ = makeUnitCubeMesh();
-        loaded_ = true;
+        std::cerr << "Falling back to built-in default level for '" << name_ << "'.\n";
+        meshPath_.clear();
+        loaded_ = false;
+        load();
     }
 }
 
