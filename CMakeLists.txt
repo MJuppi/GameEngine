@@ -84,6 +84,8 @@ set(ENGINE_SOURCES
     src/engine/lib/mesh/MtlLoader.cpp
     src/engine/lib/mesh/ObjMeshLoader.cpp
     src/engine/lib/mesh/GltfMeshLoader.cpp
+    src/engine/lib/asset/TextureLoader.cpp
+    src/engine/lib/asset/AssetLoader.cpp
     src/engine/lib/asset/AssetManager.cpp
     src/engine/lib/scene/SceneGraph.cpp
     src/engine/lib/Engine.cpp

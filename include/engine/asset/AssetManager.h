@@ -1,5 +1,6 @@
 #pragma once
 
+#include "engine/asset/TextureData.h"
 #include "engine/mesh/MeshData.h"
 
 #include <filesystem>
@@ -21,10 +22,13 @@ public:
     [[nodiscard]] bool hasMesh(const std::string& path) const;
     [[nodiscard]] const MeshData& getMesh(const std::string& path) const;
 
-private:
-    [[nodiscard]] static std::string getExtension(const std::filesystem::path& path);
+    [[nodiscard]] const TextureData& loadTexture(const std::string& path);
+    [[nodiscard]] bool hasTexture(const std::string& path) const;
+    [[nodiscard]] const TextureData& getTexture(const std::string& path) const;
 
-    std::unordered_map<std::string, MeshData> cache_;
+private:
+    std::unordered_map<std::string, MeshData> meshCache_;
+    std::unordered_map<std::string, TextureData> textureCache_;
 };
 
 } // namespace ge
