@@ -47,6 +47,8 @@ FetchContent_MakeAvailable(tinygltf)
 
 find_package(Vulkan REQUIRED)
 
+# Vulkan is linked to the engine library later.
+
 # -----------------------------------------------------------------------------
 # Shader compilation (GLSL -> SPIR-V via Vulkan SDK's glslc)
 # -----------------------------------------------------------------------------
