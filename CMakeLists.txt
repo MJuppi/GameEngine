@@ -37,13 +37,27 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
-# tinygltf — header-only glTF 2.0 file format loader.
+# cgltf — small non-deprecated glTF 2.0 loader header.
 FetchContent_Declare(
-    tinygltf
-    GIT_REPOSITORY https://github.com/syoyo/tinygltf.git
-    GIT_TAG        v2.8.21
+    cgltf
+    GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
+    GIT_TAG        v1.15
 )
-FetchContent_MakeAvailable(tinygltf)
+FetchContent_GetProperties(cgltf)
+if(NOT cgltf_POPULATED)
+    FetchContent_Populate(cgltf)
+endif()
+
+# stb — image loading required by TextureLoader.
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG        master
+)
+FetchContent_GetProperties(stb)
+if(NOT stb_POPULATED)
+    FetchContent_Populate(stb)
+endif()
 
 find_package(Vulkan REQUIRED)
 
@@ -86,6 +100,7 @@ set(ENGINE_SOURCES
     src/engine/lib/mesh/MtlLoader.cpp
     src/engine/lib/mesh/ObjMeshLoader.cpp
     src/engine/lib/mesh/GltfMeshLoader.cpp
+    src/engine/lib/mesh/CgltfImplementation.cpp
     src/engine/lib/asset/TextureLoader.cpp
     src/engine/lib/asset/AssetLoader.cpp
     src/engine/lib/asset/AssetManager.cpp
@@ -105,8 +120,9 @@ add_dependencies(game_engine_lib CompileShaders)
 
 target_include_directories(game_engine_lib PUBLIC
     ${CMAKE_SOURCE_DIR}/include
-    ${tinygltf_SOURCE_DIR}
     ${Vulkan_INCLUDE_DIRS}
+    ${cgltf_SOURCE_DIR}
+    ${stb_SOURCE_DIR}
 )
 
 target_link_libraries(game_engine_lib PUBLIC
