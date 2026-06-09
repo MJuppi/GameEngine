@@ -1,0 +1,8 @@
+{
+  "meshes": {
+    "suomi": "models/SuomiKP.obj"
+  },
+  "textures": {
+    "suomi_albedo": "textures/suomi_albedo.png"
+  }
+}

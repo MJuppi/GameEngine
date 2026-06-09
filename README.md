@@ -153,3 +153,18 @@ Guidelines:
 - Normalized model unit: export meshes so that 1 unit == 1 meter (or document chosen convention) and center meshes on origin when appropriate.
 - Texture units: use sRGB for color maps and linear for normal/roughness/metallic maps; name textures alongside material entries (e.g. `mesh_albedo.png`, `mesh_normal.png`).
 
+## Roadmap to a Playable Game
+
+This project is a renderer with a small engine foundation. Below are prioritized steps to turn it into a small playable game — a practical checklist you can follow.
+
+- **Build & Run Baseline:** Confirm the project builds and runs on your target platform. Keep build instructions in this README.
+- **Stabilize Asset Pipeline:** Robust path resolution (search `assets/`), clearer loader errors, and an asset manifest or packer for release builds.
+- **Input & Game Loop:** Centralize input handling, add a fixed-timestep update loop, and separate update vs render passes.
+- **Scene / Entity System:** Introduce a lightweight ECS or component-friendly scene graph and add save/load (JSON or binary) for levels.
+- **Physics & Collision:** Integrate a physics library (or simple internal solver) and tie collisions to gameplay events.
+- **Renderer Polish & UI:** Material/descriptor-system, batching, shader hot-reload, and a minimal UI overlay for HUD/debug.
+- **Sample Level & Gameplay:** Create a playable demo level, simple player controller, and objective to demonstrate systems.
+- **Tests, CI & Docs:** Add a CI build, unit tests for critical systems, and short developer docs for contributors.
+
+If you want, I can add a small `assets/manifest.json` prototype and harden the loaders now — starting with safer path resolution and better error messages.
+

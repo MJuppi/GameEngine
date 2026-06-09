@@ -98,6 +98,7 @@ set(ENGINE_SOURCES
     src/engine/lib/asset/TextureLoader.cpp
     src/engine/lib/asset/AssetLoader.cpp
     src/engine/lib/asset/AssetManager.cpp
+    src/engine/lib/asset/AssetManifest.cpp
     src/engine/lib/scene/SceneGraph.cpp
     src/engine/lib/Engine.cpp
     src/engine/lib/Window.cpp
@@ -121,13 +122,12 @@ target_include_directories(game_engine_lib PUBLIC
     ${Vulkan_INCLUDE_DIRS}
     ${cgltf_SOURCE_DIR}
     ${stb_SOURCE_DIR}
+    ${glfw_SOURCE_DIR}/include
+    ${glm_SOURCE_DIR}
 )
 
-target_link_libraries(game_engine_lib PUBLIC
-    glfw
-    glm::glm
-    Vulkan::Vulkan
-)
+target_link_libraries(game_engine_lib PUBLIC)
+
 
 target_compile_definitions(game_engine_lib PUBLIC
     SHADER_DIR="${CMAKE_BINARY_DIR}/shaders"
@@ -153,7 +153,7 @@ set(GAME_SOURCES
 
 add_executable(Game ${GAME_SOURCES})
 add_dependencies(Game CompileShaders)
-target_link_libraries(Game PRIVATE game_engine_lib)
+target_link_libraries(Game PRIVATE game_engine_lib glfw glm::glm Vulkan::Vulkan)
 
 if(MSVC)
     target_compile_options(Game PRIVATE /W4 /permissive-)

@@ -21,6 +21,7 @@ public:
 
 private:
     [[nodiscard]] static std::string getExtension(const std::filesystem::path& path);
+    [[nodiscard]] static std::filesystem::path resolveAssetPath(const std::filesystem::path& path);
 };
 
 } // namespace ge
