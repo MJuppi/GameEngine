@@ -1,3 +1,4 @@
+#define CGLTF_IMPLEMENTATION
 #include "engine/mesh/GltfMeshLoader.h"
 
 #include "engine/mesh/Material.h"

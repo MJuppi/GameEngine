@@ -11,6 +11,7 @@ project(GameEngine VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # -----------------------------------------------------------------------------
 # Dependencies (downloaded on first configure)
@@ -100,7 +101,6 @@ set(ENGINE_SOURCES
     src/engine/lib/mesh/MtlLoader.cpp
     src/engine/lib/mesh/ObjMeshLoader.cpp
     src/engine/lib/mesh/GltfMeshLoader.cpp
-    src/engine/lib/mesh/CgltfImplementation.cpp
     src/engine/lib/asset/TextureLoader.cpp
     src/engine/lib/asset/AssetLoader.cpp
     src/engine/lib/asset/AssetManager.cpp
@@ -117,6 +117,10 @@ set(ENGINE_SOURCES
 
 add_library(game_engine_lib STATIC ${ENGINE_SOURCES})
 add_dependencies(game_engine_lib CompileShaders)
+
+if (NOT DEFINED Vulkan_INCLUDE_DIRS)
+    set(Vulkan_INCLUDE_DIRS "$ENV{VULKAN_SDK}/Include")
+endif()
 
 target_include_directories(game_engine_lib PUBLIC
     ${CMAKE_SOURCE_DIR}/include
