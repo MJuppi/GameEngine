@@ -34,7 +34,7 @@ FetchContent_MakeAvailable(glfw)
 FetchContent_Declare(
     glm
     GIT_REPOSITORY https://github.com/g-truc/glm.git
-    GIT_TAG        1.0.1
+    GIT_TAG        1.0.2
 )
 FetchContent_MakeAvailable(glm)
 
@@ -44,10 +44,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
     GIT_TAG        v1.15
 )
-FetchContent_GetProperties(cgltf)
-if(NOT cgltf_POPULATED)
-    FetchContent_Populate(cgltf)
-endif()
+FetchContent_MakeAvailable(cgltf)
 
 # stb — image loading required by TextureLoader.
 FetchContent_Declare(
@@ -55,10 +52,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/nothings/stb.git
     GIT_TAG        master
 )
-FetchContent_GetProperties(stb)
-if(NOT stb_POPULATED)
-    FetchContent_Populate(stb)
-endif()
+FetchContent_MakeAvailable(stb)
 
 find_package(Vulkan REQUIRED)
 
