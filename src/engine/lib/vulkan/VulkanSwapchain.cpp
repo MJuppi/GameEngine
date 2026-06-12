@@ -73,11 +73,19 @@ VkSurfaceFormatKHR VulkanSwapchain::chooseFormat(const std::vector<VkSurfaceForm
 }
 
 VkPresentModeKHR VulkanSwapchain::choosePresentMode(const std::vector<VkPresentModeKHR>& modes) const {
-    // Prefer MAILBOX (low-latency) present mode when available, fall back to FIFO (vsync).
+    // Prefer MAILBOX for low-latency triple buffering. If unavailable, prefer IMMEDIATE
+    // to avoid mandatory vsync, otherwise fall back to FIFO.
+    bool immediateSupported = false;
     for (VkPresentModeKHR mode : modes) {
         if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
             return mode;
         }
+        if (mode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+            immediateSupported = true;
+        }
+    }
+    if (immediateSupported) {
+        return VK_PRESENT_MODE_IMMEDIATE_KHR;
     }
     return VK_PRESENT_MODE_FIFO_KHR;
 }
@@ -116,6 +124,12 @@ void VulkanSwapchain::createSwapchain(GLFWwindow* window) {
     m_imageFormat = surfaceFormat.format;
 
     uint32_t imageCount = support.capabilities.minImageCount + 1;
+    if (presentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+        imageCount = std::max(imageCount, 3u);
+    }
+    if (presentMode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+        imageCount = std::max(imageCount, 2u);
+    }
     if (support.capabilities.maxImageCount > 0 &&
         imageCount > support.capabilities.maxImageCount) {
         imageCount = support.capabilities.maxImageCount;

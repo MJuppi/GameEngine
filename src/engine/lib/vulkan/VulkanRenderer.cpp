@@ -797,17 +797,28 @@ void VulkanRenderer::drawFrame() {
     SceneUbo scene{};
     scene.model = model;
     scene.viewProj = proj * view;
+    scene.normalMatrix = glm::transpose(glm::inverse(model));
     scene.lightDir = glm::vec4(glm::normalize(glm::vec3(0.35f, 0.55f, 0.75f)), 0.0f);
 
     std::memcpy(m_sceneBuffersMapped[m_currentFrame], &scene, sizeof(scene));
 
     const float fps = deltaTime > 0.0f ? 1.0f / deltaTime : 0.0f;
-    updateUiVertexBuffer(
-        m_swapchain->extent().width,
-        m_swapchain->extent().height,
-        fps,
-        m_minFrameTimeMs,
-        m_maxFrameTimeMs);
+    const double uiUpdateInterval = 0.125;
+    if (currentFrameTime - m_lastUiUpdateTime >= uiUpdateInterval ||
+        std::abs(fps - m_lastRenderedFps) > 0.1f ||
+        std::abs(m_minFrameTimeMs - m_lastRenderedMinFrameTimeMs) > 0.1f ||
+        std::abs(m_maxFrameTimeMs - m_lastRenderedMaxFrameTimeMs) > 0.1f) {
+        updateUiVertexBuffer(
+            m_swapchain->extent().width,
+            m_swapchain->extent().height,
+            fps,
+            m_minFrameTimeMs,
+            m_maxFrameTimeMs);
+        m_lastUiUpdateTime = currentFrameTime;
+        m_lastRenderedFps = fps;
+        m_lastRenderedMinFrameTimeMs = m_minFrameTimeMs;
+        m_lastRenderedMaxFrameTimeMs = m_maxFrameTimeMs;
+    }
 
     vkResetFences(m_device->logical(), 1, &m_inFlightFences[m_currentFrame]);
     vkResetCommandBuffer(m_commandBuffers[imageIndex], 0);

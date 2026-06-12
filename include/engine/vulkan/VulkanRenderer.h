@@ -32,6 +32,7 @@ class VulkanBuffer;
 struct SceneUbo {
     alignas(16) glm::mat4 model;
     alignas(16) glm::mat4 viewProj;
+    alignas(16) glm::mat4 normalMatrix;
     alignas(16) glm::vec4 lightDir;
 };
 
@@ -135,6 +136,11 @@ private:
     bool m_firstMouse = true;
     bool m_mouseCaptured = false;
     double m_lastFrameTime = 0.0;
+
+    double m_lastUiUpdateTime = 0.0;
+    float m_lastRenderedFps = 0.0f;
+    float m_lastRenderedMinFrameTimeMs = 0.0f;
+    float m_lastRenderedMaxFrameTimeMs = 0.0f;
 };
 
 } // namespace ge

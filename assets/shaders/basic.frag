@@ -10,6 +10,7 @@ layout(location = 1) flat in uint fragMaterialIndex;
 layout(set = 0, binding = 0) uniform SceneUbo {
     mat4 model;
     mat4 viewProj;
+    mat4 normalMatrix;
     vec4 lightDir;
 } scene;
 
