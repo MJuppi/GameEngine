@@ -2,7 +2,6 @@
 
 #include "engine/asset/AssetManager.h"
 #include "engine/mesh/MeshData.h"
-#include "engine/scene/SceneGraph.h"
 #include <string>
 #include <vector>
 
@@ -33,7 +32,6 @@ private:
     MeshData mesh_;
     bool loaded_;
     AssetManager assetManager_;
-    SceneGraph sceneGraph_;
 };
 
 }  // namespace ge

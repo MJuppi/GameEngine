@@ -64,12 +64,9 @@ void Game::shutdown() {
 }
 
 void Game::initializeLevels() {
-    // Create a single default level. The level itself will choose a model from
-    // assets/models if one is available, otherwise it will fall back to the
-    // built-in scene.
+    // Create a single default level.
     auto defaultLevel = std::make_shared<Level>("Default");
     levelManager_.addLevel(defaultLevel);
 }
-
 
 }  // namespace ge
