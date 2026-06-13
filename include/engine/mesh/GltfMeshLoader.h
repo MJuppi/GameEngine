@@ -3,7 +3,7 @@
 // =============================================================================
 // GltfMeshLoader.h — Load glTF 2.0 files (.gltf, .glb)
 // =============================================================================
-// Uses tinygltf library to parse glTF files and convert to MeshData.
+// Uses cgltf library to parse glTF files and convert to MeshData.
 // Supports positions, normals, materials, and multiple primitives.
 // =============================================================================
 
