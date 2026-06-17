@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/Engine.h"
+#include "engine/physics/PhysicsEngine.h"
 #include "LevelManager.h"
 #include <memory>
 
@@ -35,6 +36,10 @@ public:
     // Engine access
     Engine* getEngine() { return engine_.get(); }
     const Engine* getEngine() const { return engine_.get(); }
+    
+    // Physics engine access
+    PhysicsEngine& getPhysicsEngine() { return engine_->getPhysicsEngine(); }
+    const PhysicsEngine& getPhysicsEngine() const { return engine_->getPhysicsEngine(); }
     
 private:
     void initializeLevels();

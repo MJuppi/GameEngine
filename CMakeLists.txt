@@ -108,6 +108,7 @@ set(ENGINE_SOURCES
     src/engine/lib/vulkan/VulkanPipeline.cpp
     src/engine/lib/vulkan/VulkanBuffer.cpp
     src/engine/lib/vulkan/VulkanRenderer.cpp
+    src/engine/lib/physics/PhysicsEngine.cpp
 )
 
 add_library(game_engine_lib STATIC ${ENGINE_SOURCES})

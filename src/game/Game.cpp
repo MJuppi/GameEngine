@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <filesystem>
+#include <glm/glm.hpp>
 
 namespace fs = std::filesystem;
 namespace ge {
@@ -30,9 +31,38 @@ void Game::initialize() {
     if (currentLevel) {
         currentLevel->load();
         engine_ = std::make_unique<Engine>(currentLevel->getMesh());
+        
+        // Create physics bodies using the engine's physics engine
+        RigidBodyProps testCubeProps;
+        testCubeProps.mass = 1.0f;
+        testCubeProps.restitution = 0.7f;
+        testCubeProps.friction = 0.3f;
+        
+        // Create a test cube body
+        engine_->getPhysicsEngine().createBoxBody({0.5f, 0.5f, 0.5f}, 
+                                                  glm::translate(glm::mat4(1.0f), {0.0f, 5.0f, 0.0f}), 
+                                                  testCubeProps);
+        
+        // Create a ground plane (kinematic body)
+        RigidBodyProps groundProps;
+        groundProps.mass = 0.0f; // Infinite mass (kinematic)
+        groundProps.isKinematic = true;
+        groundProps.useGravity = false;
+        
+        // Large box as ground
+        engine_->getPhysicsEngine().createBoxBody({50.0f, 0.5f, 50.0f}, 
+                                                   glm::translate(glm::mat4(1.0f), {0.0f, -2.0f, 0.0f}), 
+                                                   groundProps);
     } else {
         // Fallback to unit cube if no levels
         engine_ = std::make_unique<Engine>(makeUnitCubeMesh());
+        
+        // Create a test physics body
+        RigidBodyProps testCubeProps;
+        testCubeProps.mass = 1.0f;
+        testCubeProps.restitution = 0.7f;
+        
+        engine_->getPhysicsEngine().createBoxBody({0.5f, 0.5f, 0.5f}, glm::mat4(1.0f), testCubeProps);
     }
 
     std::cout << "Game initialized successfully.\n";
@@ -64,9 +94,12 @@ void Game::shutdown() {
 }
 
 void Game::initializeLevels() {
-    // Create a single default level.
-    auto defaultLevel = std::make_shared<Level>("Default");
-    levelManager_.addLevel(defaultLevel);
+    // Create a level with the test cube
+    auto testCubeLevel = std::make_shared<Level>("TestCube", "assets/models/TestCube.obj");
+    levelManager_.addLevel(testCubeLevel);
+    
+    // Set the test cube level as current
+    levelManager_.setCurrentLevel("TestCube");
 }
 
 }  // namespace ge

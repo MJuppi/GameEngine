@@ -3,13 +3,16 @@
 // =============================================================================
 // Engine.h — Top-level game loop owner
 // =============================================================================
-// Engine wires Window + VulkanRenderer. main.cpp only constructs Engine and
+// Engine wires Window + VulkanRenderer + PhysicsEngine. main.cpp only constructs Engine and
 // calls run() — keeps bootstrap code tiny and readable.
 // =============================================================================
 
 #include "engine/mesh/MeshData.h"
+#include <memory>
 
 namespace ge {
+
+class PhysicsEngine;
 
 class Engine {
 public:
@@ -22,6 +25,10 @@ public:
 
     /// Blocks until the window is closed. One frame = poll input + render.
     void run();
+    
+    /// Get the physics engine
+    PhysicsEngine& getPhysicsEngine();
+    const PhysicsEngine& getPhysicsEngine() const;
 
 private:
     class Impl;
