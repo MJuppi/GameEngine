@@ -1,0 +1,15 @@
+# Vertex list
+v 0 0 0
+v 1 0 0
+v 1 1 0
+v 0 1 0
+v 0 0 1
+v 1 0 1
+v 1 1 1
+v 0 1 1
+
+# Face list (each face is defined by 4 vertex indices)
+f 0 1 2 3   # Bottom face (z = 0)
+f 4 5 6 7   # Top face (z = 1)
+f 0 3 7 6   # Back face (y = 1)
+f 1 2 6 5   # Front face (y = 0)
