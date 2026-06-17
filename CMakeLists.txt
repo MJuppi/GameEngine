@@ -99,7 +99,6 @@ set(ENGINE_SOURCES
     src/engine/lib/asset/AssetLoader.cpp
     src/engine/lib/asset/AssetManager.cpp
     src/engine/lib/asset/AssetManifest.cpp
-    src/engine/lib/asset/FontLoader.cpp
     src/engine/lib/scene/SceneGraph.cpp
     src/engine/lib/Engine.cpp
     src/engine/lib/Window.cpp
@@ -108,7 +107,6 @@ set(ENGINE_SOURCES
     src/engine/lib/vulkan/VulkanSwapchain.cpp
     src/engine/lib/vulkan/VulkanPipeline.cpp
     src/engine/lib/vulkan/VulkanBuffer.cpp
-    src/engine/lib/vulkan/VulkanFont.cpp
     src/engine/lib/vulkan/VulkanRenderer.cpp
 )
 

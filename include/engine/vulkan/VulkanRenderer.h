@@ -16,8 +16,6 @@
 
 #include "engine/mesh/Material.h"
 #include "engine/mesh/MeshData.h"
-#include "engine/asset/FontData.h"
-#include "engine/vulkan/UiVertex.h"
 
 struct GLFWwindow;
 
@@ -29,7 +27,6 @@ class VulkanDevice;
 class VulkanSwapchain;
 class VulkanPipeline;
 class VulkanBuffer;
-class VulkanFont;
 
 /// Scene uniform — must match GLSL SceneUbo in basic.vert / basic.frag.
 struct SceneUbo {
@@ -62,7 +59,6 @@ private:
     void createDescriptorPool();
     void createDescriptorSets();
     void createUiPipeline();
-    void createFontSystem();
     void createUiBuffers();
     void updateUiVertexBuffer(
         uint32_t width,
@@ -87,7 +83,6 @@ private:
     std::unique_ptr<VulkanSwapchain> m_swapchain;
     std::unique_ptr<VulkanPipeline> m_pipeline;
     std::unique_ptr<VulkanPipeline> m_uiPipeline;
-    std::unique_ptr<VulkanFont> m_font;
 
     VkCommandPool m_commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> m_commandBuffers;
@@ -109,7 +104,6 @@ private:
 
     VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
     std::vector<VkDescriptorSet> m_descriptorSets;
-    std::vector<VkDescriptorSet> m_fontDescriptorSets;
 
     // Per in-flight frame: acquire + fence. Per swapchain image: present semaphore.
     std::vector<VkSemaphore> m_imageAvailableSemaphores;
