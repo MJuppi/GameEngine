@@ -2,20 +2,14 @@
 #include "engine/vulkan/VulkanBuffer.h"
 #include "engine/vulkan/VulkanDevice.h"
 #include "engine/vulkan/VulkanSwapchain.h"
+#include "engine/vulkan/UiVertex.h"
 #include "engine/math/Types.h"
 
 #include <array>
 #include <cstddef>
 #include <stdexcept>
 
-namespace {
-
-struct UiVertex {
-    float position[2];
-    float color[4];
-};
-
-} // namespace
+namespace {}
 
 namespace ge {
 
@@ -30,9 +24,7 @@ VulkanPipeline::VulkanPipeline(
     , m_fragPath(fragSpvPath)
     , m_useUi(useUi)
 {
-    if (!m_useUi) {
-        createDescriptorSetLayout();
-    }
+    createDescriptorSetLayout();
     createGraphicsPipeline(swapchain);
 }
 
@@ -59,7 +51,7 @@ VkVertexInputBindingDescription VulkanPipeline::vertexBindingDescription() {
 
 std::vector<VkVertexInputAttributeDescription> VulkanPipeline::vertexAttributeDescriptions() {
     if (m_useUi) {
-        std::vector<VkVertexInputAttributeDescription> attrs(2);
+        std::vector<VkVertexInputAttributeDescription> attrs(3);
         attrs[0].binding = 0;
         attrs[0].location = 0;
         attrs[0].format = VK_FORMAT_R32G32_SFLOAT;
@@ -67,8 +59,13 @@ std::vector<VkVertexInputAttributeDescription> VulkanPipeline::vertexAttributeDe
 
         attrs[1].binding = 0;
         attrs[1].location = 1;
-        attrs[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-        attrs[1].offset = offsetof(UiVertex, color);
+        attrs[1].format = VK_FORMAT_R32G32_SFLOAT;
+        attrs[1].offset = offsetof(UiVertex, texCoord);
+
+        attrs[2].binding = 0;
+        attrs[2].location = 2;
+        attrs[2].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        attrs[2].offset = offsetof(UiVertex, color);
         return attrs;
     }
 
@@ -93,6 +90,23 @@ std::vector<VkVertexInputAttributeDescription> VulkanPipeline::vertexAttributeDe
 
 void VulkanPipeline::createDescriptorSetLayout() {
     if (m_useUi) {
+        // UI pipeline descriptor set layout - only needs binding 1 for font sampler
+        VkDescriptorSetLayoutBinding binding{};
+        binding.binding = 1;
+        binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        binding.descriptorCount = 1;
+        binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        binding.pImmutableSamplers = nullptr;
+
+        VkDescriptorSetLayoutCreateInfo layoutInfo{};
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.bindingCount = 1;
+        layoutInfo.pBindings = &binding;
+
+        if (vkCreateDescriptorSetLayout(m_device.logical(), &layoutInfo, nullptr, &m_descriptorSetLayout) !=
+            VK_SUCCESS) {
+            throw std::runtime_error("Failed to create UI descriptor set layout");
+        }
         return;
     }
 
@@ -229,8 +243,8 @@ void VulkanPipeline::createGraphicsPipeline(VulkanSwapchain& swapchain) {
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = m_useUi ? 0 : 1;
-    pipelineLayoutInfo.pSetLayouts = m_useUi ? nullptr : &m_descriptorSetLayout;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
 
     if (vkCreatePipelineLayout(m_device.logical(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout) !=
         VK_SUCCESS) {

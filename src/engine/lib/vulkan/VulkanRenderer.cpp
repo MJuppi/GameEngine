@@ -8,6 +8,7 @@
 #include "engine/vulkan/VulkanDevice.h"
 #include "engine/vulkan/VulkanPipeline.h"
 #include "engine/vulkan/VulkanSwapchain.h"
+#include "engine/vulkan/VulkanFont.h"
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -25,34 +26,6 @@
 namespace ge {
 
 namespace {
-
-struct UiVertex {
-    glm::vec2 position;
-    glm::vec4 color;
-};
-
-static constexpr std::array<std::array<uint8_t, 7>, 10> kDigitGlyphs = {
-    std::array<uint8_t, 7>{0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110},
-    std::array<uint8_t, 7>{0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110},
-    std::array<uint8_t, 7>{0b01110, 0b10001, 0b00001, 0b00010, 0b00100, 0b01000, 0b11111},
-    std::array<uint8_t, 7>{0b01110, 0b10001, 0b00001, 0b00110, 0b00001, 0b10001, 0b01110},
-    std::array<uint8_t, 7>{0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010},
-    std::array<uint8_t, 7>{0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110},
-    std::array<uint8_t, 7>{0b00110, 0b01000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110},
-    std::array<uint8_t, 7>{0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000},
-    std::array<uint8_t, 7>{0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110},
-    std::array<uint8_t, 7>{0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100},
-};
-
-static constexpr std::array<uint8_t, 7> kFontF = {0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000};
-static constexpr std::array<uint8_t, 7> kFontP = {0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000};
-static constexpr std::array<uint8_t, 7> kFontS = {0b01110, 0b10000, 0b10000, 0b01110, 0b00001, 0b00001, 0b11110};
-static constexpr std::array<uint8_t, 7> kFontA = {0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001};
-static constexpr std::array<uint8_t, 7> kFontI = {0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b11111};
-static constexpr std::array<uint8_t, 7> kFontM = {0b10001, 0b11011, 0b10101, 0b10101, 0b10001, 0b10001, 0b10001};
-static constexpr std::array<uint8_t, 7> kFontN = {0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001, 0b10001};
-static constexpr std::array<uint8_t, 7> kFontX = {0b10001, 0b01010, 0b00100, 0b00100, 0b01010, 0b10001, 0b10001};
-static constexpr std::array<uint8_t, 7> kFontDot = {0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00100, 0b00100};
 
 static std::string formatFixed(float value, int decimals) {
     if (decimals <= 0) {
@@ -88,6 +61,8 @@ static void appendQuad(
     float top,
     float right,
     float bottom,
+    glm::vec2 texCoordLeft,
+    glm::vec2 texCoordBottom,
     glm::vec4 color,
     uint32_t screenWidth,
     uint32_t screenHeight)
@@ -97,95 +72,15 @@ static void appendQuad(
     const glm::vec2 br = pixelToNdc(right, bottom, screenWidth, screenHeight);
     const glm::vec2 tr = pixelToNdc(right, top, screenWidth, screenHeight);
 
-    vertices.push_back({tl, color});
-    vertices.push_back({bl, color});
-    vertices.push_back({br, color});
-    vertices.push_back({tl, color});
-    vertices.push_back({br, color});
-    vertices.push_back({tr, color});
+    vertices.push_back({tl, texCoordLeft, color});
+    vertices.push_back({bl, {texCoordLeft.x, texCoordBottom.y}, color});
+    vertices.push_back({br, texCoordBottom, color});
+    vertices.push_back({tl, texCoordLeft, color});
+    vertices.push_back({br, texCoordBottom, color});
+    vertices.push_back({tr, {texCoordBottom.x, texCoordLeft.y}, color});
 }
 
-static bool getGlyphPattern(char c, std::array<uint8_t, 7>& pattern, uint32_t& width) {
-    if (c >= '0' && c <= '9') {
-        pattern = kDigitGlyphs[static_cast<size_t>(c - '0')];
-        width = 5;
-        return true;
-    }
 
-    switch (c) {
-    case 'F':
-        pattern = kFontF;
-        width = 5;
-        return true;
-    case 'P':
-        pattern = kFontP;
-        width = 5;
-        return true;
-    case 'S':
-        pattern = kFontS;
-        width = 5;
-        return true;
-    case 'A':
-        pattern = kFontA;
-        width = 5;
-        return true;
-    case 'I':
-        pattern = kFontI;
-        width = 5;
-        return true;
-    case 'M':
-        pattern = kFontM;
-        width = 5;
-        return true;
-    case 'N':
-        pattern = kFontN;
-        width = 5;
-        return true;
-    case 'X':
-        pattern = kFontX;
-        width = 5;
-        return true;
-    case '.':
-        pattern = kFontDot;
-        width = 3;
-        return true;
-    case ' ':
-        pattern.fill(0);
-        width = 3;
-        return true;
-    default:
-        return false;
-    }
-}
-
-static void appendGlyph(
-    std::vector<UiVertex>& vertices,
-    char c,
-    float x,
-    float y,
-    float pixelSize,
-    glm::vec4 color,
-    uint32_t screenWidth,
-    uint32_t screenHeight)
-{
-    std::array<uint8_t, 7> pattern{};
-    uint32_t glyphWidth = 0;
-    if (!getGlyphPattern(c, pattern, glyphWidth)) {
-        return;
-    }
-
-    for (uint32_t row = 0; row < 7; ++row) {
-        for (uint32_t col = 0; col < glyphWidth; ++col) {
-            if ((pattern[row] >> (glyphWidth - 1 - col)) & 1u) {
-                float left = x + col * pixelSize;
-                float top = y + row * pixelSize;
-                float right = left + pixelSize;
-                float bottom = top + pixelSize;
-                appendQuad(vertices, left, top, right, bottom, color, screenWidth, screenHeight);
-            }
-        }
-    }
-}
 
 void framebufferResizeCallback(GLFWwindow* window, int /*width*/, int /*height*/) {
     // GLFW framebuffer resize callback: notify the renderer to recreate swapchain.
@@ -284,8 +179,9 @@ void VulkanRenderer::initVulkan() {
     createMaterialBuffer();
     createDescriptorPool();
     createDescriptorSets();
-    createCommandBuffers();
     createUiPipeline();
+    createFontSystem();
+    createCommandBuffers();
     createUiBuffers();
     createSyncObjects();
 }
@@ -403,6 +299,24 @@ void VulkanRenderer::createMaterialBuffer() {
         sizeof(MaterialBufferObject));
 }
 
+void VulkanRenderer::createFontSystem() {
+    // Create the font system with Roboto Regular font
+    m_font = std::make_unique<VulkanFont>(*m_device, m_commandPool, m_device->graphicsQueue());
+    
+    // Load font from assets/fonts directory
+    // This will automatically create GPU resources (texture image, view, sampler)
+    m_font->loadFont("Roboto-Regular.ttf", 24.0f, 32, 126);
+    
+    // Use the UI pipeline's descriptor set layout for font descriptor sets
+    // This ensures compatibility with the UI shader
+    if (m_uiPipeline) {
+        m_fontDescriptorSets = m_font->createDescriptorSetsWithLayout(
+            m_descriptorPool, 
+            m_uiPipeline->descriptorSetLayout(),
+            kMaxFramesInFlight);
+    }
+}
+
 void VulkanRenderer::createUiPipeline() {
     m_uiPipeline = std::make_unique<VulkanPipeline>(
         *m_device,
@@ -432,53 +346,55 @@ void VulkanRenderer::updateUiVertexBuffer(
     std::vector<UiVertex> vertices;
     vertices.reserve(kMaxUiVertices);
 
+    // Check if font system is available
+    if (!m_font) {
+        return;
+    }
+
     std::string text = "FPS " + std::to_string(static_cast<int>(std::round(fps))) +
         " MIN " + formatFixed(minFrameTimeMs, 1) + "MS" +
         " MAX " + formatFixed(maxFrameTimeMs, 1) + "MS";
-    constexpr float pixelSize = 4.0f;
-    constexpr float charSpacing = 1.0f;
+    
     constexpr float textPadding = 6.0f;
     constexpr float margin = 16.0f;
 
-    float textWidth = 0.0f;
-    for (char c : text) {
-        std::array<uint8_t, 7> pattern;
-        uint32_t glyphWidth = 0;
-        if (!getGlyphPattern(c, pattern, glyphWidth)) {
-            continue;
-        }
-        textWidth += (glyphWidth * pixelSize) + charSpacing;
-    }
-    if (textWidth > 0.0f) {
-        textWidth -= charSpacing;
-    }
-
-    const float textHeight = 7.0f * pixelSize;
+    // Calculate text dimensions using the font system
+    float textWidth = m_font->getTextWidth(text);
+    float textHeight = m_font->getTextHeight();
+    float ascender = m_font->metrics().ascender;
+    
     const float xStart = static_cast<float>(width) - margin - textWidth - textPadding * 2.0f;
-    const float yStart = margin + textPadding;
+    // yStart is the baseline position - place it so text sits nicely in the panel
+    const float yStart = margin + textPadding + ascender;
     const float panelLeft = xStart - textPadding;
     const float panelTop = margin;
     const float panelRight = static_cast<float>(width) - margin;
     const float panelBottom = yStart + textHeight + textPadding;
 
+    // Background panel
     appendQuad(
         vertices,
         panelLeft,
         panelTop,
         panelRight,
         panelBottom,
+        {0.0f, 0.0f}, // texCoordLeft
+        {1.0f, 1.0f}, // texCoordBottom
         glm::vec4(0.0f, 0.0f, 0.0f, 0.55f),
         width,
         height);
 
-    float cursorX = xStart;
-    for (char c : text) {
-        appendGlyph(vertices, c, cursorX, yStart, pixelSize, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), width, height);
-        std::array<uint8_t, 7> pattern;
-        uint32_t glyphWidth = 0;
-        if (getGlyphPattern(c, pattern, glyphWidth)) {
-            cursorX += (glyphWidth * pixelSize) + charSpacing;
-        }
+    // Render text using the font system
+    std::vector<FontVertex> textVertices = m_font->createTextVertices(
+        text, xStart, yStart, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), width, height);
+    
+    // Convert FontVertex to UiVertex for compatibility
+    for (const auto& fontVertex : textVertices) {
+        vertices.push_back({
+            fontVertex.position,
+            fontVertex.texCoord,
+            fontVertex.color
+        });
     }
 
     m_uiVertexCount = static_cast<uint32_t>(std::min<size_t>(vertices.size(), kMaxUiVertices));
@@ -494,16 +410,19 @@ void VulkanRenderer::updateUiVertexBuffer(
 
 void VulkanRenderer::createDescriptorPool() {
     std::array<VkDescriptorPoolSize, 2> poolSizes{};
+    // Scene UBO + Material UBO + Font UBO (font descriptor set has both UNIFORM_BUFFER and COMBINED_IMAGE_SAMPLER)
+    // Main descriptor sets use 2 UNIFORM_BUFFER per set (scene + material)
+    // Font descriptor sets use 1 UNIFORM_BUFFER + 1 COMBINED_IMAGE_SAMPLER per set
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[0].descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight);
-    poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[1].descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight);
+    poolSizes[0].descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight * 4); // 2*2 for main + 1*2 for font
+    poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSizes[1].descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight * 2); // 0 for main + 1*2 for font
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
-    poolInfo.maxSets = static_cast<uint32_t>(kMaxFramesInFlight);
+    poolInfo.maxSets = static_cast<uint32_t>(kMaxFramesInFlight * 4); // Main + Font descriptor sets
 
     if (vkCreateDescriptorPool(m_device->logical(), &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create descriptor pool");
@@ -918,6 +837,20 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
         VkBuffer uiBuffers[] = {m_uiVertexBuffer->handle()};
         VkDeviceSize uiOffsets[] = {0};
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, uiBuffers, uiOffsets);
+        
+        // Bind font descriptor set if available
+        if (m_font && !m_fontDescriptorSets.empty()) {
+            vkCmdBindDescriptorSets(
+                commandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                m_uiPipeline->layout(),
+                0,
+                1,
+                &m_fontDescriptorSets[m_currentFrame],
+                0,
+                nullptr);
+        }
+        
         vkCmdDraw(commandBuffer, m_uiVertexCount, 1, 0, 0);
     }
 
