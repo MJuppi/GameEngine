@@ -33,7 +33,6 @@ private:
     MeshData mesh_;
     bool loaded_;
     AssetManager assetManager_;
-    SceneGraph sceneGraph_;
 };
 
 }  // namespace ge
