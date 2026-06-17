@@ -31,6 +31,7 @@ struct UiVertex {
     glm::vec4 color;
 };
 
+// TODO: make fonts from png
 static constexpr std::array<std::array<uint8_t, 7>, 10> kDigitGlyphs = {
     std::array<uint8_t, 7>{0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110},
     std::array<uint8_t, 7>{0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110},
