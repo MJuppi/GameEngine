@@ -1,27 +1,22 @@
 #include "game/Level.h"
-#include "engine/asset/AssetManager.h"
 #include "engine/mesh/MeshData.h"
-#include "engine/mesh/ObjMeshLoader.h"
-#include "engine/mesh/GltfMeshLoader.h"
-#include "engine/scene/SceneGraph.h"
 
 #include <iostream>
-#include <filesystem>
 
 namespace ge {
 
 namespace {
 
-void buildDefaultScene(SceneGraph& sceneGraph) {
-    sceneGraph.clear();
+constexpr const char* kDefaultMeshPath = "assets/models/SuomiKP.obj";
 
-    MeshData cube = makeUnitCubeMesh();
-    MeshData sky = makeSkyboxMesh(1, 100.0f);
-    MeshData ground = makeGroundPlaneMesh(2, 50.0f, -1.5f);
+void postProcessMesh(MeshData& mesh) {
+    centerMesh(mesh);
+    orientMeshYUpToZUp(mesh);
+    flipMeshWinding(mesh);
+}
 
-    sceneGraph.addNode({"default_cube", std::move(cube)});
-    sceneGraph.addNode({"skybox", std::move(sky)});
-    sceneGraph.addNode({"ground", std::move(ground)});
+MeshData makeFallbackMesh() {
+    return makeUnitCubeMesh();
 }
 
 } // namespace
@@ -35,39 +30,27 @@ void Level::load() {
         return;
     }
 
-    sceneGraph_.clear();
+    const std::string pathToLoad = meshPath_.empty() ? kDefaultMeshPath : meshPath_;
+    const bool usedDefaultPath = meshPath_.empty();
 
     try {
-        if (meshPath_.empty()) {
-            buildDefaultScene(sceneGraph_);
-        } else {
-            const std::filesystem::path meshFile(meshPath_);
-            if (!std::filesystem::exists(meshFile)) {
-                throw std::runtime_error("Mesh file not found: " + meshPath_);
-            }
+        const auto& loadedMesh = assetManager_.loadMesh(pathToLoad);
+        mesh_ = loadedMesh;
+        postProcessMesh(mesh_);
 
-            const auto& loadedMesh = assetManager_.loadMesh(meshPath_);
-            sceneGraph_.addNode({"level_mesh", loadedMesh});
+        if (usedDefaultPath) {
+            meshPath_ = kDefaultMeshPath;
         }
 
-        mesh_ = sceneGraph_.buildMesh();
-        centerMesh(mesh_);
-        orientMeshYUpToZUp(mesh_);
-        flipMeshWinding(mesh_);
-
-        std::cout << "Loaded level '" << name_ << "' with mesh: "
-                  << (meshPath_.empty() ? "<built-in default>" : meshPath_) << '\n';
+        std::cout << "Loaded level '" << name_ << "' with mesh: " << pathToLoad << '\n';
         loaded_ = true;
     } catch (const std::exception& e) {
-        std::cerr << "Failed to load level '" << name_ << "': " << e.what() << '\n';
+        std::cerr << "Failed to load level '" << name_ << "' from '" << pathToLoad
+                  << "': " << e.what() << '\n';
         std::cerr << "Falling back to built-in default level for '" << name_ << "'.\n";
-        meshPath_.clear();
-        sceneGraph_.clear();
-        buildDefaultScene(sceneGraph_);
-        mesh_ = sceneGraph_.buildMesh();
-        centerMesh(mesh_);
-        orientMeshYUpToZUp(mesh_);
-        flipMeshWinding(mesh_);
+
+        mesh_ = makeFallbackMesh();
+        postProcessMesh(mesh_);
         loaded_ = true;
     }
 }
@@ -77,7 +60,6 @@ void Level::unload() {
         return;
     }
     
-    sceneGraph_.clear();
     mesh_ = MeshData();
     loaded_ = false;
 }

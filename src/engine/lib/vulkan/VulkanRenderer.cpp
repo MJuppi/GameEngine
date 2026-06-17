@@ -232,6 +232,10 @@ VulkanRenderer::~VulkanRenderer() {
         m_vertexBuffer->destroy(*m_device);
         m_vertexBuffer.reset();
     }
+    if (m_uiVertexBuffer) {
+        m_uiVertexBuffer->destroy(*m_device);
+        m_uiVertexBuffer.reset();
+    }
     for (auto& ub : m_sceneBuffers) {
         if (ub) {
             ub->destroy(*m_device);
