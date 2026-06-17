@@ -1,6 +1,11 @@
 # Test Cube for Physics Testing
-# Created by GameEngine Physics System
-# Unit cube centered at origin with normals and texture coordinates
+# Unit cube centered at origin with normals, texture coordinates, and colored materials
+# Material assignments pre-compensate for orientMeshYUpToZUp + flipMeshWinding:
+# Y-up Top -> Final Back (Red), Y-up Bottom -> Final Front (Green)
+# Y-up Front -> Final Bottom (Blue), Y-up Back -> Final Top (Yellow)
+# Y-up Left -> Final Left (Cyan), Y-up Right -> Final Right (Magenta)
+
+mtllib TestCube.mtl
 
 # Vertices
 v -0.5 -0.5 -0.5
@@ -12,13 +17,13 @@ v  0.5 -0.5  0.5
 v  0.5  0.5  0.5
 v -0.5  0.5  0.5
 
-# Normals
-vn 0.0  0.0 -1.0
-vn 0.0  0.0  1.0
-vn 0.0 -1.0  0.0
-vn 0.0  1.0  0.0
-vn -1.0  0.0  0.0
-vn 1.0  0.0  0.0
+# Normals (Y-up: Z=depth, Y=up, X=right)
+vn 0.0  0.0 -1.0    # Back: -Z -> becomes Top final
+vn 0.0  0.0  1.0    # Front: +Z -> becomes Bottom final
+vn 0.0 -1.0  0.0    # Bottom: -Y -> becomes Front final
+vn 0.0  1.0  0.0    # Top: +Y -> becomes Back final
+vn -1.0  0.0  0.0   # Left: -X
+vn 1.0  0.0  0.0    # Right: +X
 
 # Texture coordinates
 vt 0.0 0.0
@@ -26,16 +31,21 @@ vt 1.0 0.0
 vt 1.0 1.0
 vt 0.0 1.0
 
-# Faces - each face uses the same winding order (counter-clockwise when viewed from outside)
-# Back face (z = -0.5)
+# Back face (z = -0.5) in Y-up -> Top face final -> assign Yellow
+usemtl back_yellow
 f 1/1/1 2/2/1 3/3/1 4/4/1
-# Front face (z = 0.5)
-f 5/1/2 8/4/2 7/3/2 6/2/2
-# Bottom face (y = -0.5)
-f 1/1/3 4/4/3 8/4/3 5/1/3
-# Top face (y = 0.5)
-f 2/2/4 6/2/4 7/3/4 3/3/4
-# Left face (x = -0.5)
-f 1/1/5 5/1/5 7/3/5 4/4/5
-# Right face (x = 0.5)
-f 2/2/6 3/3/6 7/3/6 6/2/6
+# Front face (z = 0.5) in Y-up -> Bottom face final -> assign Blue
+usemtl front_blue
+f 5/1/2 6/2/2 7/3/2 8/4/2
+# Bottom face (y = -0.5) in Y-up -> Front face final -> assign Green
+usemtl bottom_green
+f 1/1/3 5/2/3 6/3/3 2/4/3
+# Top face (y = 0.5) in Y-up -> Back face final -> assign Red
+usemtl top_red
+f 4/1/4 8/2/4 7/3/4 3/4/4
+# Left face (x = -0.5) - Cyan
+usemtl left_cyan
+f 1/1/5 4/4/5 8/3/5 5/2/5
+# Right face (x = 0.5) - Magenta
+usemtl right_magenta
+f 2/1/6 3/4/6 7/3/6 6/2/6

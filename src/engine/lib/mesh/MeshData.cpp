@@ -1,4 +1,5 @@
 #include "engine/mesh/MeshData.h"
+#include "engine/mesh/Material.h"
 
 #include <algorithm>
 #include <cmath>
@@ -24,28 +25,82 @@ Vertex makeVertex(float x, float y, float z, float nx, float ny, float nz, uint3
 } // namespace
 
 MeshData makeUnitCubeMesh() {
-    // Produce a simple unit cube mesh centered at origin with one default material.
+    // Produce a unit cube mesh centered at origin with each face having
+    // a different color and correct outward-facing normals.
+    // Uses 24 vertices (4 per face) to ensure each face has independent normals.
     MeshData mesh;
-    mesh.materials = {makeDefaultMaterial("default")};
+    
+    // Create 6 materials with different colors for each face
+    Material redMat = makeDefaultMaterial("red");
+    redMat.diffuse[0] = 1.0f; redMat.diffuse[1] = 0.0f; redMat.diffuse[2] = 0.0f;
+    
+    Material greenMat = makeDefaultMaterial("green");
+    greenMat.diffuse[0] = 0.0f; greenMat.diffuse[1] = 1.0f; greenMat.diffuse[2] = 0.0f;
+    
+    Material blueMat = makeDefaultMaterial("blue");
+    blueMat.diffuse[0] = 0.0f; blueMat.diffuse[1] = 0.0f; blueMat.diffuse[2] = 1.0f;
+    
+    Material yellowMat = makeDefaultMaterial("yellow");
+    yellowMat.diffuse[0] = 1.0f; yellowMat.diffuse[1] = 1.0f; yellowMat.diffuse[2] = 0.0f;
+    
+    Material cyanMat = makeDefaultMaterial("cyan");
+    cyanMat.diffuse[0] = 0.0f; cyanMat.diffuse[1] = 1.0f; cyanMat.diffuse[2] = 1.0f;
+    
+    Material magentaMat = makeDefaultMaterial("magenta");
+    magentaMat.diffuse[0] = 1.0f; magentaMat.diffuse[1] = 0.0f; magentaMat.diffuse[2] = 1.0f;
+    
+    mesh.materials = {redMat, greenMat, blueMat, yellowMat, cyanMat, magentaMat};
 
+    // Face order: Back, Front, Left, Right, Top, Bottom
+    // Material indices: 0=red (back), 1=green (front), 2=blue (left), 3=yellow (right), 4=cyan (top), 5=magenta (bottom)
+    
+    // Back face (-Z): normal (0, 0, -1)
     mesh.vertices = {
         makeVertex(-0.5f, -0.5f, -0.5f, 0, 0, -1, 0),
         makeVertex(0.5f, -0.5f, -0.5f, 0, 0, -1, 0),
         makeVertex(0.5f, 0.5f, -0.5f, 0, 0, -1, 0),
         makeVertex(-0.5f, 0.5f, -0.5f, 0, 0, -1, 0),
-        makeVertex(-0.5f, -0.5f, 0.5f, 0, 0, 1, 0),
-        makeVertex(0.5f, -0.5f, 0.5f, 0, 0, 1, 0),
-        makeVertex(0.5f, 0.5f, 0.5f, 0, 0, 1, 0),
-        makeVertex(-0.5f, 0.5f, 0.5f, 0, 0, 1, 0),
+        // Front face (+Z): normal (0, 0, 1)
+        makeVertex(-0.5f, -0.5f, 0.5f, 0, 0, 1, 1),
+        makeVertex(0.5f, -0.5f, 0.5f, 0, 0, 1, 1),
+        makeVertex(0.5f, 0.5f, 0.5f, 0, 0, 1, 1),
+        makeVertex(-0.5f, 0.5f, 0.5f, 0, 0, 1, 1),
+        // Left face (-X): normal (-1, 0, 0)
+        makeVertex(-0.5f, -0.5f, -0.5f, -1, 0, 0, 2),
+        makeVertex(-0.5f, -0.5f, 0.5f, -1, 0, 0, 2),
+        makeVertex(-0.5f, 0.5f, 0.5f, -1, 0, 0, 2),
+        makeVertex(-0.5f, 0.5f, -0.5f, -1, 0, 0, 2),
+        // Right face (+X): normal (1, 0, 0)
+        makeVertex(0.5f, -0.5f, -0.5f, 1, 0, 0, 3),
+        makeVertex(0.5f, -0.5f, 0.5f, 1, 0, 0, 3),
+        makeVertex(0.5f, 0.5f, 0.5f, 1, 0, 0, 3),
+        makeVertex(0.5f, 0.5f, -0.5f, 1, 0, 0, 3),
+        // Top face (+Y): normal (0, 1, 0)
+        makeVertex(-0.5f, 0.5f, -0.5f, 0, 1, 0, 4),
+        makeVertex(0.5f, 0.5f, -0.5f, 0, 1, 0, 4),
+        makeVertex(0.5f, 0.5f, 0.5f, 0, 1, 0, 4),
+        makeVertex(-0.5f, 0.5f, 0.5f, 0, 1, 0, 4),
+        // Bottom face (-Y): normal (0, -1, 0)
+        makeVertex(-0.5f, -0.5f, -0.5f, 0, -1, 0, 5),
+        makeVertex(0.5f, -0.5f, -0.5f, 0, -1, 0, 5),
+        makeVertex(0.5f, -0.5f, 0.5f, 0, -1, 0, 5),
+        makeVertex(-0.5f, -0.5f, 0.5f, 0, -1, 0, 5),
     };
 
+    // Indices for each face (two triangles per face)
     mesh.indices = {
+        // Back face (indices 0-3)
         0, 1, 2, 2, 3, 0,
+        // Front face (indices 4-7)
         4, 5, 6, 6, 7, 4,
-        0, 4, 7, 7, 3, 0,
-        1, 5, 6, 6, 2, 1,
-        3, 2, 6, 6, 7, 3,
-        0, 1, 5, 5, 4, 0,
+        // Left face (indices 8-11)
+        8, 9, 10, 10, 11, 8,
+        // Right face (indices 12-15)
+        12, 13, 14, 14, 15, 12,
+        // Top face (indices 16-19)
+        16, 17, 18, 18, 19, 16,
+        // Bottom face (indices 20-23)
+        20, 21, 22, 22, 23, 20,
     };
 
     return mesh;

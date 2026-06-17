@@ -7,7 +7,7 @@ namespace ge {
 
 namespace {
 
-constexpr const char* kDefaultMeshPath = "assets/models/SuomiKP.obj";
+constexpr const char* kDefaultMeshPath = "assets/models/TestCube.obj";
 
 void postProcessMesh(MeshData& mesh) {
     centerMesh(mesh);
