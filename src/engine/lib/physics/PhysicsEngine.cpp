@@ -74,46 +74,38 @@ CollisionResult BoxCollider::checkCollision(
         
         if (colliding) {
             result.isColliding = true;
-            
-            // Calculate penetration depth and normal
-            // Find the axis of least penetration
-            float depths[6] = {
-                bMin.x - aMax.x,    // left
-                aMin.x - bMax.x,    // right
-                bMin.y - aMax.y,    // bottom
-                aMin.y - bMax.y,    // top
-                bMin.z - aMax.z,    // back
-                aMin.z - bMax.z     // front
-            };
-            
-            int bestAxis = 0;
-            float maxDepth = depths[0];
-            for (int i = 1; i < 6; ++i) {
-                if (depths[i] > maxDepth) {
-                    maxDepth = depths[i];
-                    bestAxis = i;
-                }
+
+            const float overlapX1 = aMax.x - bMin.x;
+            const float overlapX2 = bMax.x - aMin.x;
+            const float overlapY1 = aMax.y - bMin.y;
+            const float overlapY2 = bMax.y - aMin.y;
+            const float overlapZ1 = aMax.z - bMin.z;
+            const float overlapZ2 = bMax.z - aMin.z;
+
+            float penetration = overlapX1;
+            glm::vec3 normal{1.0f, 0.0f, 0.0f};
+
+            if (overlapX2 < penetration) { penetration = overlapX2; normal = {-1.0f, 0.0f, 0.0f}; }
+            if (overlapY1 < penetration) { penetration = overlapY1; normal = {0.0f, 1.0f, 0.0f}; }
+            if (overlapY2 < penetration) { penetration = overlapY2; normal = {0.0f, -1.0f, 0.0f}; }
+            if (overlapZ1 < penetration) { penetration = overlapZ1; normal = {0.0f, 0.0f, 1.0f}; }
+            if (overlapZ2 < penetration) { penetration = overlapZ2; normal = {0.0f, 0.0f, -1.0f}; }
+
+            const glm::vec3 centerA = (aMin + aMax) * 0.5f;
+            const glm::vec3 centerB = (bMin + bMax) * 0.5f;
+            if (glm::dot(normal, centerB - centerA) < 0.0f) {
+                normal = -normal;
             }
-            
+
             Contact contact;
-            contact.depth = maxDepth;
-            
-            switch (bestAxis) {
-                case 0: contact.normal = { 1, 0, 0 }; break;
-                case 1: contact.normal = { -1, 0, 0 }; break;
-                case 2: contact.normal = { 0, 1, 0 }; break;
-                case 3: contact.normal = { 0, -1, 0 }; break;
-                case 4: contact.normal = { 0, 0, 1 }; break;
-                case 5: contact.normal = { 0, 0, -1 }; break;
-            }
-            
-            // Calculate contact point (average of overlapping region)
+            contact.depth = penetration;
+            contact.normal = normal;
             contact.point = {
                 (std::max(aMin.x, bMin.x) + std::min(aMax.x, bMax.x)) * 0.5f,
                 (std::max(aMin.y, bMin.y) + std::min(aMax.y, bMax.y)) * 0.5f,
                 (std::max(aMin.z, bMin.z) + std::min(aMax.z, bMax.z)) * 0.5f
             };
-            
+
             result.contacts.push_back(contact);
         }
         
@@ -278,7 +270,7 @@ void RigidBody::setTransform(const glm::mat4& transform) {
 void RigidBody::setPosition(const glm::vec3& position) {
     position_ = position;
     transform_[3] = glm::vec4(position, 1.0f);
-    worldTransform_[3] = glm::vec4(position, 1.0f);
+    updateTransform();
 }
 
 void RigidBody::setVelocity(const glm::vec3& velocity) {
@@ -464,70 +456,73 @@ void PhysicsWorld::detectCollisions(std::vector<Contact>& contacts) {
     }
 }
 
+namespace {
+
+float getInverseMass(const RigidBody* body) {
+    if (body->getProps().isKinematic || body->getProps().mass <= 0.0f) {
+        return 0.0f;
+    }
+    return 1.0f / body->getProps().mass;
+}
+
+} // namespace
+
 void PhysicsWorld::resolveCollisions(std::vector<Contact>& contacts) {
     for (auto& contact : contacts) {
         RigidBody* bodyA = contact.bodyA;
         RigidBody* bodyB = contact.bodyB;
-        
-        // Skip if either body is kinematic
-        if (bodyA->getProps().isKinematic || bodyB->getProps().isKinematic) {
-            continue;
-        }
-        
+
         const RigidBodyProps& propsA = bodyA->getProps();
         const RigidBodyProps& propsB = bodyB->getProps();
-        
-        // Calculate relative velocity
-        glm::vec3 relativeVelocity = bodyB->getVelocity() - bodyA->getVelocity();
-        
-        // Calculate relative velocity along the contact normal
-        float velocityAlongNormal = glm::dot(relativeVelocity, contact.normal);
-        
-        // Only resolve collisions if objects are moving towards each other
+
+        const float invMassA = getInverseMass(bodyA);
+        const float invMassB = getInverseMass(bodyB);
+        const float totalInvMass = invMassA + invMassB;
+
+        if (totalInvMass <= 0.0f) {
+            continue;
+        }
+
+        const glm::vec3 relativeVelocity = bodyB->getVelocity() - bodyA->getVelocity();
+        const float velocityAlongNormal = glm::dot(relativeVelocity, contact.normal);
+
         if (velocityAlongNormal > 0.0f) {
             continue;
         }
-        
-        // Calculate restitution (bounciness)
-        float restitution = std::min(propsA.restitution, propsB.restitution);
-        
-        // Calculate impulse scalar
-        float massA = propsA.mass;
-        float massB = propsB.mass;
-        float totalMass = massA + massB;
-        
-        if (totalMass <= 0.0f) {
-            continue;
+
+        const float restitution = std::min(propsA.restitution, propsB.restitution);
+        float impulse = -(1.0f + restitution) * velocityAlongNormal / totalInvMass;
+
+        bodyA->setVelocity(bodyA->getVelocity() - contact.normal * impulse * invMassA);
+        bodyB->setVelocity(bodyB->getVelocity() + contact.normal * impulse * invMassB);
+
+        const float friction = std::min(propsA.friction, propsB.friction);
+        glm::vec3 tangent = relativeVelocity - contact.normal * velocityAlongNormal;
+        if (glm::length2(tangent) > 0.0001f) {
+            tangent = glm::normalize(tangent);
+            float frictionImpulse = -glm::dot(relativeVelocity, tangent) / totalInvMass;
+            const float maxFriction = impulse * friction;
+            frictionImpulse = std::clamp(frictionImpulse, -maxFriction, maxFriction);
+
+            bodyA->setVelocity(bodyA->getVelocity() - tangent * frictionImpulse * invMassA);
+            bodyB->setVelocity(bodyB->getVelocity() + tangent * frictionImpulse * invMassB);
         }
-        
-        // Calculate impulse magnitude
-        float impulse = -(1.0f + restitution) * velocityAlongNormal;
-        impulse /= totalMass;
-        
-        // Apply impulse to both bodies
-        glm::vec3 impulseVector = contact.normal * impulse;
-        
-        if (massA > 0.0f) {
-            bodyA->setVelocity(bodyA->getVelocity() - impulseVector * (massB / totalMass));
-        }
-        
-        if (massB > 0.0f) {
-            bodyB->setVelocity(bodyB->getVelocity() + impulseVector * (massA / totalMass));
-        }
-        
-        // Positional correction to prevent sinking
-        const float correctionFactor = 0.2f;
-        const float correctionMargin = 0.01f;
-        
+
+        const float correctionFactor = 0.8f;
+        const float correctionMargin = 0.001f;
+
         if (contact.depth > correctionMargin) {
-            glm::vec3 correction = contact.normal * (contact.depth - correctionMargin) * correctionFactor;
-            
-            if (massA > 0.0f) {
-                bodyA->setPosition(bodyA->getPosition() - correction * (massB / totalMass));
+            const glm::vec3 correction =
+                contact.normal * ((contact.depth - correctionMargin) * correctionFactor / totalInvMass);
+
+            if (invMassA > 0.0f) {
+                bodyA->setPosition(bodyA->getPosition() - correction * invMassA);
+                bodyA->updateTransform();
             }
-            
-            if (massB > 0.0f) {
-                bodyB->setPosition(bodyB->getPosition() + correction * (massA / totalMass));
+
+            if (invMassB > 0.0f) {
+                bodyB->setPosition(bodyB->getPosition() + correction * invMassB);
+                bodyB->updateTransform();
             }
         }
     }
@@ -537,21 +532,21 @@ void PhysicsWorld::step(float deltaTime, int /*maxSubSteps*/) {
     if (deltaTime <= 0.0f) {
         return;
     }
-    
-    // Apply gravity
+
     applyGravity();
-    
-    // Detect and resolve collisions
-    std::vector<Contact> contacts;
-    detectCollisions(contacts);
-    
-    // Integrate all bodies
+
     for (auto& body : bodies_) {
         body->integrate(deltaTime);
     }
-    
-    // Resolve collisions after integration
-    resolveCollisions(contacts);
+
+    std::vector<Contact> contacts;
+    for (int iteration = 0; iteration < solverIterations_; ++iteration) {
+        detectCollisions(contacts);
+        if (contacts.empty()) {
+            break;
+        }
+        resolveCollisions(contacts);
+    }
 }
 
 // =============================================================================

@@ -46,6 +46,7 @@ public:
 
     void drawFrame();
     void onFramebufferResize();
+    void setModelMatrix(const glm::mat4& model) { m_modelMatrix = model; }
 
 private:
     void initVulkan();
@@ -141,6 +142,8 @@ private:
     float m_lastRenderedFps = 0.0f;
     float m_lastRenderedMinFrameTimeMs = 0.0f;
     float m_lastRenderedMaxFrameTimeMs = 0.0f;
+
+    glm::mat4 m_modelMatrix = glm::mat4(1.0f);
 };
 
 } // namespace ge

@@ -791,7 +791,7 @@ void VulkanRenderer::drawFrame() {
     const float aspect =
         m_swapchain->extent().width / static_cast<float>(m_swapchain->extent().height);
 
-    const glm::mat4 model = glm::mat4(1.0f);
+    const glm::mat4 model = m_modelMatrix;
     const glm::mat4 view = glm::lookAt(
         m_cameraPosition,
         m_cameraPosition + m_cameraFront,

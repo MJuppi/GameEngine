@@ -57,6 +57,14 @@ public:
             // Update physics simulation
             physicsEngine.update(deltaTime);
 
+            // Sync the first dynamic body's transform to the renderer
+            for (const auto& body : physicsEngine.getWorld().getBodies()) {
+                if (!body->getProps().isKinematic) {
+                    renderer.setModelMatrix(body->getWorldTransform());
+                    break;
+                }
+            }
+
             renderer.drawFrame();
         }
         // VulkanRenderer destructor calls vkDeviceWaitIdle before teardown.
