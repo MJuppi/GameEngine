@@ -1,5 +1,5 @@
 #include "game/Level.h"
-#include "engine/asset/AssetManager.h" // assuming this exists
+#include "engine/asset/AssetManager.h"
 #include <iostream>
 
 namespace ge {
@@ -39,7 +39,7 @@ void Level::load(AssetManager& assetManager) {
         std::cout << "Loaded level '" << name_ << "' from " << pathToLoad << '\n';
         loaded_ = true;
     } catch (const std::exception& e) {
-        std::cerr << "Failed to load level '" << name_ << "' (" << pathToLoad 
+        std::cerr << "Failed to load level '" << name_ << "' (" << pathToLoad
                   << "): " << e.what() << "\nFalling back to unit cube.\n";
         mesh_ = makeFallbackMesh();
         postProcessMesh(mesh_);

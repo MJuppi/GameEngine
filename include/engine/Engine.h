@@ -8,7 +8,6 @@
 // =============================================================================
 
 #include "engine/mesh/MeshData.h"
-#include <memory>
 
 namespace ge {
 
@@ -25,7 +24,7 @@ public:
 
     /// Blocks until the window is closed. One frame = poll input + render.
     void run();
-    
+
     /// Get the physics engine
     PhysicsEngine& getPhysicsEngine();
     const PhysicsEngine& getPhysicsEngine() const;

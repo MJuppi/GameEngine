@@ -1,7 +1,6 @@
 #pragma once
 #include "engine/mesh/MeshData.h"
 #include <string>
-#include <memory>
 
 namespace ge {
 
