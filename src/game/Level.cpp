@@ -1,10 +1,8 @@
 #include "game/Level.h"
-#include "engine/mesh/MeshData.h"
-
+#include "engine/asset/AssetManager.h" // assuming this exists
 #include <iostream>
 
 namespace ge {
-
 namespace {
 
 constexpr const char* kDefaultMeshPath = "assets/models/TestCube.obj";
@@ -21,34 +19,28 @@ MeshData makeFallbackMesh() {
 
 } // namespace
 
-Level::Level(const std::string& name, const std::string& meshPath)
-    : name_(name), meshPath_(meshPath), loaded_(false) {
-}
+Level::Level(std::string name, std::string meshPath)
+    : name_(std::move(name)), meshPath_(std::move(meshPath)) {}
 
-void Level::load() {
-    if (loaded_) {
-        return;
-    }
+void Level::load(AssetManager& assetManager) {
+    if (loaded_) return;
 
     const std::string pathToLoad = meshPath_.empty() ? kDefaultMeshPath : meshPath_;
-    const bool usedDefaultPath = meshPath_.empty();
+    const bool usedDefault = meshPath_.empty();
 
     try {
-        const auto& loadedMesh = assetManager_.loadMesh(pathToLoad);
-        mesh_ = loadedMesh;
+        mesh_ = assetManager.loadMesh(pathToLoad);
         postProcessMesh(mesh_);
 
-        if (usedDefaultPath) {
+        if (usedDefault) {
             meshPath_ = kDefaultMeshPath;
         }
 
-        std::cout << "Loaded level '" << name_ << "' with mesh: " << pathToLoad << '\n';
+        std::cout << "Loaded level '" << name_ << "' from " << pathToLoad << '\n';
         loaded_ = true;
     } catch (const std::exception& e) {
-        std::cerr << "Failed to load level '" << name_ << "' from '" << pathToLoad
-                  << "': " << e.what() << '\n';
-        std::cerr << "Falling back to built-in default level for '" << name_ << "'.\n";
-
+        std::cerr << "Failed to load level '" << name_ << "' (" << pathToLoad 
+                  << "): " << e.what() << "\nFalling back to unit cube.\n";
         mesh_ = makeFallbackMesh();
         postProcessMesh(mesh_);
         loaded_ = true;
@@ -56,12 +48,9 @@ void Level::load() {
 }
 
 void Level::unload() {
-    if (!loaded_) {
-        return;
-    }
-    
-    mesh_ = MeshData();
+    if (!loaded_) return;
+    mesh_ = MeshData{};
     loaded_ = false;
 }
 
-}  // namespace ge
+} // namespace ge

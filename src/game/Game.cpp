@@ -1,16 +1,13 @@
 #include "game/Game.h"
+#include "engine/Engine.h"
 #include "engine/mesh/MeshData.h"
-
+#include "engine/physics/PhysicsEngine.h"
 #include <iostream>
-#include <filesystem>
 #include <glm/glm.hpp>
 
-namespace fs = std::filesystem;
 namespace ge {
 
-Game::Game()
-    : state_(GameState::Uninitialized), engine_(nullptr) {
-}
+Game::Game() = default;
 
 Game::~Game() {
     shutdown();
@@ -23,46 +20,30 @@ void Game::initialize() {
 
     std::cout << "Initializing game...\n";
     state_ = GameState::Loading;
-    
+
     initializeLevels();
-    
-    // Create engine with the current level's mesh
-    auto currentLevel = levelManager_.getCurrentLevel();
+
+    // Load current level
+    Level* currentLevel = levelManager_.getCurrentLevel();
     if (currentLevel) {
-        currentLevel->load();
+        std::cout << "Loading level: " << currentLevel->getName() << '\n';
+        currentLevel->load(assetManager_);
+
         engine_ = std::make_unique<Engine>(currentLevel->getMesh());
-        
-        // Create physics bodies using the engine's physics engine
+        setupTestPhysics();
+    } else {
+        // Fallback
+        std::cout << "No level available, using fallback unit cube.\n";
+        engine_ = std::make_unique<Engine>(makeUnitCubeMesh());
+
         RigidBodyProps testCubeProps;
         testCubeProps.mass = 1.0f;
         testCubeProps.restitution = 0.7f;
         testCubeProps.friction = 0.3f;
-        
-        // Create a test cube body
-        engine_->getPhysicsEngine().createBoxBody({0.5f, 0.5f, 0.5f}, 
-                                                  glm::translate(glm::mat4(1.0f), {0.0f, 5.0f, 0.0f}), 
+
+        engine_->getPhysicsEngine().createBoxBody({0.5f, 0.5f, 0.5f},
+                                                  glm::mat4(1.0f),
                                                   testCubeProps);
-        
-        // Create a ground plane (kinematic body)
-        RigidBodyProps groundProps;
-        groundProps.mass = 0.0f; // Infinite mass (kinematic)
-        groundProps.isKinematic = true;
-        groundProps.useGravity = false;
-        
-        // Large box as ground
-        engine_->getPhysicsEngine().createBoxBody({50.0f, 0.5f, 50.0f}, 
-                                                   glm::translate(glm::mat4(1.0f), {0.0f, -2.0f, 0.0f}), 
-                                                   groundProps);
-    } else {
-        // Fallback to unit cube if no levels
-        engine_ = std::make_unique<Engine>(makeUnitCubeMesh());
-        
-        // Create a test physics body
-        RigidBodyProps testCubeProps;
-        testCubeProps.mass = 1.0f;
-        testCubeProps.restitution = 0.7f;
-        
-        engine_->getPhysicsEngine().createBoxBody({0.5f, 0.5f, 0.5f}, glm::mat4(1.0f), testCubeProps);
     }
 
     std::cout << "Game initialized successfully.\n";
@@ -74,11 +55,11 @@ void Game::run() {
         std::cerr << "Engine not initialized. Call initialize() first.\n";
         return;
     }
-    
+
     if (state_ != GameState::Running) {
         state_ = GameState::Running;
     }
-    
+
     engine_->run();
 }
 
@@ -86,20 +67,44 @@ void Game::shutdown() {
     if (state_ == GameState::Shutdown) {
         return;
     }
-    
+
     std::cout << "Shutting down game...\n";
+
     engine_.reset();
-    levelManager_.unloadAllLevels();
+    levelManager_.unloadAll();
+
     state_ = GameState::Shutdown;
 }
 
 void Game::initializeLevels() {
-    // Create a level with the test cube
-    auto testCubeLevel = std::make_shared<Level>("TestCube", "assets/models/TestCube.obj");
-    levelManager_.addLevel(testCubeLevel);
+    levelManager_.addLevel("TestCube", "assets/models/TestCube.obj");
     
-    // Set the test cube level as current
+    // Add more levels here as needed:
+    // levelManager_.addLevel("Level2", "assets/models/Level2.obj");
+    
     levelManager_.setCurrentLevel("TestCube");
 }
 
-}  // namespace ge
+void Game::setupTestPhysics() {
+    // Falling test cube
+    RigidBodyProps testCubeProps;
+    testCubeProps.mass = 1.0f;
+    testCubeProps.restitution = 0.7f;
+    testCubeProps.friction = 0.3f;
+
+    engine_->getPhysicsEngine().createBoxBody({0.5f, 0.5f, 0.5f},
+                                              glm::translate(glm::mat4(1.0f), {0.0f, 5.0f, 0.0f}),
+                                              testCubeProps);
+
+    // Ground plane
+    RigidBodyProps groundProps;
+    groundProps.mass = 0.0f;
+    groundProps.isKinematic = true;
+    groundProps.useGravity = false;
+
+    engine_->getPhysicsEngine().createBoxBody({50.0f, 0.5f, 50.0f},
+                                              glm::translate(glm::mat4(1.0f), {0.0f, -2.0f, 0.0f}),
+                                              groundProps);
+}
+
+} // namespace ge

@@ -1,94 +1,90 @@
 #include "game/LevelManager.h"
+#include "engine/asset/AssetManager.h"
 #include <algorithm>
-#include <iostream>
 
 namespace ge {
 
-LevelManager::LevelManager()
-    : currentLevelIndex_(-1) {
-}
-
 LevelManager::~LevelManager() {
-    unloadAllLevels();
+    unloadAll();
 }
 
-void LevelManager::addLevel(const std::shared_ptr<Level>& level) {
-    if (!level) {
-        return;
-    }
+void LevelManager::addLevel(std::unique_ptr<Level> level) {
+    if (!level) return;
     
-    levels_.push_back(level);
-    
-    // Auto-select first level
+    levels_.push_back(std::move(level));
+
     if (currentLevelIndex_ < 0) {
         currentLevelIndex_ = 0;
     }
 }
 
-std::shared_ptr<Level> LevelManager::getLevel(size_t index) const {
-    if (index >= levels_.size()) {
-        return nullptr;
-    }
-    return levels_[index];
+void LevelManager::addLevel(const std::string& name, const std::string& meshPath) {
+    addLevel(std::make_unique<Level>(name, meshPath));
 }
 
-std::shared_ptr<Level> LevelManager::getLevelByName(const std::string& name) const {
-    auto it = std::find_if(levels_.begin(), levels_.end(),
-        [&name](const std::shared_ptr<Level>& level) {
-            return level && level->getName() == name;
-        });
-    
-    return (it != levels_.end()) ? *it : nullptr;
-}
+// ====================== Getters ======================
 
-std::shared_ptr<Level> LevelManager::getCurrentLevel() const {
+Level* LevelManager::getCurrentLevel() const {
     if (currentLevelIndex_ < 0 || currentLevelIndex_ >= static_cast<int>(levels_.size())) {
         return nullptr;
     }
-    return levels_[currentLevelIndex_];
+    return levels_[currentLevelIndex_].get();
 }
 
-bool LevelManager::setCurrentLevel(size_t index) {
-    if (index >= levels_.size()) {
-        return false;
-    }
-    currentLevelIndex_ = static_cast<int>(index);
-    return true;
+Level* LevelManager::getLevel(const std::string& name) const {
+    auto it = std::find_if(levels_.begin(), levels_.end(),
+        [&](const auto& lvl) { return lvl && lvl->getName() == name; });
+    
+    return (it != levels_.end()) ? it->get() : nullptr;
 }
+
+Level* LevelManager::getLevel(size_t index) const {
+    if (index >= levels_.size()) return nullptr;
+    return levels_[index].get();
+}
+
+// ====================== Setters ======================
 
 bool LevelManager::setCurrentLevel(const std::string& name) {
-    auto level = getLevelByName(name);
-    if (!level) {
-        return false;
-    }
+    auto level = getLevel(name);
+    if (!level) return false;
+
+    auto it = std::find_if(levels_.begin(), levels_.end(),
+        [level](const auto& ptr) { return ptr.get() == level; });
     
-    auto it = std::find(levels_.begin(), levels_.end(), level);
     currentLevelIndex_ = static_cast<int>(std::distance(levels_.begin(), it));
     return true;
 }
 
+bool LevelManager::setCurrentLevel(size_t index) {
+    if (index >= levels_.size()) return false;
+    currentLevelIndex_ = static_cast<int>(index);
+    return true;
+}
+
 bool LevelManager::nextLevel() {
-    return setCurrentLevel(currentLevelIndex_ + 1);
+    if (levels_.empty()) return false;
+    currentLevelIndex_ = (currentLevelIndex_ + 1) % static_cast<int>(levels_.size());
+    return true;
 }
 
 bool LevelManager::previousLevel() {
-    return setCurrentLevel(currentLevelIndex_ - 1);
+    if (levels_.empty()) return false;
+    currentLevelIndex_ = (currentLevelIndex_ + static_cast<int>(levels_.size()) - 1) 
+                          % static_cast<int>(levels_.size());
+    return true;
 }
 
-void LevelManager::loadAllLevels() {
+void LevelManager::loadAll(AssetManager& assetManager) {
     for (auto& level : levels_) {
-        if (level) {
-            level->load();
-        }
+        if (level) level->load(assetManager);
     }
 }
 
-void LevelManager::unloadAllLevels() {
+void LevelManager::unloadAll() {
     for (auto& level : levels_) {
-        if (level) {
-            level->unload();
-        }
+        if (level) level->unload();
     }
 }
 
-}  // namespace ge
+} // namespace ge
