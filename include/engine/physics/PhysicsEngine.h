@@ -6,13 +6,10 @@
 // Provides basic physics simulation with collision detection and response.
 // =============================================================================
 
-#define GLM_ENABLE_EXPERIMENTAL
-
 #include <vector>
 #include <memory>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
-#include <glm/gtx/quaternion.hpp>
 
 namespace ge {
 
