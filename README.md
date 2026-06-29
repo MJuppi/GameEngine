@@ -42,36 +42,66 @@ assets/                  # runtime assets loaded by the engine
   audio/
   fonts/
   models/
-  shaders/               # GLSL source for shader compilation
+  shaders/
+    basic.vert / .frag   # default mesh vertex + fragment shaders
+    ui.vert / .frag      # overlay/debug UI shaders
   textures/
-build/                   # out-of-source CMake build output
+build/                   # out-of-source CMake build output (.spv, binaries)
 include/
   engine/
-    Engine.h
-    Window.h
+    Engine.h             # top-level game loop owner
+    Window.h             # GLFW window wrapper
+    asset/
+      AssetLoader.h      # unified loader interface for all asset types
+      AssetManager.h     # caches and manages loaded assets (meshes, textures, materials)
+      AssetManifest.h    # describes available assets in the project
+      TextureData.h      # raw pixel data + format metadata
+      TextureLoader.h    # loads PNG/JPEG via stb_image
     math/
-      Types.h
+      Types.h            # Vec3, Mat4, and other math type aliases
     mesh/
+      GltfMeshLoader.h   # glTF 2.0 mesh loader (cgltf)
+      Material.h         # Blinn-Phong material definition (Kd, Ks, Ns)
+      MeshData.h         # vertex/index buffers + draw info
+      MtlLoader.h        # .mtl file parser (Kd/Ks/Ns/ambient/diffuse/specular)
+      ObjMeshLoader.h    # Wavefront OBJ loader with triangulation
+    physics/
+      PhysicsEngine.h    # simple collision/simulation engine
+    scene/
+      SceneGraph.h       # hierarchical node graph for transforms + meshes
     vulkan/
 src/
   game/
     main.cpp             # entry point (Game executable)
+    Game.cpp / .h        # high-level game state machine + loop
+    Level.cpp / .h       # a playable scene / stage
+    LevelManager.cpp / .h # loads and switches between levels
   engine/
     lib/
-      Engine.cpp
-      Window.cpp
+      Engine.cpp         # wires Window + VulkanRenderer + PhysicsEngine
+      Window.cpp         # GLFW window creation, resize, input polling
+      asset/
+        AssetLoader.cpp  # dispatches to the right loader by file type
+        AssetManager.cpp # in-memory caching of loaded assets
+        AssetManifest.cpp # parses manifest.json for available content
+        TextureLoader.cpp # stb_image wrapper + VkImage upload path
       mesh/
-        Material.cpp
-        MeshData.cpp
-        MtlLoader.cpp
-        ObjMeshLoader.cpp
+        Material.cpp     # converts Material → Vulkan push constant / UBO
+        MeshData.cpp     # builds vertex/index buffer layouts
+        MtlLoader.cpp    # .mtl parser implementation
+        ObjMeshLoader.cpp # OBJ file reader with fan triangulation
+        GltfMeshLoader.cpp # glTF 2.0 mesh importer (cgltf)
+      physics/
+        PhysicsEngine.cpp # collision detection / simulation loop
+      scene/
+        SceneGraph.cpp   # node hierarchy transform + cull logic
       vulkan/
-        VulkanContext.cpp
-        VulkanDevice.cpp
-        VulkanSwapchain.cpp
-        VulkanPipeline.cpp
-        VulkanBuffer.cpp
-        VulkanRenderer.cpp
+        VulkanContext.cpp    # instance, validation layers, surface
+        VulkanDevice.cpp     # physical/logical device selection
+        VulkanSwapchain.cpp  # swapchain creation + image views
+        VulkanPipeline.cpp   # graphics pipeline + descriptor sets
+        VulkanBuffer.cpp     # vertex/index/uniform buffer management
+        VulkanRenderer.cpp   # frame rendering, command buffers
 ```
 
 ## Prerequisites
@@ -88,7 +118,6 @@ This project uses an out-of-source CMake build and compiles GLSL shaders from `a
 First time building on Windows with MinGW:
 ```powershell
 $env:VULKAN_SDK = "C:\VulkanSDK\1.4.350.0"
-$env:PATH = "$env:VULKAN_SDK\Bin;C:\msys64\ucrt64\bin;$env:PATH"
 cmake -B build -G "MinGW Makefiles" `
   -DCMAKE_BUILD_TYPE=Debug `
   -DCMAKE_CXX_COMPILER="C:/msys64/ucrt64/bin/g++.exe" `
@@ -165,6 +194,3 @@ This project is a renderer with a small engine foundation. Below are prioritized
 - **Renderer Polish & UI:** Material/descriptor-system, batching, shader hot-reload, and a minimal UI overlay for HUD/debug.
 - **Sample Level & Gameplay:** Create a playable demo level, simple player controller, and objective to demonstrate systems.
 - **Tests, CI & Docs:** Add a CI build, unit tests for critical systems, and short developer docs for contributors.
-
-If you want, I can add a small `assets/manifest.json` prototype and harden the loaders now — starting with safer path resolution and better error messages.
-
