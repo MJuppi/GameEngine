@@ -6,8 +6,6 @@
 namespace ge {
 namespace {
 
-constexpr const char* kDefaultMeshPath = "assets/models/TestCube.obj";
-
 void postProcessMesh(MeshData& mesh) {
     centerMesh(mesh);
     orientMeshYUpToZUp(mesh);
@@ -58,7 +56,7 @@ Level::Level(std::string name, std::string meshPath, PhysicsMeshObject object)
 }
 
 /// @brief Gets the mesh for the level.
-/// @return 
+/// @return
 MeshData Level::buildCombinedMesh() const {
     MeshData combinedMesh;
 
@@ -143,7 +141,7 @@ PhysicsMeshObject& Level::getObject() {
 }
 
 /// @brief Adds an object to the level.
-/// @param object 
+/// @param object
 void Level::addObject(PhysicsMeshObject object) {
     if (object.meshPath.empty() && !meshPath_.empty() && objects_.empty()) {
         object.meshPath = meshPath_;
@@ -153,12 +151,12 @@ void Level::addObject(PhysicsMeshObject object) {
 }
 
 /// @brief Adds an object to the level with specified parameters.
-/// @param name 
+/// @param name
 /// @param transform
 /// @param location
-/// @param halfExtents 
-/// @param props 
-/// @param meshPath 
+/// @param halfExtents
+/// @param props
+/// @param meshPath
 void Level::addObject(std::string name,
                       const glm::mat4& transform,
                       const glm::vec3& location,
@@ -183,7 +181,7 @@ void Level::addObject(std::string name,
 }
 
 /// @brief Loads the level's assets.
-/// @param assetManager 
+/// @param assetManager
 void Level::load(AssetManager& assetManager) {
     if (loaded_) return;
 

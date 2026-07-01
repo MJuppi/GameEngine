@@ -5,7 +5,6 @@
 #include "engine/vulkan/VulkanRenderer.h"
 
 #include <GLFW/glfw3.h>
-#include <memory>
 #include <chrono>
 
 namespace ge {
@@ -19,7 +18,7 @@ public:
     Window window{kWidth, kHeight, kTitle};
     VulkanRenderer renderer;
     PhysicsEngine physicsEngine;
-    
+
     // Time tracking for delta time calculation
     std::chrono::high_resolution_clock::time_point lastFrameTime;
     float deltaTime = 0.0f;
@@ -67,7 +66,7 @@ public:
         }
         // VulkanRenderer destructor calls vkDeviceWaitIdle before teardown.
     }
-    
+
     // Public access to physics engine for the Game class
     PhysicsEngine& getPhysicsEngine() { return physicsEngine; }
 };
