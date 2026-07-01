@@ -90,26 +90,26 @@ add_custom_target(CompileShaders ALL DEPENDS ${SHADER_SPV})
 # -----------------------------------------------------------------------------
 
 set(ENGINE_SOURCES
-    src/engine/lib/mesh/MeshData.cpp
-    src/engine/lib/mesh/Material.cpp
-    src/engine/lib/mesh/MtlLoader.cpp
-    src/engine/lib/mesh/ObjMeshLoader.cpp
-    src/engine/lib/mesh/GltfMeshLoader.cpp
-    src/engine/lib/asset/TextureLoader.cpp
-    src/engine/lib/asset/AssetLoader.cpp
-    src/engine/lib/asset/AssetManager.cpp
-    src/engine/lib/asset/AssetManifest.cpp
-    src/engine/lib/scene/SceneGraph.cpp
-    src/engine/lib/scene/ObjectBuilder.cpp
-    src/engine/lib/Engine.cpp
-    src/engine/lib/Window.cpp
-    src/engine/lib/vulkan/VulkanContext.cpp
-    src/engine/lib/vulkan/VulkanDevice.cpp
-    src/engine/lib/vulkan/VulkanSwapchain.cpp
-    src/engine/lib/vulkan/VulkanPipeline.cpp
-    src/engine/lib/vulkan/VulkanBuffer.cpp
-    src/engine/lib/vulkan/VulkanRenderer.cpp
-    src/engine/lib/physics/PhysicsEngine.cpp
+    src/engine/mesh/MeshData.cpp
+    src/engine/mesh/Material.cpp
+    src/engine/mesh/MtlLoader.cpp
+    src/engine/mesh/ObjMeshLoader.cpp
+    src/engine/mesh/GltfMeshLoader.cpp
+    src/engine/asset/TextureLoader.cpp
+    src/engine/asset/AssetLoader.cpp
+    src/engine/asset/AssetManager.cpp
+    src/engine/asset/AssetManifest.cpp
+    src/engine/scene/SceneGraph.cpp
+    src/engine/scene/ObjectBuilder.cpp
+    src/engine/Engine.cpp
+    src/engine/Window.cpp
+    src/engine/vulkan/VulkanContext.cpp
+    src/engine/vulkan/VulkanDevice.cpp
+    src/engine/vulkan/VulkanSwapchain.cpp
+    src/engine/vulkan/VulkanPipeline.cpp
+    src/engine/vulkan/VulkanBuffer.cpp
+    src/engine/vulkan/VulkanRenderer.cpp
+    src/engine/physics/PhysicsEngine.cpp
 )
 
 add_library(game_engine_lib STATIC ${ENGINE_SOURCES})
