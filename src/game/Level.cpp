@@ -18,6 +18,33 @@ MeshData makeFallbackMesh() {
     return makeUnitCubeMesh();
 }
 
+bool loadObjectMesh(PhysicsMeshObject& object,
+                    AssetManager& assetManager,
+                    const std::string& levelName,
+                    const std::string& levelMeshPath,
+                    size_t index) {
+    if (object.name.empty()) {
+        object.name = levelName;
+    }
+
+    const std::string resolvedPath = object.meshPath.empty() ? (index == 0 ? levelMeshPath : std::string{}) : object.meshPath;
+    if (resolvedPath.empty()) {
+        return false;
+    }
+
+    try {
+        object.mesh = assetManager.loadMesh(resolvedPath);
+        postProcessMesh(object.mesh);
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to load object '" << object.name << "' for level '" << levelName << "' ("
+                  << resolvedPath << "): " << e.what() << "\nFalling back to unit cube.\n";
+        object.mesh = makeFallbackMesh();
+        postProcessMesh(object.mesh);
+        return true;
+    }
+}
+
 } // namespace
 
 Level::Level(std::string name, std::string meshPath, PhysicsMeshObject object)
@@ -170,26 +197,7 @@ void Level::load(AssetManager& assetManager) {
     bool loadedAny = false;
     for (size_t index = 0; index < objects_.size(); ++index) {
         auto& object = objects_[index];
-        if (object.name.empty()) {
-            object.name = name_;
-        }
-
-        const std::string resolvedPath = object.meshPath.empty() ? (index == 0 ? meshPath_ : std::string{}) : object.meshPath;
-        if (resolvedPath.empty()) {
-            continue;
-        }
-
-        try {
-            object.mesh = assetManager.loadMesh(resolvedPath);
-            postProcessMesh(object.mesh);
-            loadedAny = true;
-        } catch (const std::exception& e) {
-            std::cerr << "Failed to load object '" << object.name << "' for level '" << name_ << "' ("
-                      << resolvedPath << "): " << e.what() << "\nFalling back to unit cube.\n";
-            object.mesh = makeFallbackMesh();
-            postProcessMesh(object.mesh);
-            loadedAny = true;
-        }
+        loadedAny |= loadObjectMesh(object, assetManager, name_, meshPath_, index);
     }
 
     if (!loadedAny && !meshPath_.empty()) {

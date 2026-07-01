@@ -29,6 +29,8 @@ public:
 
 private:
     void initializeLevels();
+    void initializeLevel(Level& level);
+    void initializeFallbackLevel();
     void setupTestPhysics();
     void updateGameplay(float deltaTime);
 
