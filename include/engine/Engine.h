@@ -10,6 +10,10 @@
 #include "engine/mesh/MeshData.h"
 #include "engine/scene/Light.h"
 
+#include <functional>
+
+struct GLFWwindow;
+
 namespace ge {
 
 class PhysicsEngine;
@@ -29,7 +33,10 @@ public:
     /// Get the physics engine
     PhysicsEngine& getPhysicsEngine();
     const PhysicsEngine& getPhysicsEngine() const;
+    GLFWwindow* getWindowHandle() const;
     void setPointLight(const PointLight& pointLight);
+    using FrameUpdateCallback = std::function<void(float)>;
+    void setFrameUpdateCallback(FrameUpdateCallback callback);
 
 private:
     class Impl;

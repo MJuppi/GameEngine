@@ -8,6 +8,7 @@ namespace ge {
 
 class Engine;
 class AssetManager;
+class PlayerController;
 
 class Game {
 public:
@@ -29,9 +30,11 @@ public:
 private:
     void initializeLevels();
     void setupTestPhysics();
+    void updateGameplay(float deltaTime);
 
     GameState state_ = GameState::Uninitialized;
     std::unique_ptr<Engine> engine_;
+    std::unique_ptr<PlayerController> playerController_;
     LevelManager levelManager_;
     AssetManager assetManager_;
 };

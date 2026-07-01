@@ -49,7 +49,10 @@ public:
     void drawFrame();
     void onFramebufferResize();
     void setModelMatrix(const glm::mat4& model) { m_modelMatrix = model; }
+    void setModelMatrices(const std::vector<glm::mat4>& models) { m_bodyModelMatrices = models; }
     void setPointLight(const PointLight& pointLight) { m_pointLight = pointLight; }
+    [[nodiscard]] glm::vec3 getCameraPosition() const { return m_cameraPosition; }
+    [[nodiscard]] glm::vec3 getCameraFront() const { return m_cameraFront; }
 
 private:
     void initVulkan();
@@ -58,6 +61,7 @@ private:
     void createSyncObjects();
     void destroySyncObjects();
     void createMeshBuffers();
+    void createBoxMeshBuffers();
     void createSceneBuffers();
     void createMaterialBuffer();
     void createDescriptorPool();
@@ -94,6 +98,9 @@ private:
     std::unique_ptr<VulkanBuffer> m_vertexBuffer;
     std::unique_ptr<VulkanBuffer> m_indexBuffer;
     uint32_t m_indexCount = 0;
+    std::unique_ptr<VulkanBuffer> m_boxVertexBuffer;
+    std::unique_ptr<VulkanBuffer> m_boxIndexBuffer;
+    uint32_t m_boxIndexCount = 0;
 
     static constexpr uint32_t kMaxUiVertices = 16384;
 
@@ -149,6 +156,8 @@ private:
     float m_lastRenderedMaxFrameTimeMs = 0.0f;
 
     glm::mat4 m_modelMatrix = glm::mat4(1.0f);
+    std::vector<glm::mat4> m_bodyModelMatrices;
+    MeshData m_boxMesh = makeUnitCubeMesh();
 };
 
 } // namespace ge

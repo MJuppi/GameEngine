@@ -24,6 +24,7 @@ public:
     std::chrono::high_resolution_clock::time_point lastFrameTime;
     float deltaTime = 0.0f;
     bool firstFrame = true;
+    FrameUpdateCallback frameUpdateCallback;
 
     explicit Impl(MeshData mesh, PointLight pointLight)
         : renderer(window, std::move(mesh)),
@@ -56,17 +57,12 @@ public:
                 glfwSetWindowShouldClose(window.handle(), GLFW_TRUE);
             }
 
-            // Update physics simulation
-            physicsEngine.update(deltaTime);
-
-            // Sync the first dynamic body's transform to the renderer
-            for (const auto& body : physicsEngine.getWorld().getBodies()) {
-                if (!body->getProps().isKinematic) {
-                    renderer.setModelMatrix(body->getWorldTransform());
-                    break;
-                }
+            if (frameUpdateCallback) {
+                frameUpdateCallback(deltaTime);
             }
 
+            // Update physics simulation
+            physicsEngine.update(deltaTime);
             renderer.drawFrame();
         }
         // VulkanRenderer destructor calls vkDeviceWaitIdle before teardown.
@@ -91,6 +87,14 @@ void Engine::run() {
 
 void Engine::setPointLight(const PointLight& pointLight) {
     m_impl->renderer.setPointLight(pointLight);
+}
+
+void Engine::setFrameUpdateCallback(FrameUpdateCallback callback) {
+    m_impl->frameUpdateCallback = std::move(callback);
+}
+
+GLFWwindow* Engine::getWindowHandle() const {
+    return m_impl->window.handle();
 }
 
 PhysicsEngine& Engine::getPhysicsEngine() {

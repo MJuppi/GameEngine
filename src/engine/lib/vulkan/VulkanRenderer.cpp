@@ -232,6 +232,14 @@ VulkanRenderer::~VulkanRenderer() {
         m_vertexBuffer->destroy(*m_device);
         m_vertexBuffer.reset();
     }
+    if (m_boxIndexBuffer) {
+        m_boxIndexBuffer->destroy(*m_device);
+        m_boxIndexBuffer.reset();
+    }
+    if (m_boxVertexBuffer) {
+        m_boxVertexBuffer->destroy(*m_device);
+        m_boxVertexBuffer.reset();
+    }
     if (m_uiVertexBuffer) {
         m_uiVertexBuffer->destroy(*m_device);
         m_uiVertexBuffer.reset();
@@ -281,6 +289,7 @@ void VulkanRenderer::initVulkan() {
 
     createCommandPool();
     createMeshBuffers();
+    createBoxMeshBuffers();
     createSceneBuffers();
     createMaterialBuffer();
     createDescriptorPool();
@@ -359,6 +368,64 @@ void VulkanRenderer::createMeshBuffers() {
         m_device->graphicsQueue(),
         stagingIndex.handle(),
         m_indexBuffer->handle(),
+        indexSize);
+    stagingIndex.destroy(*m_device);
+}
+
+void VulkanRenderer::createBoxMeshBuffers() {
+    if (m_boxMesh.vertices.empty() || m_boxMesh.indices.empty()) {
+        throw std::runtime_error("Box mesh has no vertices or indices");
+    }
+
+    VkDeviceSize vertexSize = sizeof(Vertex) * m_boxMesh.vertices.size();
+    VkDeviceSize indexSize = sizeof(uint32_t) * m_boxMesh.indices.size();
+    m_boxIndexCount = static_cast<uint32_t>(m_boxMesh.indices.size());
+
+    VulkanBuffer stagingVertex;
+    stagingVertex.create(
+        *m_device,
+        vertexSize,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    VulkanBuffer::write(
+        *m_device, stagingVertex.handle(), stagingVertex.memory(), m_boxMesh.vertices.data(), vertexSize);
+
+    m_boxVertexBuffer = std::make_unique<VulkanBuffer>();
+    m_boxVertexBuffer->create(
+        *m_device,
+        vertexSize,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    VulkanBuffer::copyBuffer(
+        *m_device,
+        m_commandPool,
+        m_device->graphicsQueue(),
+        stagingVertex.handle(),
+        m_boxVertexBuffer->handle(),
+        vertexSize);
+    stagingVertex.destroy(*m_device);
+
+    VulkanBuffer stagingIndex;
+    stagingIndex.create(
+        *m_device,
+        indexSize,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    VulkanBuffer::write(
+        *m_device, stagingIndex.handle(), stagingIndex.memory(), m_boxMesh.indices.data(), indexSize);
+
+    m_boxIndexBuffer = std::make_unique<VulkanBuffer>();
+    m_boxIndexBuffer->create(
+        *m_device,
+        indexSize,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    VulkanBuffer::copyBuffer(
+        *m_device,
+        m_commandPool,
+        m_device->graphicsQueue(),
+        stagingIndex.handle(),
+        m_boxIndexBuffer->handle(),
         indexSize);
     stagingIndex.destroy(*m_device);
 }
@@ -914,6 +981,32 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
         nullptr);
 
     vkCmdDrawIndexed(commandBuffer, m_indexCount, 1, 0, 0, 0);
+
+    if (m_boxVertexBuffer && m_boxIndexBuffer && !m_bodyModelMatrices.empty()) {
+        VkBuffer boxBuffers[] = {m_boxVertexBuffer->handle()};
+        VkDeviceSize boxOffsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, boxBuffers, boxOffsets);
+        vkCmdBindIndexBuffer(commandBuffer, m_boxIndexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
+
+        const float aspect = m_swapchain->extent().width / static_cast<float>(m_swapchain->extent().height);
+        const glm::mat4 view = glm::lookAt(
+            m_cameraPosition,
+            m_cameraPosition + m_cameraFront,
+            m_cameraUp);
+        glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, m_meshRadius * 0.05f, m_meshRadius * 50.0f);
+        proj[1][1] *= -1.0f;
+
+        for (const auto& model : m_bodyModelMatrices) {
+            SceneUbo scene{};
+            scene.model = model;
+            scene.viewProj = proj * view;
+            scene.normalMatrix = glm::transpose(glm::inverse(model));
+            scene.lightDir = glm::vec4(glm::normalize(glm::vec3(0.35f, 0.55f, 0.75f)), 0.0f);
+            scene.pointLight = m_pointLight;
+            std::memcpy(m_sceneBuffersMapped[m_currentFrame], &scene, sizeof(scene));
+            vkCmdDrawIndexed(commandBuffer, m_boxIndexCount, 1, 0, 0, 0);
+        }
+    }
 
     if (m_uiPipeline && m_uiVertexCount > 0) {
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_uiPipeline->handle());

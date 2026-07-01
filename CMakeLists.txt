@@ -152,6 +152,7 @@ set(GAME_SOURCES
     src/game/Level.cpp
     src/game/LevelManager.cpp
     src/game/LevelBuilder.cpp
+    src/game/PlayerController.cpp
 )
 
 add_executable(Game ${GAME_SOURCES})

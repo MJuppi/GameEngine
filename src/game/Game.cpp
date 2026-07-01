@@ -1,5 +1,6 @@
 #include "game/Game.h"
 #include "game/LevelBuilder.h"
+#include "game/PlayerController.h"
 #include "engine/Engine.h"
 #include "engine/mesh/MeshData.h"
 #include "engine/physics/PhysicsEngine.h"
@@ -35,6 +36,10 @@ void Game::initialize() {
         for (auto& levelObject : currentLevel->getObjects()) {
             ObjectBuilder::attachPhysics(engine_->getPhysicsEngine(), levelObject);
         }
+        playerController_ = std::make_unique<PlayerController>(*engine_);
+        engine_->setFrameUpdateCallback([this](float deltaTime) {
+            updateGameplay(deltaTime);
+        });
         setupTestPhysics();
     } else {
         // Fallback
@@ -68,6 +73,12 @@ void Game::run() {
     engine_->run();
 }
 
+void Game::updateGameplay(float deltaTime) {
+    if (playerController_) {
+        playerController_->update(deltaTime);
+    }
+}
+
 void Game::shutdown() {
     if (state_ == GameState::Shutdown) {
         return;
@@ -75,6 +86,7 @@ void Game::shutdown() {
 
     std::cout << "Shutting down game...\n";
 
+    playerController_.reset();
     engine_.reset();
     levelManager_.unloadAll();
 
