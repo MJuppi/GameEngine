@@ -2,6 +2,7 @@
 
 #include "engine/mesh/MeshData.h"
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -23,7 +24,8 @@ public:
     void clear();
     void addNode(SceneNode node);
     [[nodiscard]] MeshData buildMesh() const;
-    [[nodiscard]] bool empty() const;
+    [[nodiscard]] bool empty() const noexcept;
+    [[nodiscard]] std::size_t nodeCount() const noexcept;
 
 private:
     std::vector<SceneNode> nodes_;

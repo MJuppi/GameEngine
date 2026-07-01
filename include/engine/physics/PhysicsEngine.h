@@ -6,8 +6,9 @@
 // Provides basic physics simulation with collision detection and response.
 // =============================================================================
 
-#include <vector>
+#include <cstddef>
 #include <memory>
+#include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -26,11 +27,11 @@ using PhysicsScalar = float;
 
 /// @brief Collision contact information
 struct Contact {
-    PhysicsVec3 normal;      // Contact normal (from A to B)
-    PhysicsVec3 point;       // Contact point in world space
-    PhysicsScalar depth;     // Penetration depth
-    RigidBody* bodyA;        // First body in collision
-    RigidBody* bodyB;        // Second body in collision
+    PhysicsVec3 normal{};      // Contact normal (from A to B)
+    PhysicsVec3 point{};       // Contact point in world space
+    PhysicsScalar depth = 0.0f; // Penetration depth
+    RigidBody* bodyA = nullptr; // First body in collision
+    RigidBody* bodyB = nullptr; // Second body in collision
 };
 
 /// @brief Collision result containing all contacts
@@ -237,6 +238,9 @@ public:
 
     /// @brief Get all rigid bodies
     const std::vector<std::unique_ptr<RigidBody>>& getBodies() const { return bodies_; }
+
+    [[nodiscard]] bool empty() const noexcept { return bodies_.empty(); }
+    [[nodiscard]] std::size_t bodyCount() const noexcept { return bodies_.size(); }
 
     /// @brief Step the physics simulation
     /// @param deltaTime Time step in seconds

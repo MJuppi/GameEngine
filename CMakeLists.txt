@@ -103,6 +103,7 @@ set(ENGINE_SOURCES
     src/engine/scene/ObjectBuilder.cpp
     src/engine/Engine.cpp
     src/engine/Window.cpp
+    src/engine/FrameTimer.cpp
     src/engine/vulkan/VulkanContext.cpp
     src/engine/vulkan/VulkanDevice.cpp
     src/engine/vulkan/VulkanSwapchain.cpp

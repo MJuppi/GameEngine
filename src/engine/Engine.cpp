@@ -1,11 +1,11 @@
 #include "engine/Engine.h"
+#include "engine/FrameTimer.h"
 #include "engine/physics/PhysicsEngine.h"
 
 #include "engine/Window.h"
 #include "engine/vulkan/VulkanRenderer.h"
 
 #include <GLFW/glfw3.h>
-#include <chrono>
 
 namespace ge {
 
@@ -18,57 +18,43 @@ public:
     Window window{kWidth, kHeight, kTitle};
     VulkanRenderer renderer;
     PhysicsEngine physicsEngine;
-
-    // Time tracking for delta time calculation
-    std::chrono::high_resolution_clock::time_point lastFrameTime;
-    float deltaTime = 0.0f;
-    bool firstFrame = true;
+    FrameTimer frameTimer;
     FrameUpdateCallback frameUpdateCallback;
 
     explicit Impl(MeshData mesh, PointLight pointLight)
-        : renderer(window, std::move(mesh)),
-          lastFrameTime(std::chrono::high_resolution_clock::now())
+        : renderer(window, std::move(mesh))
     {
         renderer.setPointLight(pointLight);
 
-        // Set up physics engine with default gravity
         physicsEngine.setGravity({0.0f, -9.81f, 0.0f});
         physicsEngine.setFixedTimeStep(1.0f / 60.0f);
+        frameTimer.reset();
     }
 
     void run() {
-        // Main loop: poll OS events, handle escape key, and render each frame.
         while (!window.shouldClose()) {
-            // Calculate delta time
-            auto currentTime = std::chrono::high_resolution_clock::now();
-            if (!firstFrame) {
-                auto duration = std::chrono::duration_cast<std::chrono::duration<float>>(currentTime - lastFrameTime);
-                deltaTime = duration.count();
-            } else {
-                deltaTime = 1.0f / 60.0f; // Default for first frame
-                firstFrame = false;
-            }
-            lastFrameTime = currentTime;
-
+            const float deltaTime = frameTimer.beginFrame();
             window.pollEvents();
-
-            if (glfwGetKey(window.handle(), GLFW_KEY_ESCAPE) == GLFW_PRESS) {
-                glfwSetWindowShouldClose(window.handle(), GLFW_TRUE);
-            }
+            handleWindowInput();
 
             if (frameUpdateCallback) {
                 frameUpdateCallback(deltaTime);
             }
 
-            // Update physics simulation
             physicsEngine.update(deltaTime);
             renderer.drawFrame();
         }
-        // VulkanRenderer destructor calls vkDeviceWaitIdle before teardown.
     }
 
-    // Public access to physics engine for the Game class
+public:
     PhysicsEngine& getPhysicsEngine() { return physicsEngine; }
+
+private:
+    void handleWindowInput() {
+        if (glfwGetKey(window.handle(), GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+            glfwSetWindowShouldClose(window.handle(), GLFW_TRUE);
+        }
+    }
 };
 
 Engine::Engine(MeshData mesh, PointLight pointLight)

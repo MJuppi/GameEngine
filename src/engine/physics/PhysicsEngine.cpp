@@ -1,8 +1,83 @@
 #include "engine/physics/PhysicsEngine.h"
 #include "glm/geometric.hpp"
 #include <algorithm>
+#include <cmath>
+#include <string>
 
 namespace ge {
+namespace {
+
+constexpr float kEpsilon = 1.0e-4f;
+
+void applyDamping(glm::vec3& value, float damping, float deltaTime) {
+    if (damping > 0.0f) {
+        const float factor = std::max(0.0f, 1.0f - damping * deltaTime);
+        value *= factor;
+    }
+}
+
+void resolveContact(Contact& contact) {
+    RigidBody* bodyA = contact.bodyA;
+    RigidBody* bodyB = contact.bodyB;
+    if (bodyA == nullptr || bodyB == nullptr) {
+        return;
+    }
+
+    const RigidBodyProps& propsA = bodyA->getProps();
+    const RigidBodyProps& propsB = bodyB->getProps();
+
+    const float invMassA = (propsA.isKinematic || propsA.mass <= 0.0f) ? 0.0f : 1.0f / propsA.mass;
+    const float invMassB = (propsB.isKinematic || propsB.mass <= 0.0f) ? 0.0f : 1.0f / propsB.mass;
+    const float totalInvMass = invMassA + invMassB;
+
+    if (totalInvMass <= 0.0f) {
+        return;
+    }
+
+    const glm::vec3 relativeVelocity = bodyB->getVelocity() - bodyA->getVelocity();
+    const float velocityAlongNormal = glm::dot(relativeVelocity, contact.normal);
+
+    if (velocityAlongNormal > 0.0f) {
+        return;
+    }
+
+    const float restitution = std::min(propsA.restitution, propsB.restitution);
+    const float impulse = -(1.0f + restitution) * velocityAlongNormal / totalInvMass;
+
+    bodyA->setVelocity(bodyA->getVelocity() - contact.normal * impulse * invMassA);
+    bodyB->setVelocity(bodyB->getVelocity() + contact.normal * impulse * invMassB);
+
+    const float friction = std::min(propsA.friction, propsB.friction);
+    glm::vec3 tangent = relativeVelocity - contact.normal * velocityAlongNormal;
+    if (glm::length(tangent) > kEpsilon) {
+        tangent = glm::normalize(tangent);
+        float frictionImpulse = -glm::dot(relativeVelocity, tangent) / totalInvMass;
+        const float maxFriction = impulse * friction;
+        frictionImpulse = std::clamp(frictionImpulse, -maxFriction, maxFriction);
+
+        bodyA->setVelocity(bodyA->getVelocity() - tangent * frictionImpulse * invMassA);
+        bodyB->setVelocity(bodyB->getVelocity() + tangent * frictionImpulse * invMassB);
+    }
+
+    const float correctionFactor = 0.8f;
+    const float correctionMargin = 0.001f;
+    if (contact.depth > correctionMargin) {
+        const glm::vec3 correction =
+            contact.normal * ((contact.depth - correctionMargin) * correctionFactor / totalInvMass);
+
+        if (invMassA > 0.0f) {
+            bodyA->setPosition(bodyA->getPosition() - correction * invMassA);
+            bodyA->updateTransform();
+        }
+
+        if (invMassB > 0.0f) {
+            bodyB->setPosition(bodyB->getPosition() + correction * invMassB);
+            bodyB->updateTransform();
+        }
+    }
+}
+
+} // namespace
 
 // =============================================================================
 // Collider base class implementation
@@ -352,11 +427,7 @@ void RigidBody::integrate(float deltaTime) {
     // Update velocity
     velocity_ += acceleration_ * deltaTime;
 
-    // Apply linear damping
-    if (props_.linearDamping > 0.0f) {
-        float damping = std::max(0.0f, 1.0f - props_.linearDamping * deltaTime);
-        velocity_ *= damping;
-    }
+    applyDamping(velocity_, props_.linearDamping, deltaTime);
 
     // Update position
     position_ += velocity_ * deltaTime;
@@ -368,11 +439,7 @@ void RigidBody::integrate(float deltaTime) {
         angularVelocity_ += angularAcceleration * deltaTime;
     }
 
-    // Apply angular damping
-    if (props_.angularDamping > 0.0f) {
-        float damping = std::max(0.0f, 1.0f - props_.angularDamping * deltaTime);
-        angularVelocity_ *= damping;
-    }
+    applyDamping(angularVelocity_, props_.angularDamping, deltaTime);
 
     // Update rotation (using quaternions)
     if (glm::length(angularVelocity_) > 0.001f) {
@@ -432,9 +499,13 @@ void PhysicsWorld::applyGravity() {
 void PhysicsWorld::detectCollisions(std::vector<Contact>& contacts) {
     contacts.clear();
 
-    size_t bodyCount = bodies_.size();
-    for (size_t i = 0; i < bodyCount; ++i) {
-        for (size_t j = i + 1; j < bodyCount; ++j) {
+    const std::size_t bodyCount = bodies_.size();
+    if (bodyCount < 2) {
+        return;
+    }
+
+    for (std::size_t i = 0; i < bodyCount; ++i) {
+        for (std::size_t j = i + 1; j < bodyCount; ++j) {
             RigidBody* bodyA = bodies_[i].get();
             RigidBody* bodyB = bodies_[j].get();
 
@@ -455,75 +526,9 @@ void PhysicsWorld::detectCollisions(std::vector<Contact>& contacts) {
     }
 }
 
-namespace {
-
-float getInverseMass(const RigidBody* body) {
-    if (body->getProps().isKinematic || body->getProps().mass <= 0.0f) {
-        return 0.0f;
-    }
-    return 1.0f / body->getProps().mass;
-}
-
-} // namespace
-
 void PhysicsWorld::resolveCollisions(std::vector<Contact>& contacts) {
     for (auto& contact : contacts) {
-        RigidBody* bodyA = contact.bodyA;
-        RigidBody* bodyB = contact.bodyB;
-
-        const RigidBodyProps& propsA = bodyA->getProps();
-        const RigidBodyProps& propsB = bodyB->getProps();
-
-        const float invMassA = getInverseMass(bodyA);
-        const float invMassB = getInverseMass(bodyB);
-        const float totalInvMass = invMassA + invMassB;
-
-        if (totalInvMass <= 0.0f) {
-            continue;
-        }
-
-        const glm::vec3 relativeVelocity = bodyB->getVelocity() - bodyA->getVelocity();
-        const float velocityAlongNormal = glm::dot(relativeVelocity, contact.normal);
-
-        if (velocityAlongNormal > 0.0f) {
-            continue;
-        }
-
-        const float restitution = std::min(propsA.restitution, propsB.restitution);
-        float impulse = -(1.0f + restitution) * velocityAlongNormal / totalInvMass;
-
-        bodyA->setVelocity(bodyA->getVelocity() - contact.normal * impulse * invMassA);
-        bodyB->setVelocity(bodyB->getVelocity() + contact.normal * impulse * invMassB);
-
-        const float friction = std::min(propsA.friction, propsB.friction);
-        glm::vec3 tangent = relativeVelocity - contact.normal * velocityAlongNormal;
-        if (glm::length(tangent) > 0.0001f) {
-            tangent = glm::normalize(tangent);
-            float frictionImpulse = -glm::dot(relativeVelocity, tangent) / totalInvMass;
-            const float maxFriction = impulse * friction;
-            frictionImpulse = std::clamp(frictionImpulse, -maxFriction, maxFriction);
-
-            bodyA->setVelocity(bodyA->getVelocity() - tangent * frictionImpulse * invMassA);
-            bodyB->setVelocity(bodyB->getVelocity() + tangent * frictionImpulse * invMassB);
-        }
-
-        const float correctionFactor = 0.8f;
-        const float correctionMargin = 0.001f;
-
-        if (contact.depth > correctionMargin) {
-            const glm::vec3 correction =
-                contact.normal * ((contact.depth - correctionMargin) * correctionFactor / totalInvMass);
-
-            if (invMassA > 0.0f) {
-                bodyA->setPosition(bodyA->getPosition() - correction * invMassA);
-                bodyA->updateTransform();
-            }
-
-            if (invMassB > 0.0f) {
-                bodyB->setPosition(bodyB->getPosition() + correction * invMassB);
-                bodyB->updateTransform();
-            }
-        }
+        resolveContact(contact);
     }
 }
 

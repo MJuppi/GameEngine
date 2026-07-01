@@ -19,8 +19,12 @@ struct PhysicsMeshObject {
     RigidBodyProps physicsProps{};
     bool createPhysicsBody = true;
 
-    glm::mat4 getWorldTransform() const {
+    [[nodiscard]] glm::mat4 getWorldTransform() const {
         return glm::translate(glm::mat4(1.0f), spawnLocation) * transform;
+    }
+
+    [[nodiscard]] bool hasPhysicsBody() const noexcept {
+        return createPhysicsBody;
     }
 };
 
