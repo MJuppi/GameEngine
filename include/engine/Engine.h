@@ -8,6 +8,7 @@
 // =============================================================================
 
 #include "engine/mesh/MeshData.h"
+#include "engine/scene/Light.h"
 
 namespace ge {
 
@@ -16,7 +17,7 @@ class PhysicsEngine;
 class Engine {
 public:
     /// Pass mesh data from disk (e.g. loadObjFile) or use makeUnitCubeMesh().
-    explicit Engine(MeshData mesh);
+    explicit Engine(MeshData mesh, PointLight pointLight = PointLight{});
     ~Engine();
 
     Engine(const Engine&) = delete;
@@ -28,6 +29,7 @@ public:
     /// Get the physics engine
     PhysicsEngine& getPhysicsEngine();
     const PhysicsEngine& getPhysicsEngine() const;
+    void setPointLight(const PointLight& pointLight);
 
 private:
     class Impl;

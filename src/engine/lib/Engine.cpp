@@ -25,10 +25,12 @@ public:
     float deltaTime = 0.0f;
     bool firstFrame = true;
 
-    explicit Impl(MeshData mesh)
+    explicit Impl(MeshData mesh, PointLight pointLight)
         : renderer(window, std::move(mesh)),
           lastFrameTime(std::chrono::high_resolution_clock::now())
     {
+        renderer.setPointLight(pointLight);
+
         // Set up physics engine with default gravity
         physicsEngine.setGravity({0.0f, -9.81f, 0.0f});
         physicsEngine.setFixedTimeStep(1.0f / 60.0f);
@@ -74,8 +76,8 @@ public:
     PhysicsEngine& getPhysicsEngine() { return physicsEngine; }
 };
 
-Engine::Engine(MeshData mesh)
-    : m_impl(new Impl(std::move(mesh)))
+Engine::Engine(MeshData mesh, PointLight pointLight)
+    : m_impl(new Impl(std::move(mesh), std::move(pointLight)))
 {
 }
 
@@ -85,6 +87,10 @@ Engine::~Engine() {
 
 void Engine::run() {
     m_impl->run();
+}
+
+void Engine::setPointLight(const PointLight& pointLight) {
+    m_impl->renderer.setPointLight(pointLight);
 }
 
 PhysicsEngine& Engine::getPhysicsEngine() {

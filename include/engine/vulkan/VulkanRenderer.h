@@ -16,6 +16,7 @@
 
 #include "engine/mesh/Material.h"
 #include "engine/mesh/MeshData.h"
+#include "engine/scene/Light.h"
 
 struct GLFWwindow;
 
@@ -34,6 +35,7 @@ struct SceneUbo {
     alignas(16) glm::mat4 viewProj;
     alignas(16) glm::mat4 normalMatrix;
     alignas(16) glm::vec4 lightDir;
+    alignas(16) PointLight pointLight;
 };
 
 class VulkanRenderer {
@@ -47,6 +49,7 @@ public:
     void drawFrame();
     void onFramebufferResize();
     void setModelMatrix(const glm::mat4& model) { m_modelMatrix = model; }
+    void setPointLight(const PointLight& pointLight) { m_pointLight = pointLight; }
 
 private:
     void initVulkan();
@@ -120,6 +123,8 @@ private:
     float m_minFrameTimeMs = std::numeric_limits<float>::infinity();
     float m_maxFrameTimeMs = 0.0f;
     double m_frameTimeWindowStart = 0.0;
+
+    PointLight m_pointLight{};
 
     glm::vec3 m_cameraPosition = glm::vec3(0.0f, 0.0f, 0.0f);
     glm::vec3 m_cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);

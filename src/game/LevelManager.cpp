@@ -8,18 +8,33 @@ LevelManager::~LevelManager() {
     unloadAll();
 }
 
-void LevelManager::addLevel(std::unique_ptr<Level> level) {
-    if (!level) return;
-    
+Level* LevelManager::addLevel(std::unique_ptr<Level> level) {
+    if (!level) return nullptr;
+
+    Level* rawLevel = level.get();
     levels_.push_back(std::move(level));
 
     if (currentLevelIndex_ < 0) {
         currentLevelIndex_ = 0;
     }
+
+    return rawLevel;
 }
 
-void LevelManager::addLevel(const std::string& name, const std::string& meshPath) {
-    addLevel(std::make_unique<Level>(name, meshPath));
+Level* LevelManager::addLevel(const std::string& name, const std::string& meshPath) {
+    return addLevel(std::make_unique<Level>(name, meshPath));
+}
+
+Level* LevelManager::addLevel(const std::string& name, const std::string& meshPath, const PhysicsMeshObject& object) {
+    return addLevel(std::make_unique<Level>(name, meshPath, object));
+}
+
+Level* LevelManager::addLevel(const std::string& name, const std::string& meshPath, LevelConfigurator configurator) {
+    auto level = std::make_unique<Level>(name, meshPath);
+    if (configurator) {
+        configurator(*level);
+    }
+    return addLevel(std::move(level));
 }
 
 // ====================== Getters ======================

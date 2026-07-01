@@ -100,6 +100,7 @@ set(ENGINE_SOURCES
     src/engine/lib/asset/AssetManager.cpp
     src/engine/lib/asset/AssetManifest.cpp
     src/engine/lib/scene/SceneGraph.cpp
+    src/engine/lib/scene/ObjectBuilder.cpp
     src/engine/lib/Engine.cpp
     src/engine/lib/Window.cpp
     src/engine/lib/vulkan/VulkanContext.cpp
@@ -150,6 +151,7 @@ set(GAME_SOURCES
     src/game/Game.cpp
     src/game/Level.cpp
     src/game/LevelManager.cpp
+    src/game/LevelBuilder.cpp
 )
 
 add_executable(Game ${GAME_SOURCES})

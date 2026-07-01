@@ -1,7 +1,9 @@
 #include "game/Game.h"
+#include "game/LevelBuilder.h"
 #include "engine/Engine.h"
 #include "engine/mesh/MeshData.h"
 #include "engine/physics/PhysicsEngine.h"
+#include "engine/scene/ObjectBuilder.h"
 #include <iostream>
 #include <glm/glm.hpp>
 
@@ -29,21 +31,24 @@ void Game::initialize() {
         std::cout << "Loading level: " << currentLevel->getName() << '\n';
         currentLevel->load(assetManager_);
 
-        engine_ = std::make_unique<Engine>(currentLevel->getMesh());
+        engine_ = std::make_unique<Engine>(currentLevel->getMesh(), currentLevel->getPointLight());
+        for (auto& levelObject : currentLevel->getObjects()) {
+            ObjectBuilder::attachPhysics(engine_->getPhysicsEngine(), levelObject);
+        }
         setupTestPhysics();
     } else {
         // Fallback
         std::cout << "No level available, using fallback unit cube.\n";
-        engine_ = std::make_unique<Engine>(makeUnitCubeMesh());
+        auto fallbackObject = ObjectBuilder::createObject(
+            "FallbackCube",
+            makeUnitCubeMesh(),
+            glm::mat4(1.0f),
+            {0.0f, 0.0f, 0.0f},
+            {0.5f, 0.5f, 0.5f},
+            RigidBodyProps{1.0f, 0.3f, 0.7f});
 
-        RigidBodyProps testCubeProps;
-        testCubeProps.mass = 1.0f;
-        testCubeProps.restitution = 0.7f;
-        testCubeProps.friction = 0.3f;
-
-        engine_->getPhysicsEngine().createBoxBody({0.5f, 0.5f, 0.5f},
-                                                  glm::mat4(1.0f),
-                                                  testCubeProps);
+        engine_ = std::make_unique<Engine>(fallbackObject.mesh);
+        ObjectBuilder::attachPhysics(engine_->getPhysicsEngine(), fallbackObject);
     }
 
     std::cout << "Game initialized successfully.\n";
@@ -77,11 +82,7 @@ void Game::shutdown() {
 }
 
 void Game::initializeLevels() {
-    levelManager_.addLevel("TestCube", "assets/models/TestCube.obj");
-    
-    // Add more levels here as needed:
-    // levelManager_.addLevel("Level2", "assets/models/Level2.obj");
-    
+    LevelBuilder::registerDefaultLevels(levelManager_);
     levelManager_.setCurrentLevel("TestCube");
 }
 
