@@ -4,12 +4,12 @@ A **lightweight 3D game engine** built with **C++20** and **Vulkan**. The codeba
 
 ## What you get
 
-- GLFW window + Vulkan surface
-- Instance, validation layers (debug builds), physical/logical device, swapchain
-- Graphics pipeline with SPIR-V shaders (vertex + fragment)
-- Vertex/index buffers, uniform buffer (MVP matrix)
-- **Wavefront `.obj` loading** (positions + optional vertex normals for pseudo-color)
-- A **rotating colored cube** as the default when no file is passed
+- **Vulkan Renderer:** GLFW window, validation layers, swapchain, and graphics pipeline.
+- **Physics Engine:** Simple collision detection and rigid body simulation (static, dynamic, kinematic).
+- **Game Loop:** Decoupled update and render loops with fixed-timestep physics.
+- **Level System:** Structured level loading and scene configuration via `LevelManager` and `SceneFactory`.
+- **Asset Loading:** Wavefront `.obj` (with `.mtl`) and glTF 2.0 support.
+- **Player Controller:** First-person style movement and interaction.
 
 ## Loading your own 3D models
 
@@ -77,10 +77,10 @@ src/
     Level.cpp / .h       # a playable scene / stage
     LevelManager.cpp / .h # loads and switches between levels
   engine/
-    lib/
-      Engine.cpp         # wires Window + VulkanRenderer + PhysicsEngine
-      Window.cpp         # GLFW window creation, resize, input polling
-      asset/
+    Engine.cpp         # wires Window + VulkanRenderer + PhysicsEngine
+    Window.cpp         # GLFW window creation, resize, input polling
+    FrameTimer.cpp     # delta time and fixed timestep tracking
+    asset/
         AssetLoader.cpp  # dispatches to the right loader by file type
         AssetManager.cpp # in-memory caching of loaded assets
         AssetManifest.cpp # parses manifest.json for available content
@@ -143,8 +143,8 @@ Press **Escape** or close the window to quit.
 
 - Texture sampling (use `vt` from OBJ + `.mtl`)
 - Descriptor sets for materials
-- Entity / scene graph
-- Input system and camera controller
+- Advanced lighting (multiple lights, shadows)
+- UI system (ImGui integration)
 
 ## Recommended project structure
 
@@ -184,13 +184,39 @@ Guidelines:
 
 ## Roadmap to a Playable Game
 
-This project is a renderer with a small engine foundation. Below are prioritized steps to turn it into a small playable game — a practical checklist you can follow.
+This project has evolved from a simple renderer into a basic engine. Below is the progress checklist.
 
-- **Build & Run Baseline:** Confirm the project builds and runs on your target platform. Keep build instructions in this README.
-- **Stabilize Asset Pipeline:** Robust path resolution (search `assets/`), clearer loader errors, and an asset manifest or packer for release builds.
-- **Input & Game Loop:** Centralize input handling, add a fixed-timestep update loop, and separate update vs render passes.
-- **Scene / Entity System:** Introduce a lightweight ECS or component-friendly scene graph and add save/load (JSON or binary) for levels.
-- **Physics & Collision:** Integrate a physics library (or simple internal solver) and tie collisions to gameplay events.
-- **Renderer Polish & UI:** Material/descriptor-system, batching, shader hot-reload, and a minimal UI overlay for HUD/debug.
-- **Sample Level & Gameplay:** Create a playable demo level, simple player controller, and objective to demonstrate systems.
-- **Tests, CI & Docs:** Add a CI build, unit tests for critical systems, and short developer docs for contributors.
+- [x] **Build & Run Baseline:** Project builds and runs with Vulkan.
+- [x] **Input & Game Loop:** Fixed-timestep update loop and centralized input.
+- [x] **Physics & Collision:** Integrated physics engine with collision events.
+- [x] **Scene / Entity System:** Lightweight scene management and level loading.
+- [x] **Sample Level:** Test levels with physics interactions.
+- [ ] **Renderer Polish:** Material/descriptor-system, batching, and shader hot-reload.
+- [ ] **Stabilize Asset Pipeline:** Robust path resolution and asset manifest.
+- [ ] **UI & HUD:** Minimal overlay for gameplay information.
+- [ ] **Gameplay Loop:** Objectives, scoring, and state transitions.
+
+## License
+
+MIT License
+
+Copyright (c) 2024-2025
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
