@@ -29,9 +29,8 @@ public:
 
 private:
     void initializeLevels();
-    void initializeLevel(Level& level);
-    void initializeFallbackLevel();
-    void setupTestPhysics();
+    bool loadLevel(Level& level);
+    void loadFallbackLevel();
     void updateGameplay(float deltaTime);
 
     GameState state_ = GameState::Uninitialized;

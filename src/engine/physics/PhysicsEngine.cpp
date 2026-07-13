@@ -199,16 +199,15 @@ CollisionResult BoxCollider::checkCollision(
         closestPoint.y = std::clamp(closestPoint.y, aMin.y, aMax.y);
         closestPoint.z = std::clamp(closestPoint.z, aMin.z, aMax.z);
 
-        float distanceSquared = glm::distance(sphereCenter, closestPoint);
-        float radiusSquared = sphereRadius * sphereRadius;
+        const float distance = glm::distance(sphereCenter, closestPoint);
 
-        if (distanceSquared <= radiusSquared) {
+        if (distance <= sphereRadius) {
             result.isColliding = true;
 
             Contact contact;
-            contact.depth = sphereRadius - std::sqrt(distanceSquared);
+            contact.depth = sphereRadius - distance;
 
-            if (distanceSquared > 0.001f) {
+            if (distance > 0.001f) {
                 contact.normal = glm::normalize(sphereCenter - closestPoint);
             } else {
                 // Sphere center is inside the box, use arbitrary normal
@@ -249,17 +248,16 @@ CollisionResult SphereCollider::checkCollision(
         glm::vec3 centerA = glm::vec3(transformA[3]);
         glm::vec3 centerB = glm::vec3(transformB[3]);
 
-        float distanceSquared = glm::distance(centerA, centerB);
-        float radiusSum = radius_ + sphereB.getRadius();
-        float radiusSumSquared = radiusSum * radiusSum;
+        const float distance = glm::distance(centerA, centerB);
+        const float radiusSum = radius_ + sphereB.getRadius();
 
-        if (distanceSquared <= radiusSumSquared) {
+        if (distance <= radiusSum) {
             result.isColliding = true;
 
             Contact contact;
-            contact.depth = radiusSum - std::sqrt(distanceSquared);
+            contact.depth = radiusSum - distance;
 
-            if (distanceSquared > 0.001f) {
+            if (distance > 0.001f) {
                 contact.normal = glm::normalize(centerB - centerA);
             } else {
                 // Spheres are overlapping completely, use arbitrary normal
@@ -285,17 +283,16 @@ CollisionResult SphereCollider::checkCollision(
         closestPoint.y = std::clamp(closestPoint.y, bMin.y, bMax.y);
         closestPoint.z = std::clamp(closestPoint.z, bMin.z, bMax.z);
 
-        float distanceSquared = glm::distance(sphereCenter, closestPoint);
-        float radiusSquared = radius_ * radius_;
+        const float distance = glm::distance(sphereCenter, closestPoint);
 
-        if (distanceSquared <= radiusSquared) {
+        if (distance <= radius_) {
             result.isColliding = true;
 
             Contact contact;
-            contact.depth = radius_ - std::sqrt(distanceSquared);
+            contact.depth = radius_ - distance;
 
-            if (distanceSquared > 0.001f) {
-                contact.normal = glm::normalize(sphereCenter - closestPoint);
+            if (distance > 0.001f) {
+                contact.normal = glm::normalize(closestPoint - sphereCenter);
             } else {
                 contact.normal = { 0, 1, 0 };
             }

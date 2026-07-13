@@ -28,9 +28,15 @@ public:
     bool isLoaded() const { return loaded_; }
 
     void addObject(PhysicsMeshObject object);
+
+    void addVisual(std::string name, std::string meshPath, const glm::vec3& location, const glm::vec3& halfExtents = {0.5f, 0.5f, 0.5f});
+    void addStatic(std::string name, std::string meshPath, const glm::vec3& location, const glm::vec3& halfExtents = {0.5f, 0.5f, 0.5f}, const RigidBodyProps& props = {});
+    void addActive(std::string name, std::string meshPath, const glm::vec3& location, const glm::vec3& halfExtents = {0.5f, 0.5f, 0.5f}, const RigidBodyProps& props = {1.0f});
+
+    // Legacy method for backward compatibility
     void addObject(std::string name,
                    const glm::mat4& transform,
-                   const glm::vec3& translation,
+                   const glm::vec3& location,
                    const glm::vec3& halfExtents = {0.5f, 0.5f, 0.5f},
                    const RigidBodyProps& props = {},
                    std::string meshPath = {});

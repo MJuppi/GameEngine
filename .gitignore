@@ -5,7 +5,8 @@ out/
 cmake-build-*/
 
 # IDE
-.cache
+.idea/
+.cache/
 .vs/
 .vscode/
 *.user

@@ -13,51 +13,18 @@ void SceneFactory::configureTestLevel(Level& level) {
     light.color = {1.0f, 0.95f, 0.8f, 1.0f};
     light.parameters = {1.0f, 0.09f, 0.032f, 8.0f};
 
-    // Add test cubes
-    const glm::vec3 cubeHalfExtents{0.5f, 0.5f, 0.5f};
     const std::string modelPath = "assets/models/TestCube.obj";
-
-    level.addObject("TestCube",
-                    glm::mat4(1.0f),
-                    {0.0f, 0.0f, 0.0f},
-                    cubeHalfExtents,
-                    makeDynamicBoxProps(),
-                    modelPath);
-
-    level.addObject("TestCube2",
-                    glm::mat4(1.0f),
-                    {0.0f, 0.0f, 5.0f},
-                    cubeHalfExtents,
-                    makeDynamicBoxProps(),
-                    modelPath);
-
-    // Add ground
-    const glm::vec3 groundHalfExtents{50.0f, 0.5f, 50.0f};
-    level.addObject("Ground",
-                    glm::translate(glm::mat4(1.0f), {0.0f, -2.0f, 0.0f}),
-                    groundHalfExtents,
-                    {0.0f, 0.0f, 0.0f},
-                    makeGroundProps());
-}
-
-void SceneFactory::setupTestPhysics(Engine& engine) {
-    // Create test cubes
     const glm::vec3 cubeHalfExtents{0.5f, 0.5f, 0.5f};
-    const glm::mat4 cubeTransform = glm::translate(glm::mat4(1.0f), {0.0f, 5.0f, 0.0f});
-    
-    engine.getPhysicsEngine().createBoxBody(
-        cubeHalfExtents,
-        cubeTransform,
-        makeDynamicBoxProps());
 
-    // Create ground
-    const glm::vec3 groundHalfExtents{50.0f, 0.5f, 50.0f};
-    const glm::mat4 groundTransform = glm::translate(glm::mat4(1.0f), {0.0f, -2.0f, 0.0f});
-    
-    engine.getPhysicsEngine().createBoxBody(
-        groundHalfExtents,
-        groundTransform,
-        makeGroundProps());
+    // Add active physics objects
+    level.addActive("TestCube", modelPath, {0.0f, 0.0f, 0.0f}, cubeHalfExtents);
+    level.addActive("TestCube2", modelPath, {0.0f, 4.0f, 0.0f}, cubeHalfExtents);
+
+    // Add static ground
+    level.addStatic("Ground", "", {0.0f, -2.0f, 0.0f}, {50.0f, 0.5f, 50.0f});
+
+    // Example: Add a visual-only prop (no physics)
+    // level.addVisual("BackgroundMountain", "assets/models/Mountain.obj", {0.0f, 0.0f, -100.0f}, {10.0f, 10.0f, 10.0f});
 }
 
 RigidBodyProps SceneFactory::makeDynamicBoxProps(float mass,
@@ -89,7 +56,6 @@ RigidBody* SceneFactory::spawnProjectile(Engine& engine,
                                          const glm::vec3& fireDirection,
                                          const glm::vec3& velocityOffset,
                                          const glm::vec3& halfExtents) {
-    // Validate input parameters
     if (halfExtents.x <= 0.0f || halfExtents.y <= 0.0f || halfExtents.z <= 0.0f) {
         return nullptr;
     }

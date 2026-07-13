@@ -3,8 +3,8 @@
 #include "engine/vulkan/VulkanDevice.h"
 #include "engine/vulkan/VulkanSwapchain.h"
 #include "engine/math/Types.h"
+#include <glm/glm.hpp>
 
-#include <array>
 #include <cstddef>
 #include <stdexcept>
 
@@ -231,6 +231,15 @@ void VulkanPipeline::createGraphicsPipeline(VulkanSwapchain& swapchain) {
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = m_useUi ? 0 : 1;
     pipelineLayoutInfo.pSetLayouts = m_useUi ? nullptr : &m_descriptorSetLayout;
+
+    VkPushConstantRange pushConstantRange{};
+    if (!m_useUi) {
+        pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        pushConstantRange.offset = 0;
+        pushConstantRange.size = sizeof(glm::mat4) * 2;
+        pipelineLayoutInfo.pushConstantRangeCount = 1;
+        pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+    }
 
     if (vkCreatePipelineLayout(m_device.logical(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout) !=
         VK_SUCCESS) {

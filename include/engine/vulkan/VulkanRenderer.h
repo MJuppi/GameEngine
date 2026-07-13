@@ -17,6 +17,7 @@
 #include "engine/mesh/Material.h"
 #include "engine/mesh/MeshData.h"
 #include "engine/scene/Light.h"
+#include "engine/scene/MaterialSystem.h"
 
 struct GLFWwindow;
 
@@ -28,6 +29,12 @@ class VulkanDevice;
 class VulkanSwapchain;
 class VulkanPipeline;
 class VulkanBuffer;
+class MaterialSystem;
+
+struct RenderObject {
+    glm::mat4 transform;
+    std::shared_ptr<Material> material;
+};
 
 /// Scene uniform — must match GLSL SceneUbo in basic.vert / basic.frag.
 struct SceneUbo {
@@ -49,10 +56,15 @@ public:
     void drawFrame();
     void onFramebufferResize();
     void setModelMatrix(const glm::mat4& model) { m_modelMatrix = model; }
-    void setModelMatrices(const std::vector<glm::mat4>& models) { m_bodyModelMatrices = models; }
+
+    void addDynamicObject(const glm::mat4& transform, std::shared_ptr<Material> material);
+    void clearDynamicObjects() { m_dynamicObjects.clear(); }
+
     void setPointLight(const PointLight& pointLight) { m_pointLight = pointLight; }
     [[nodiscard]] glm::vec3 getCameraPosition() const { return m_cameraPosition; }
     [[nodiscard]] glm::vec3 getCameraFront() const { return m_cameraFront; }
+
+    MaterialSystem& getMaterialSystem() { return *m_materialSystem; }
 
 private:
     void initVulkan();
@@ -89,7 +101,6 @@ private:
     std::unique_ptr<VulkanContext> m_context;
     std::unique_ptr<VulkanDevice> m_device;
     std::unique_ptr<VulkanSwapchain> m_swapchain;
-    std::unique_ptr<VulkanPipeline> m_pipeline;
     std::unique_ptr<VulkanPipeline> m_uiPipeline;
 
     VkCommandPool m_commandPool = VK_NULL_HANDLE;
@@ -156,8 +167,9 @@ private:
     float m_lastRenderedMaxFrameTimeMs = 0.0f;
 
     glm::mat4 m_modelMatrix = glm::mat4(1.0f);
-    std::vector<glm::mat4> m_bodyModelMatrices;
+    std::vector<RenderObject> m_dynamicObjects;
     MeshData m_boxMesh = makeUnitCubeMesh();
+    std::unique_ptr<MaterialSystem> m_materialSystem;
 };
 
 } // namespace ge

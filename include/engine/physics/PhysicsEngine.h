@@ -11,6 +11,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include "engine/mesh/Material.h"
 
 namespace ge {
 
@@ -176,6 +177,9 @@ public:
     /// @brief Set the mass
     void setMass(float mass) { props_.mass = mass; }
 
+    void setMaterial(std::shared_ptr<Material> material) { material_ = material; }
+    std::shared_ptr<Material> getMaterial() const { return material_; }
+
     // Internal physics state (accessed by PhysicsEngine)
     PhysicsVec3 getAcceleration() const { return acceleration_; }
     PhysicsVec3 getTotalForce() const { return totalForce_; }
@@ -203,6 +207,8 @@ private:
 
     // Orientation
     glm::quat rotation_;
+
+    std::shared_ptr<Material> material_;
 
     // Derived properties
     glm::mat3 inverseInertiaTensor_;

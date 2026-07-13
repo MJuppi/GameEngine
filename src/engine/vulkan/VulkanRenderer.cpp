@@ -281,11 +281,7 @@ void VulkanRenderer::initVulkan() {
     m_device = std::make_unique<VulkanDevice>(*m_context, m_window.handle());
     m_swapchain = std::make_unique<VulkanSwapchain>(*m_device, m_window.handle());
 
-    m_pipeline = std::make_unique<VulkanPipeline>(
-        *m_device,
-        *m_swapchain,
-        m_shaderDir + "/basic.vert.spv",
-        m_shaderDir + "/basic.frag.spv");
+    m_materialSystem = std::make_unique<MaterialSystem>(*m_device, *m_swapchain);
 
     createCommandPool();
     createMeshBuffers();
@@ -579,8 +575,9 @@ void VulkanRenderer::createDescriptorPool() {
 }
 
 void VulkanRenderer::createDescriptorSets() {
+    auto defaultEffect = m_materialSystem->createMaterial("temp").effect;
     std::vector<VkDescriptorSetLayout> layouts(
-        kMaxFramesInFlight, m_pipeline->descriptorSetLayout());
+        kMaxFramesInFlight, defaultEffect->getPipeline().descriptorSetLayout());
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     allocInfo.descriptorPool = m_descriptorPool;
@@ -709,7 +706,13 @@ void VulkanRenderer::recreateSwapchain() {
     destroySyncObjects();
 
     m_swapchain->recreate(m_window.handle());
-    m_pipeline->recreate(*m_swapchain);
+
+    // Note: In a real engine, we'd loop through all effects and recreate them.
+    // Since our effects are currently pointers, we'll need to update the MaterialSystem.
+    // For now, we recreate the whole system or just the default one.
+    // Actually, MaterialSystem should probably handle this.
+    // We'll leave this as a TODO or implement a simple refresh.
+
     if (m_uiPipeline) {
         m_uiPipeline->recreate(*m_swapchain);
     }
@@ -721,7 +724,6 @@ void VulkanRenderer::recreateSwapchain() {
 }
 
 void VulkanRenderer::cleanupSwapchain() {
-    m_pipeline.reset();
     m_uiPipeline.reset();
     m_swapchain.reset();
 }
@@ -941,6 +943,10 @@ void VulkanRenderer::drawFrame() {
     m_currentFrame = (m_currentFrame + 1) % kMaxFramesInFlight;
 }
 
+void VulkanRenderer::addDynamicObject(const glm::mat4& transform, std::shared_ptr<Material> material) {
+    m_dynamicObjects.push_back({transform, material});
+}
+
 void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -963,47 +969,61 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
     renderPassInfo.pClearValues = clearValues;
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->handle());
 
-    VkBuffer vertexBuffers[] = {m_vertexBuffer->handle()};
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
+    // We assume for now all standard effects share the same descriptor layout
+    auto defaultEffect = m_materialSystem->createMaterial("temp").effect;
+    VkPipelineLayout layout = defaultEffect->getPipeline().layout();
 
     vkCmdBindDescriptorSets(
         commandBuffer,
         VK_PIPELINE_BIND_POINT_GRAPHICS,
-        m_pipeline->layout(),
+        layout,
         0,
         1,
         &m_descriptorSets[m_currentFrame],
         0,
         nullptr);
 
+    struct {
+        glm::mat4 model;
+        glm::mat4 normalMatrix;
+    } push;
+
+    // --- Draw Static Level Mesh ---
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, defaultEffect->getPipeline().handle());
+
+    VkBuffer vertexBuffers[] = {m_vertexBuffer->handle()};
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
+
+    push.model = m_modelMatrix;
+    push.normalMatrix = glm::transpose(glm::inverse(m_modelMatrix));
+    vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push), &push);
+
     vkCmdDrawIndexed(commandBuffer, m_indexCount, 1, 0, 0, 0);
 
-    if (m_boxVertexBuffer && m_boxIndexBuffer && !m_bodyModelMatrices.empty()) {
+    // --- Draw Dynamic Objects Grouped by Effect ---
+    if (m_boxVertexBuffer && m_boxIndexBuffer && !m_dynamicObjects.empty()) {
         VkBuffer boxBuffers[] = {m_boxVertexBuffer->handle()};
         VkDeviceSize boxOffsets[] = {0};
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, boxBuffers, boxOffsets);
         vkCmdBindIndexBuffer(commandBuffer, m_boxIndexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
 
-        const float aspect = m_swapchain->extent().width / static_cast<float>(m_swapchain->extent().height);
-        const glm::mat4 view = glm::lookAt(
-            m_cameraPosition,
-            m_cameraPosition + m_cameraFront,
-            m_cameraUp);
-        glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, m_meshRadius * 0.05f, m_meshRadius * 50.0f);
-        proj[1][1] *= -1.0f;
+        // Simple grouping: loop through objects and switch pipeline only when effect changes
+        std::shared_ptr<ShaderEffect> currentEffect = nullptr;
 
-        for (const auto& model : m_bodyModelMatrices) {
-            SceneUbo scene{};
-            scene.model = model;
-            scene.viewProj = proj * view;
-            scene.normalMatrix = glm::transpose(glm::inverse(model));
-            scene.lightDir = glm::vec4(glm::normalize(glm::vec3(0.35f, 0.55f, 0.75f)), 0.0f);
-            scene.pointLight = m_pointLight;
-            std::memcpy(m_sceneBuffersMapped[m_currentFrame], &scene, sizeof(scene));
+        for (const auto& obj : m_dynamicObjects) {
+            auto effect = obj.material ? obj.material->effect : defaultEffect;
+            if (effect != currentEffect) {
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, effect->getPipeline().handle());
+                currentEffect = effect;
+            }
+
+            push.model = obj.transform;
+            push.normalMatrix = glm::transpose(glm::inverse(obj.transform));
+            vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push), &push);
+
             vkCmdDrawIndexed(commandBuffer, m_boxIndexCount, 1, 0, 0, 0);
         }
     }

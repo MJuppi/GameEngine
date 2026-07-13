@@ -10,8 +10,11 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <memory>
 
 namespace ge {
+
+class ShaderEffect;
 
 /// Parsed from a .mtl file (one newmtl block per instance).
 struct Material {
@@ -21,6 +24,9 @@ struct Material {
     float specular[3] = {0.5f, 0.5f, 0.5f};
     float shininess = 32.0f;
     float alpha = 1.0f;
+
+    // Advanced: Link to a specific shader effect
+    std::shared_ptr<ShaderEffect> effect;
 };
 
 /// Maximum materials in one draw (shader uniform array size).

@@ -65,6 +65,12 @@ MeshData Level::buildCombinedMesh() const {
             continue;
         }
 
+        // Only bake Static and Visual objects into the level's static mesh.
+        // Active (dynamic) objects are rendered individually.
+        if (object.type == ObjectType::Active) {
+            continue;
+        }
+
         const size_t materialBaseIndex = combinedMesh.materials.size();
         if (object.mesh.materials.empty()) {
             combinedMesh.materials.push_back(makeDefaultMaterial("default"));
@@ -141,22 +147,24 @@ PhysicsMeshObject& Level::getObject() {
 }
 
 /// @brief Adds an object to the level.
-/// @param object
 void Level::addObject(PhysicsMeshObject object) {
-    if (object.meshPath.empty() && !meshPath_.empty() && objects_.empty()) {
-        object.meshPath = meshPath_;
-    }
     objects_.push_back(std::move(object));
     combinedMeshDirty_ = true;
 }
 
+void Level::addVisual(std::string name, std::string meshPath, const glm::vec3& location, const glm::vec3& halfExtents) {
+    addObject(ObjectBuilder::createVisual(std::move(name), std::move(meshPath), location, halfExtents));
+}
+
+void Level::addStatic(std::string name, std::string meshPath, const glm::vec3& location, const glm::vec3& halfExtents, const RigidBodyProps& props) {
+    addObject(ObjectBuilder::createStatic(std::move(name), std::move(meshPath), location, halfExtents, props));
+}
+
+void Level::addActive(std::string name, std::string meshPath, const glm::vec3& location, const glm::vec3& halfExtents, const RigidBodyProps& props) {
+    addObject(ObjectBuilder::createActive(std::move(name), std::move(meshPath), location, halfExtents, props));
+}
+
 /// @brief Adds an object to the level with specified parameters.
-/// @param name
-/// @param transform
-/// @param location
-/// @param halfExtents
-/// @param props
-/// @param meshPath
 void Level::addObject(std::string name,
                       const glm::mat4& transform,
                       const glm::vec3& location,

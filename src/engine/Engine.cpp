@@ -42,6 +42,16 @@ public:
             }
 
             physicsEngine.update(deltaTime);
+
+            // Sync physics transforms to renderer
+            const auto& bodies = physicsEngine.getWorld().getBodies();
+            renderer.clearDynamicObjects();
+            for (const auto& body : bodies) {
+                if (!body->getProps().isKinematic && body->getProps().mass > 0.0f) {
+                    renderer.addDynamicObject(body->getWorldTransform(), body->getMaterial());
+                }
+            }
+
             renderer.drawFrame();
         }
     }

@@ -8,7 +8,6 @@
 // =============================================================================
 
 #include <vulkan/vulkan.h>
-#include <array>
 #include <string>
 #include <vector>
 

@@ -1,7 +1,6 @@
 #include "game/Game.h"
 #include "game/LevelBuilder.h"
 #include "game/PlayerController.h"
-#include "game/SceneFactory.h"
 #include "engine/Engine.h"
 #include "engine/mesh/MeshData.h"
 #include "engine/physics/PhysicsEngine.h"
@@ -22,16 +21,19 @@ void Game::initialize() {
         return;
     }
 
-    std::cout << "Initializing game...\n";
+    std::cout << "Initializing game engine...\n";
     state_ = GameState::Loading;
 
     initializeLevels();
 
     Level* currentLevel = levelManager_.getCurrentLevel();
+    bool success = false;
     if (currentLevel) {
-        initializeLevel(*currentLevel);
-    } else {
-        initializeFallbackLevel();
+        success = loadLevel(*currentLevel);
+    }
+
+    if (!success) {
+        loadFallbackLevel();
     }
 
     std::cout << "Game initialized successfully.\n";
@@ -44,10 +46,7 @@ void Game::run() {
         return;
     }
 
-    if (state_ != GameState::Running) {
-        state_ = GameState::Running;
-    }
-
+    state_ = GameState::Running;
     engine_->run();
 }
 
@@ -57,9 +56,14 @@ void Game::updateGameplay(float deltaTime) {
     }
 }
 
-void Game::initializeLevel(Level& level) {
+bool Game::loadLevel(Level& level) {
     std::cout << "Loading level: " << level.getName() << '\n';
     level.load(assetManager_);
+
+    if (!level.isLoaded()) {
+        std::cerr << "Failed to load level assets for: " << level.getName() << '\n';
+        return false;
+    }
 
     engine_ = std::make_unique<Engine>(level.getMesh(), level.getPointLight());
     for (auto& levelObject : level.getObjects()) {
@@ -70,15 +74,15 @@ void Game::initializeLevel(Level& level) {
     engine_->setFrameUpdateCallback([this](float deltaTime) {
         updateGameplay(deltaTime);
     });
-    setupTestPhysics();
+
+    return true;
 }
 
-void Game::initializeFallbackLevel() {
-    std::cout << "No level available, using fallback unit cube.\n";
-    auto fallbackObject = ObjectBuilder::createObject(
+void Game::loadFallbackLevel() {
+    std::cout << "Using fallback unit cube level.\n";
+    auto fallbackObject = ObjectBuilder::createActive(
         "FallbackCube",
-        makeUnitCubeMesh(),
-        glm::mat4(1.0f),
+        "", // use default cube
         {0.0f, 0.0f, 0.0f},
         {0.5f, 0.5f, 0.5f},
         RigidBodyProps{1.0f, 0.3f, 0.7f});
@@ -104,10 +108,6 @@ void Game::shutdown() {
 void Game::initializeLevels() {
     LevelBuilder::registerDefaultLevels(levelManager_);
     levelManager_.setCurrentLevel("TestCube");
-}
-
-void Game::setupTestPhysics() {
-    SceneFactory::setupTestPhysics(*engine_);
 }
 
 } // namespace ge

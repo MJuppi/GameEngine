@@ -2,7 +2,6 @@
 #include "engine/vulkan/VulkanContext.h"
 
 #include <GLFW/glfw3.h>
-#include <algorithm>
 #include <set>
 #include <stdexcept>
 
