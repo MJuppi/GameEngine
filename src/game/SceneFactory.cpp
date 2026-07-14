@@ -13,12 +13,12 @@ void SceneFactory::configureTestLevel(Level& level) {
     light.color = {1.0f, 0.95f, 0.8f, 1.0f};
     light.parameters = {1.0f, 0.09f, 0.032f, 8.0f};
 
-    const std::string modelPath = "assets/models/TestCube.obj";
+    const std::string modelPath = "test_cube";
     const glm::vec3 cubeHalfExtents{0.5f, 0.5f, 0.5f};
 
     // Add active physics objects
-    level.addActive("TestCube", modelPath, {0.0f, 0.0f, 0.0f}, cubeHalfExtents);
-    level.addActive("TestCube2", modelPath, {0.0f, 4.0f, 0.0f}, cubeHalfExtents);
+    level.addActive("TestCube", modelPath, {0.0f, 4.0f, 0.0f}, cubeHalfExtents);
+    level.addActive("TestCube2", modelPath, {0.0f, 10.0f, 0.0f}, cubeHalfExtents);
 
     // Add static ground
     level.addStatic("Ground", "", {0.0f, -2.0f, 0.0f}, {50.0f, 0.5f, 50.0f});

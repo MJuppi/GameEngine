@@ -1,17 +1,18 @@
 #include "game/LevelBuilder.h"
 #include "game/SceneFactory.h"
+#include <memory>
 
 namespace ge {
 
 void LevelBuilder::registerDefaultLevels(LevelManager& levelManager) {
-    levelManager.addLevel("TestCube", "assets/models/TestCubeTexture.obj", [](Level& level) {
-        SceneFactory::configureTestLevel(level);
-    });
+    auto testLevel = std::make_unique<Level>("TestCube");
+    SceneFactory::configureTestLevel(*testLevel);
+    levelManager.addLevel(std::move(testLevel));
 
     // Add more levels here as needed:
-    // levelManager.addLevel("Level2", "assets/models/Level2.obj", [](Level& level) {
-    //     SceneFactory::configureLevel2(level);
-    // });
+    // auto level2 = std::make_unique<Level>("Level2");
+    // SceneFactory::configureLevel2(*level2);
+    // levelManager.addLevel(std::move(level2));
 }
 
 } // namespace ge

@@ -1,7 +1,7 @@
 {
   "meshes": {
     "suomi": "models/SuomiKP.obj",
-    "test_cube": "models/TestCube.obj"
+    "test_cube": "models/TestCubeTexture.obj"
   },
   "textures": {
     "suomi_albedo": "textures/suomi_albedo.png",

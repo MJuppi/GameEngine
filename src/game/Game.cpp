@@ -84,10 +84,16 @@ void Game::loadFallbackLevel() {
     std::cout << "Using fallback unit cube level.\n";
     auto fallbackObject = ObjectBuilder::createActive(
         "FallbackCube",
-        "", // use default cube
+        "test_cube",
         {0.0f, 0.0f, 0.0f},
         {0.5f, 0.5f, 0.5f},
         RigidBodyProps{1.0f, 0.3f, 0.7f});
+
+    try {
+        fallbackObject.mesh = assetManager_.loadMesh(fallbackObject.meshPath);
+    } catch (...) {
+        fallbackObject.mesh = makeUnitCubeMesh();
+    }
 
     engine_ = std::make_unique<Engine>(fallbackObject.mesh);
     ObjectBuilder::attachPhysics(engine_->getPhysicsEngine(), fallbackObject);

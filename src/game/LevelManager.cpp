@@ -1,6 +1,5 @@
 #include "game/LevelManager.h"
 #include "engine/asset/AssetManager.h"
-#include <algorithm>
 
 namespace ge {
 
@@ -21,22 +20,6 @@ Level* LevelManager::addLevel(std::unique_ptr<Level> level) {
     return rawLevel;
 }
 
-Level* LevelManager::addLevel(const std::string& name, const std::string& meshPath) {
-    return addLevel(std::make_unique<Level>(name, meshPath));
-}
-
-Level* LevelManager::addLevel(const std::string& name, const std::string& meshPath, const PhysicsMeshObject& object) {
-    return addLevel(std::make_unique<Level>(name, meshPath, object));
-}
-
-Level* LevelManager::addLevel(const std::string& name, const std::string& meshPath, LevelConfigurator configurator) {
-    auto level = std::make_unique<Level>(name, meshPath);
-    if (configurator) {
-        configurator(*level);
-    }
-    return addLevel(std::move(level));
-}
-
 // ====================== Getters ======================
 
 Level* LevelManager::getCurrentLevel() const {
@@ -47,10 +30,12 @@ Level* LevelManager::getCurrentLevel() const {
 }
 
 Level* LevelManager::getLevel(const std::string& name) const {
-    auto it = std::find_if(levels_.begin(), levels_.end(),
-        [&](const auto& lvl) { return lvl && lvl->getName() == name; });
-    
-    return (it != levels_.end()) ? it->get() : nullptr;
+    for (const auto& level : levels_) {
+        if (level && level->getName() == name) {
+            return level.get();
+        }
+    }
+    return nullptr;
 }
 
 Level* LevelManager::getLevel(size_t index) const {
@@ -61,14 +46,13 @@ Level* LevelManager::getLevel(size_t index) const {
 // ====================== Setters ======================
 
 bool LevelManager::setCurrentLevel(const std::string& name) {
-    auto level = getLevel(name);
-    if (!level) return false;
-
-    auto it = std::find_if(levels_.begin(), levels_.end(),
-        [level](const auto& ptr) { return ptr.get() == level; });
-    
-    currentLevelIndex_ = static_cast<int>(std::distance(levels_.begin(), it));
-    return true;
+    for (int i = 0; i < static_cast<int>(levels_.size()); ++i) {
+        if (levels_[i] && levels_[i]->getName() == name) {
+            currentLevelIndex_ = i;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool LevelManager::setCurrentLevel(size_t index) {

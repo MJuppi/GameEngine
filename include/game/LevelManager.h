@@ -1,7 +1,5 @@
 #pragma once
 #include "game/Level.h"
-#include "engine/scene/ObjectBuilder.h"
-#include <functional>
 #include <vector>
 #include <memory>
 #include <string>
@@ -12,17 +10,11 @@ class AssetManager;
 
 class LevelManager {
 public:
-    using LevelConfigurator = std::function<void(Level&)>;
-
     LevelManager() = default;
     ~LevelManager();
 
     Level* addLevel(std::unique_ptr<Level> level);
-    Level* addLevel(const std::string& name, const std::string& meshPath = {});
-    Level* addLevel(const std::string& name, const std::string& meshPath, const PhysicsMeshObject& object);
-    Level* addLevel(const std::string& name, const std::string& meshPath, LevelConfigurator configurator);
 
-    // === Recommended: Return raw pointer (non-owning) ===
     Level* getCurrentLevel() const;
     Level* getLevel(const std::string& name) const;
     Level* getLevel(size_t index) const;
