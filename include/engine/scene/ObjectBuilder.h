@@ -2,6 +2,7 @@
 
 #include "engine/mesh/MeshData.h"
 #include "engine/physics/PhysicsEngine.h"
+#include "engine/physics/RigidBody.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -22,8 +23,13 @@ struct PhysicsMeshObject {
     glm::mat4 transform{1.0f};
     glm::vec3 halfExtents{0.5f, 0.5f, 0.5f};
     glm::vec3 spawnLocation{0.0f, 0.0f, 0.0f};
-    RigidBodyProps physicsProps{};
+    RigidBodyProps physicsProps;
     ObjectType type = ObjectType::Static;
+
+    PhysicsMeshObject() = default;
+
+    PhysicsMeshObject(std::string n, std::string path, glm::vec3 loc, glm::vec3 ext, ObjectType t, RigidBodyProps props = {})
+            : name(std::move(n)), meshPath(std::move(path)), halfExtents(ext), spawnLocation(loc), physicsProps(props), type(t) {}
 
     [[nodiscard]] glm::mat4 getWorldTransform() const {
         return glm::translate(glm::mat4(1.0f), spawnLocation) * transform;

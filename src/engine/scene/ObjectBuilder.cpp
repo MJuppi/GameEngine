@@ -9,13 +9,8 @@ PhysicsMeshObject ObjectBuilder::createVisual(
     std::string meshPath,
     const glm::vec3& location,
     const glm::vec3& halfExtents) {
-    PhysicsMeshObject object;
-    object.name = std::move(name);
-    object.meshPath = std::move(meshPath);
-    object.spawnLocation = location;
-    object.halfExtents = halfExtents;
-    object.type = ObjectType::Visual;
-    return object;
+
+    return PhysicsMeshObject(std::move(name), std::move(meshPath), location, halfExtents, ObjectType::Visual);
 }
 
 PhysicsMeshObject ObjectBuilder::createStatic(
@@ -24,16 +19,8 @@ PhysicsMeshObject ObjectBuilder::createStatic(
     const glm::vec3& location,
     const glm::vec3& halfExtents,
     const RigidBodyProps& props) {
-    PhysicsMeshObject object;
-    object.name = std::move(name);
-    object.meshPath = std::move(meshPath);
-    object.spawnLocation = location;
-    object.halfExtents = halfExtents;
-    object.physicsProps = props;
-    object.physicsProps.mass = 0.0f; // Force static
-    object.physicsProps.isKinematic = true;
-    object.type = ObjectType::Static;
-    return object;
+
+    return PhysicsMeshObject(std::move(name), std::move(meshPath), location, halfExtents, ObjectType::Static, props);
 }
 
 PhysicsMeshObject ObjectBuilder::createActive(
@@ -42,15 +29,8 @@ PhysicsMeshObject ObjectBuilder::createActive(
     const glm::vec3& location,
     const glm::vec3& halfExtents,
     const RigidBodyProps& props) {
-    PhysicsMeshObject object;
-    object.name = std::move(name);
-    object.meshPath = std::move(meshPath);
-    object.spawnLocation = location;
-    object.halfExtents = halfExtents;
-    object.physicsProps = props;
-    if (object.physicsProps.mass <= 0.0f) object.physicsProps.mass = 1.0f;
-    object.type = ObjectType::Active;
-    return object;
+    
+    return PhysicsMeshObject(std::move(name), std::move(meshPath), location, halfExtents, ObjectType::Active, props);
 }
 
 PhysicsMeshObject ObjectBuilder::createObject(
@@ -60,23 +40,21 @@ PhysicsMeshObject ObjectBuilder::createObject(
     const glm::vec3& location,
     const glm::vec3& halfExtents,
     const RigidBodyProps& physicsProps) {
-    PhysicsMeshObject object;
-    object.name = std::move(name);
-    object.mesh = std::move(mesh);
-    object.transform = transform;
-    object.spawnLocation = location;
-    object.halfExtents = halfExtents;
-    object.physicsProps = physicsProps;
 
+    ObjectType type;
+    // Determine the object type based on physics properties
     if (physicsProps.mass > 0.0f && !physicsProps.isKinematic) {
-        object.type = ObjectType::Active;
+        type = ObjectType::Active;
     } else if (physicsProps.mass == 0.0f && physicsProps.isKinematic) {
-        object.type = ObjectType::Static;
+        type = ObjectType::Static;
     } else {
-        object.type = ObjectType::Visual;
+        type = ObjectType::Visual;
     }
 
-    return object;
+    PhysicsMeshObject obj(std::move(name), "", location, halfExtents, type, physicsProps);
+    obj.mesh = std::move(mesh);
+    obj.transform = transform;
+    return obj;
 }
 
 RigidBody* ObjectBuilder::attachPhysics(PhysicsEngine& physicsEngine, PhysicsMeshObject& object) {

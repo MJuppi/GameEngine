@@ -112,7 +112,13 @@ set(ENGINE_SOURCES
     src/engine/vulkan/VulkanPipeline.cpp
     src/engine/vulkan/VulkanBuffer.cpp
     src/engine/vulkan/VulkanRenderer.cpp
+    src/engine/physics/BoxCollider.cpp
+    src/engine/physics/Collider.cpp
+    src/engine/physics/CollisionDetection.cpp
     src/engine/physics/PhysicsEngine.cpp
+    src/engine/physics/PhysicsWorld.cpp
+    src/engine/physics/RigidBody.cpp
+    src/engine/physics/SphereCollider.cpp
 )
 
 add_library(game_engine_lib STATIC ${ENGINE_SOURCES})

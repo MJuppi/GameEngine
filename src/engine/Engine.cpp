@@ -1,6 +1,7 @@
 #include "engine/Engine.h"
 #include "engine/FrameTimer.h"
 #include "engine/physics/PhysicsEngine.h"
+#include "engine/physics/RigidBody.h"
 
 #include "engine/Window.h"
 #include "engine/vulkan/VulkanRenderer.h"
