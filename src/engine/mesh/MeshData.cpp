@@ -9,17 +9,19 @@ namespace ge {
 
 namespace {
 
-Vertex makeVertex(float x, float y, float z, float nx, float ny, float nz, uint32_t materialIndex) {
-    // Helper to create a Vertex value with position, normal and material index.
-    Vertex v{};
-    v.position[0] = x;
-    v.position[1] = y;
-    v.position[2] = z;
-    v.normal[0] = nx;
-    v.normal[1] = ny;
-    v.normal[2] = nz;
-    v.materialIndex = materialIndex;
-    return v;
+Vertex makeVertex(float x, float y, float z, float nx, float ny, float nz, float u, float v, uint32_t materialIndex) {
+    // Helper to create a Vertex value with position, normal, texCoord and material index.
+    Vertex vtx{};
+    vtx.position[0] = x;
+    vtx.position[1] = y;
+    vtx.position[2] = z;
+    vtx.normal[0] = nx;
+    vtx.normal[1] = ny;
+    vtx.normal[2] = nz;
+    vtx.texCoord[0] = u;
+    vtx.texCoord[1] = v;
+    vtx.materialIndex = materialIndex;
+    return vtx;
 }
 
 } // namespace
@@ -56,35 +58,35 @@ MeshData makeUnitCubeMesh() {
     
     // Back face (-Z): normal (0, 0, -1)
     mesh.vertices = {
-        makeVertex(-0.5f, -0.5f, -0.5f, 0, 0, -1, 0),
-        makeVertex(0.5f, -0.5f, -0.5f, 0, 0, -1, 0),
-        makeVertex(0.5f, 0.5f, -0.5f, 0, 0, -1, 0),
-        makeVertex(-0.5f, 0.5f, -0.5f, 0, 0, -1, 0),
+        makeVertex(-0.5f, -0.5f, -0.5f, 0, 0, -1, 0.0f, 0.0f, 0),
+        makeVertex(0.5f, -0.5f, -0.5f, 0, 0, -1, 1.0f, 0.0f, 0),
+        makeVertex(0.5f, 0.5f, -0.5f, 0, 0, -1, 1.0f, 1.0f, 0),
+        makeVertex(-0.5f, 0.5f, -0.5f, 0, 0, -1, 0.0f, 1.0f, 0),
         // Front face (+Z): normal (0, 0, 1)
-        makeVertex(-0.5f, -0.5f, 0.5f, 0, 0, 1, 1),
-        makeVertex(0.5f, -0.5f, 0.5f, 0, 0, 1, 1),
-        makeVertex(0.5f, 0.5f, 0.5f, 0, 0, 1, 1),
-        makeVertex(-0.5f, 0.5f, 0.5f, 0, 0, 1, 1),
+        makeVertex(-0.5f, -0.5f, 0.5f, 0, 0, 1, 0.0f, 0.0f, 1),
+        makeVertex(0.5f, -0.5f, 0.5f, 0, 0, 1, 1.0f, 0.0f, 1),
+        makeVertex(0.5f, 0.5f, 0.5f, 0, 0, 1, 1.0f, 1.0f, 1),
+        makeVertex(-0.5f, 0.5f, 0.5f, 0, 0, 1, 0.0f, 1.0f, 1),
         // Left face (-X): normal (-1, 0, 0)
-        makeVertex(-0.5f, -0.5f, -0.5f, -1, 0, 0, 2),
-        makeVertex(-0.5f, -0.5f, 0.5f, -1, 0, 0, 2),
-        makeVertex(-0.5f, 0.5f, 0.5f, -1, 0, 0, 2),
-        makeVertex(-0.5f, 0.5f, -0.5f, -1, 0, 0, 2),
+        makeVertex(-0.5f, -0.5f, -0.5f, -1, 0, 0, 0.0f, 0.0f, 2),
+        makeVertex(-0.5f, -0.5f, 0.5f, -1, 0, 0, 1.0f, 0.0f, 2),
+        makeVertex(-0.5f, 0.5f, 0.5f, -1, 0, 0, 1.0f, 1.0f, 2),
+        makeVertex(-0.5f, 0.5f, -0.5f, -1, 0, 0, 0.0f, 1.0f, 2),
         // Right face (+X): normal (1, 0, 0)
-        makeVertex(0.5f, -0.5f, -0.5f, 1, 0, 0, 3),
-        makeVertex(0.5f, -0.5f, 0.5f, 1, 0, 0, 3),
-        makeVertex(0.5f, 0.5f, 0.5f, 1, 0, 0, 3),
-        makeVertex(0.5f, 0.5f, -0.5f, 1, 0, 0, 3),
+        makeVertex(0.5f, -0.5f, -0.5f, 1, 0, 0, 0.0f, 0.0f, 3),
+        makeVertex(0.5f, -0.5f, 0.5f, 1, 0, 0, 1.0f, 0.0f, 3),
+        makeVertex(0.5f, 0.5f, 0.5f, 1, 0, 0, 1.0f, 1.0f, 3),
+        makeVertex(0.5f, 0.5f, -0.5f, 1, 0, 0, 0.0f, 1.0f, 3),
         // Top face (+Y): normal (0, 1, 0)
-        makeVertex(-0.5f, 0.5f, -0.5f, 0, 1, 0, 4),
-        makeVertex(0.5f, 0.5f, -0.5f, 0, 1, 0, 4),
-        makeVertex(0.5f, 0.5f, 0.5f, 0, 1, 0, 4),
-        makeVertex(-0.5f, 0.5f, 0.5f, 0, 1, 0, 4),
+        makeVertex(-0.5f, 0.5f, -0.5f, 0, 1, 0, 0.0f, 0.0f, 4),
+        makeVertex(0.5f, 0.5f, -0.5f, 0, 1, 0, 1.0f, 0.0f, 4),
+        makeVertex(0.5f, 0.5f, 0.5f, 0, 1, 0, 1.0f, 1.0f, 4),
+        makeVertex(-0.5f, 0.5f, 0.5f, 0, 1, 0, 0.0f, 1.0f, 4),
         // Bottom face (-Y): normal (0, -1, 0)
-        makeVertex(-0.5f, -0.5f, -0.5f, 0, -1, 0, 5),
-        makeVertex(0.5f, -0.5f, -0.5f, 0, -1, 0, 5),
-        makeVertex(0.5f, -0.5f, 0.5f, 0, -1, 0, 5),
-        makeVertex(-0.5f, -0.5f, 0.5f, 0, -1, 0, 5),
+        makeVertex(-0.5f, -0.5f, -0.5f, 0, -1, 0, 0.0f, 0.0f, 5),
+        makeVertex(0.5f, -0.5f, -0.5f, 0, -1, 0, 1.0f, 0.0f, 5),
+        makeVertex(0.5f, -0.5f, 0.5f, 0, -1, 0, 1.0f, 1.0f, 5),
+        makeVertex(-0.5f, -0.5f, 0.5f, 0, -1, 0, 0.0f, 1.0f, 5),
     };
 
     // Indices for each face (two triangles per face)
@@ -112,20 +114,20 @@ MeshData makeSkyboxMesh(uint32_t materialIndex, float size) {
 
     const float h = size * 0.5f;
 
-    auto makeV = [&](float x, float y, float z, float nx, float ny, float nz) {
-        return makeVertex(x, y, z, nx, ny, nz, materialIndex);
+    auto makeV = [&](float x, float y, float z, float nx, float ny, float nz, float u, float v) {
+        return makeVertex(x, y, z, nx, ny, nz, u, v, materialIndex);
     };
 
     // Create a cube but invert normals so the inside is visible.
     mesh.vertices = {
-        makeV(-h, -h, -h, 0, 0, 1),
-        makeV( h, -h, -h, 0, 0, 1),
-        makeV( h,  h, -h, 0, 0, 1),
-        makeV(-h,  h, -h, 0, 0, 1),
-        makeV(-h, -h,  h, 0, 0, -1),
-        makeV( h, -h,  h, 0, 0, -1),
-        makeV( h,  h,  h, 0, 0, -1),
-        makeV(-h,  h,  h, 0, 0, -1),
+        makeV(-h, -h, -h, 0, 0, 1, 0, 0),
+        makeV( h, -h, -h, 0, 0, 1, 1, 0),
+        makeV( h,  h, -h, 0, 0, 1, 1, 1),
+        makeV(-h,  h, -h, 0, 0, 1, 0, 1),
+        makeV(-h, -h,  h, 0, 0, -1, 0, 0),
+        makeV( h, -h,  h, 0, 0, -1, 1, 0),
+        makeV( h,  h,  h, 0, 0, -1, 1, 1),
+        makeV(-h,  h,  h, 0, 0, -1, 0, 1),
     };
 
     // Use same index order but winding will be flipped later if needed.
@@ -148,10 +150,10 @@ MeshData makeGroundPlaneMesh(uint32_t materialIndex, float size, float y) {
     const float h = size * 0.5f;
 
     // Simple quad (two triangles) lying on XZ plane at height y.
-    Vertex v0 = makeVertex(-h, y, -h, 0, 1, 0, materialIndex);
-    Vertex v1 = makeVertex( h, y, -h, 0, 1, 0, materialIndex);
-    Vertex v2 = makeVertex( h, y,  h, 0, 1, 0, materialIndex);
-    Vertex v3 = makeVertex(-h, y,  h, 0, 1, 0, materialIndex);
+    Vertex v0 = makeVertex(-h, y, -h, 0, 1, 0, 0.0f, 0.0f, materialIndex);
+    Vertex v1 = makeVertex( h, y, -h, 0, 1, 0, 1.0f, 0.0f, materialIndex);
+    Vertex v2 = makeVertex( h, y,  h, 0, 1, 0, 1.0f, 1.0f, materialIndex);
+    Vertex v3 = makeVertex(-h, y,  h, 0, 1, 0, 0.0f, 1.0f, materialIndex);
 
     mesh.vertices = {v0, v1, v2, v3};
     mesh.indices = {0, 1, 2, 2, 3, 0};

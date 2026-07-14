@@ -18,6 +18,9 @@
 #include <vector>
 #include <algorithm>
 
+#include "engine/asset/TextureLoader.h"
+#include "engine/asset/AssetLoader.h"
+
 #ifndef SHADER_DIR
 #define SHADER_DIR "shaders"
 #endif
@@ -203,10 +206,12 @@ VulkanRenderer::VulkanRenderer(Window& window, MeshData mesh)
     , m_mesh(std::move(mesh))
     , m_shaderDir(SHADER_DIR)
 {
+    // Ensure the box mesh used for dynamic objects matches our winding order
+    flipMeshWinding(m_boxMesh);
+
     // Compute mesh bounds, register resize callback, initialize camera, and create Vulkan resources.
     const MeshBounds bounds = computeMeshBounds(m_mesh);
     m_meshRadius = bounds.radius;
-    resetCamera(bounds);
     glfwSetWindowUserPointer(m_window.handle(), this);
     glfwSetFramebufferSizeCallback(m_window.handle(), framebufferResizeCallback);
     initVulkan();
@@ -254,6 +259,8 @@ VulkanRenderer::~VulkanRenderer() {
         m_materialBuffer.reset();
     }
 
+    m_texture.destroy(*m_device);
+
     cleanupSwapchain();
 
     if (m_descriptorPool != VK_NULL_HANDLE) {
@@ -288,6 +295,7 @@ void VulkanRenderer::initVulkan() {
     createBoxMeshBuffers();
     createSceneBuffers();
     createMaterialBuffer();
+    createTextureImage();
     createDescriptorPool();
     createDescriptorSets();
     createCommandBuffers();
@@ -467,6 +475,33 @@ void VulkanRenderer::createMaterialBuffer() {
         sizeof(MaterialBufferObject));
 }
 
+void VulkanRenderer::createTextureImage() {
+    std::string texturePath = "textures/grid_texture.png";
+    for (const auto& mat : m_mesh.materials) {
+        if (!mat.texturePath.empty()) {
+            texturePath = mat.texturePath;
+            break;
+        }
+    }
+
+    try {
+        const auto resolved = AssetLoader::resolveAssetPath(texturePath);
+        TextureData data = loadTextureFile(resolved.string());
+        m_texture = VulkanImage::fromTextureData(*m_device, m_commandPool, m_device->graphicsQueue(), data);
+    } catch (const std::exception& e) {
+        // Fallback to a tiny 2x2 checkerboard if texture fails to load
+        TextureData dummy;
+        dummy.width = 2;
+        dummy.height = 2;
+        dummy.channels = 4;
+        dummy.pixels = {
+            255, 255, 255, 255,   0,   0,   0, 255,
+              0,   0,   0, 255, 255, 255, 255, 255
+        };
+        m_texture = VulkanImage::fromTextureData(*m_device, m_commandPool, m_device->graphicsQueue(), dummy);
+    }
+}
+
 void VulkanRenderer::createUiPipeline() {
     m_uiPipeline = std::make_unique<VulkanPipeline>(
         *m_device,
@@ -557,11 +592,13 @@ void VulkanRenderer::updateUiVertexBuffer(
 }
 
 void VulkanRenderer::createDescriptorPool() {
-    std::array<VkDescriptorPoolSize, 2> poolSizes{};
+    std::array<VkDescriptorPoolSize, 3> poolSizes{};
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     poolSizes[0].descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight);
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     poolSizes[1].descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight);
+    poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSizes[2].descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight);
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -600,7 +637,12 @@ void VulkanRenderer::createDescriptorSets() {
         materialInfo.offset = 0;
         materialInfo.range = sizeof(MaterialBufferObject);
 
-        std::array<VkWriteDescriptorSet, 2> writes{};
+        VkDescriptorImageInfo imageInfo{};
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfo.imageView = m_texture.view();
+        imageInfo.sampler = m_texture.sampler();
+
+        std::array<VkWriteDescriptorSet, 3> writes{};
 
         writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes[0].dstSet = m_descriptorSets[i];
@@ -615,6 +657,13 @@ void VulkanRenderer::createDescriptorSets() {
         writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         writes[1].descriptorCount = 1;
         writes[1].pBufferInfo = &materialInfo;
+
+        writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[2].dstSet = m_descriptorSets[i];
+        writes[2].dstBinding = 2;
+        writes[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writes[2].descriptorCount = 1;
+        writes[2].pImageInfo = &imageInfo;
 
         vkUpdateDescriptorSets(m_device->logical(), static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
     }
@@ -728,87 +777,6 @@ void VulkanRenderer::cleanupSwapchain() {
     m_swapchain.reset();
 }
 
-void VulkanRenderer::updateCamera(float deltaTime) {
-    const float velocity = m_cameraSpeed * deltaTime;
-
-    if (glfwGetKey(m_window.handle(), GLFW_KEY_W) == GLFW_PRESS) {
-        m_cameraPosition += m_cameraFront * velocity;
-    }
-    if (glfwGetKey(m_window.handle(), GLFW_KEY_S) == GLFW_PRESS) {
-        m_cameraPosition -= m_cameraFront * velocity;
-    }
-    if (glfwGetKey(m_window.handle(), GLFW_KEY_A) == GLFW_PRESS) {
-        m_cameraPosition -= m_cameraRight * velocity;
-    }
-    if (glfwGetKey(m_window.handle(), GLFW_KEY_D) == GLFW_PRESS) {
-        m_cameraPosition += m_cameraRight * velocity;
-    }
-    if (glfwGetKey(m_window.handle(), GLFW_KEY_E) == GLFW_PRESS) {
-        m_cameraPosition += m_cameraWorldUp * velocity;
-    }
-    if (glfwGetKey(m_window.handle(), GLFW_KEY_Q) == GLFW_PRESS) {
-        m_cameraPosition -= m_cameraWorldUp * velocity;
-    }
-
-    if (glfwGetMouseButton(m_window.handle(), GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
-        if (!m_mouseCaptured) {
-            glfwSetInputMode(m_window.handle(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-            m_firstMouse = true;
-            m_mouseCaptured = true;
-        }
-
-        double xpos, ypos;
-        glfwGetCursorPos(m_window.handle(), &xpos, &ypos);
-        if (m_firstMouse) {
-            m_lastCursorX = xpos;
-            m_lastCursorY = ypos;
-            m_firstMouse = false;
-        }
-
-        float xoffset = static_cast<float>(xpos - m_lastCursorX);
-        float yoffset = static_cast<float>(m_lastCursorY - ypos);
-        m_lastCursorX = xpos;
-        m_lastCursorY = ypos;
-
-        xoffset *= m_mouseSensitivity;
-        yoffset *= m_mouseSensitivity;
-
-        m_cameraYaw += xoffset;
-        m_cameraPitch += yoffset;
-        m_cameraPitch = glm::clamp(m_cameraPitch, -89.0f, 89.0f);
-
-        updateCameraVectors();
-    } else if (m_mouseCaptured) {
-        glfwSetInputMode(m_window.handle(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-        m_mouseCaptured = false;
-        m_firstMouse = true;
-    }
-}
-
-void VulkanRenderer::resetCamera(const MeshBounds& bounds) {
-    const float r = bounds.radius;
-    const float cameraDistance = r * 2.8f;
-    m_cameraPosition = glm::vec3(cameraDistance * 0.6f, cameraDistance * 0.35f, cameraDistance * 0.75f);
-    m_cameraFront = glm::normalize(-m_cameraPosition);
-    m_cameraYaw = glm::degrees(std::atan2(m_cameraFront.z, m_cameraFront.x));
-    m_cameraPitch = glm::degrees(std::asin(m_cameraFront.y));
-    updateCameraVectors();
-    m_lastFrameTime = glfwGetTime();
-    m_frameTimeWindowStart = m_lastFrameTime;
-    m_minFrameTimeMs = std::numeric_limits<float>::infinity();
-    m_maxFrameTimeMs = 0.0f;
-}
-
-void VulkanRenderer::updateCameraVectors() {
-    glm::vec3 front;
-    front.x = std::cos(glm::radians(m_cameraYaw)) * std::cos(glm::radians(m_cameraPitch));
-    front.y = std::sin(glm::radians(m_cameraPitch));
-    front.z = std::sin(glm::radians(m_cameraYaw)) * std::cos(glm::radians(m_cameraPitch));
-    m_cameraFront = glm::normalize(front);
-    m_cameraRight = glm::normalize(glm::cross(m_cameraFront, m_cameraWorldUp));
-    m_cameraUp = glm::normalize(glm::cross(m_cameraRight, m_cameraFront));
-}
-
 void VulkanRenderer::drawFrame() {
     vkWaitForFences(
         m_device->logical(), 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
@@ -854,8 +822,6 @@ void VulkanRenderer::drawFrame() {
         m_maxFrameTimeMs = frameTimeMs;
     }
 
-    updateCamera(deltaTime);
-
     const float r = m_meshRadius;
     const float aspect =
         m_swapchain->extent().width / static_cast<float>(m_swapchain->extent().height);
@@ -873,6 +839,7 @@ void VulkanRenderer::drawFrame() {
     scene.viewProj = proj * view;
     scene.normalMatrix = glm::transpose(glm::inverse(model));
     scene.lightDir = glm::vec4(glm::normalize(glm::vec3(0.35f, 0.55f, 0.75f)), 0.0f);
+    scene.cameraPos = glm::vec4(m_cameraPosition, 1.0f);
     scene.pointLight = m_pointLight;
 
     std::memcpy(m_sceneBuffersMapped[m_currentFrame], &scene, sizeof(scene));

@@ -67,7 +67,10 @@ bool VulkanDevice::isDeviceSuitable(VkPhysicalDevice device) const {
         swapchainAdequate = formatCount > 0 && presentModeCount > 0;
     }
 
-    return indices.isComplete() && extensionsSupported && swapchainAdequate;
+    VkPhysicalDeviceFeatures supportedFeatures;
+    vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
+
+    return indices.isComplete() && extensionsSupported && swapchainAdequate && supportedFeatures.samplerAnisotropy;
 }
 
 QueueFamilyIndices VulkanDevice::findQueueFamilies(VkPhysicalDevice device) const {
@@ -129,6 +132,7 @@ void VulkanDevice::createLogicalDevice() {
     }
 
     VkPhysicalDeviceFeatures deviceFeatures{};
+    deviceFeatures.samplerAnisotropy = VK_TRUE;
 
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

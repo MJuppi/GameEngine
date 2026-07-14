@@ -35,6 +35,9 @@ public:
     const PhysicsEngine& getPhysicsEngine() const;
     GLFWwindow* getWindowHandle() const;
     void setPointLight(const PointLight& pointLight);
+
+    void setCamera(const glm::vec3& position, const glm::vec3& front, const glm::vec3& up);
+
     using FrameUpdateCallback = std::function<void(float)>;
     void setFrameUpdateCallback(FrameUpdateCallback callback);
 

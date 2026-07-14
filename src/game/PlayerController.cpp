@@ -18,7 +18,7 @@ PlayerController::PlayerController(Engine& engine)
 /// @brief Updates the player controller state, handling input and projectile firing.
 /// @param deltaTime
 void PlayerController::update(float deltaTime) {
-    (void)deltaTime;
+    updateCamera(deltaTime);
 
     auto* window = engine_.getWindowHandle();
     if (!window) {
@@ -31,6 +31,78 @@ void PlayerController::update(float deltaTime) {
     }
     leftMouseDown_ = firePressed;
     updateScoredProjectiles();
+}
+
+void PlayerController::updateCamera(float deltaTime) {
+    auto* window = engine_.getWindowHandle();
+    if (!window) return;
+
+    const float velocity = cameraSpeed_ * deltaTime;
+
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+        cameraPosition_ += cameraFront_ * velocity;
+    }
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+        cameraPosition_ -= cameraFront_ * velocity;
+    }
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+        cameraPosition_ -= cameraRight_ * velocity;
+    }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+        cameraPosition_ += cameraRight_ * velocity;
+    }
+    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
+        cameraPosition_ += cameraWorldUp_ * velocity;
+    }
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+        cameraPosition_ -= cameraWorldUp_ * velocity;
+    }
+
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+        if (!mouseCaptured_) {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            firstMouse_ = true;
+            mouseCaptured_ = true;
+        }
+
+        double xpos, ypos;
+        glfwGetCursorPos(window, &xpos, &ypos);
+        if (firstMouse_) {
+            lastCursorX_ = xpos;
+            lastCursorY_ = ypos;
+            firstMouse_ = false;
+        }
+
+        float xoffset = static_cast<float>(xpos - lastCursorX_);
+        float yoffset = static_cast<float>(lastCursorY_ - ypos);
+        lastCursorX_ = xpos;
+        lastCursorY_ = ypos;
+
+        xoffset *= mouseSensitivity_;
+        yoffset *= mouseSensitivity_;
+
+        cameraYaw_ += xoffset;
+        cameraPitch_ += yoffset;
+        cameraPitch_ = glm::clamp(cameraPitch_, -89.0f, 89.0f);
+
+        updateCameraVectors();
+    } else if (mouseCaptured_) {
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        mouseCaptured_ = false;
+        firstMouse_ = true;
+    }
+
+    engine_.setCamera(cameraPosition_, cameraFront_, cameraUp_);
+}
+
+void PlayerController::updateCameraVectors() {
+    glm::vec3 front;
+    front.x = std::cos(glm::radians(cameraYaw_)) * std::cos(glm::radians(cameraPitch_));
+    front.y = std::sin(glm::radians(cameraPitch_));
+    front.z = std::sin(glm::radians(cameraYaw_)) * std::cos(glm::radians(cameraPitch_));
+    cameraFront_ = glm::normalize(front);
+    cameraRight_ = glm::normalize(glm::cross(cameraFront_, cameraWorldUp_));
+    cameraUp_ = glm::normalize(glm::cross(cameraRight_, cameraFront_));
 }
 
 void PlayerController::fireProjectile() {

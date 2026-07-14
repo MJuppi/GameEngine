@@ -72,7 +72,7 @@ std::vector<VkVertexInputAttributeDescription> VulkanPipeline::vertexAttributeDe
         return attrs;
     }
 
-    std::vector<VkVertexInputAttributeDescription> attrs(3);
+    std::vector<VkVertexInputAttributeDescription> attrs(4);
     attrs[0].binding = 0;
     attrs[0].location = 0;
     attrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
@@ -85,8 +85,13 @@ std::vector<VkVertexInputAttributeDescription> VulkanPipeline::vertexAttributeDe
 
     attrs[2].binding = 0;
     attrs[2].location = 2;
-    attrs[2].format = VK_FORMAT_R32_UINT;
-    attrs[2].offset = offsetof(Vertex, materialIndex);
+    attrs[2].format = VK_FORMAT_R32G32_SFLOAT;
+    attrs[2].offset = offsetof(Vertex, texCoord);
+
+    attrs[3].binding = 0;
+    attrs[3].location = 3;
+    attrs[3].format = VK_FORMAT_R32_UINT;
+    attrs[3].offset = offsetof(Vertex, materialIndex);
 
     return attrs;
 }
@@ -96,9 +101,10 @@ void VulkanPipeline::createDescriptorSetLayout() {
         return;
     }
 
-    // Create a descriptor set layout describing two uniform buffers:
-    // binding 0 = scene UBO, binding 1 = material UBO.
-    VkDescriptorSetLayoutBinding bindings[2]{};
+    // Binding 0: Scene UBO
+    // Binding 1: Material UBO
+    // Binding 2: Texture Sampler
+    VkDescriptorSetLayoutBinding bindings[3]{};
 
     bindings[0].binding = 0;
     bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -110,9 +116,14 @@ void VulkanPipeline::createDescriptorSetLayout() {
     bindings[1].descriptorCount = 1;
     bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
+    bindings[2].binding = 2;
+    bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[2].descriptorCount = 1;
+    bindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 2;
+    layoutInfo.bindingCount = 3;
     layoutInfo.pBindings = bindings;
 
     if (vkCreateDescriptorSetLayout(m_device.logical(), &layoutInfo, nullptr, &m_descriptorSetLayout) !=

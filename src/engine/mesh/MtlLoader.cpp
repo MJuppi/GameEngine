@@ -77,6 +77,9 @@ std::vector<Material> loadMtlFile(const std::string& path) {
         } else if (startsWith(view, "d ")) {
             std::istringstream iss(line.substr(2));
             iss >> m.alpha;
+        } else if (startsWith(view, "map_Kd ")) {
+            m.texturePath = line.substr(7);
+            trimInPlace(m.texturePath);
         }
     }
 

@@ -42,12 +42,13 @@ TextureData loadTextureFile(const std::string& path) {
         return texture;
     }
 
-    unsigned char* pixels = stbi_load(path.c_str(), &texture.width, &texture.height, &texture.channels, 0);
+    unsigned char* pixels = stbi_load(path.c_str(), &texture.width, &texture.height, &texture.channels, 4);
     if (!pixels) {
         throw std::runtime_error("TextureLoader: Failed to load texture: " + path);
     }
 
-    texture.pixels.assign(pixels, pixels + static_cast<size_t>(texture.width) * texture.height * texture.channels);
+    texture.channels = 4;
+    texture.pixels.assign(pixels, pixels + static_cast<size_t>(texture.width) * texture.height * 4);
     stbi_image_free(pixels);
     return texture;
 }

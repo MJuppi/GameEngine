@@ -8,7 +8,13 @@
 namespace ge {
 
 const MeshData& AssetManager::loadMesh(const std::string& path) {
-    const auto normalizedPath = std::filesystem::absolute(std::filesystem::path(path)).string();
+    std::string resolvedPath = path;
+    auto itm = manifest_.meshes.find(path);
+    if (itm != manifest_.meshes.end()) {
+        resolvedPath = itm->second;
+    }
+
+    const auto normalizedPath = std::filesystem::absolute(std::filesystem::path(resolvedPath)).string();
     auto it = meshCache_.find(normalizedPath);
     if (it != meshCache_.end()) {
         return *it->second;
@@ -34,7 +40,13 @@ const MeshData& AssetManager::getMesh(const std::string& path) const {
 }
 
 const TextureData& AssetManager::loadTexture(const std::string& path) {
-    const auto normalizedPath = std::filesystem::absolute(std::filesystem::path(path)).string();
+    std::string resolvedPath = path;
+    auto itt = manifest_.textures.find(path);
+    if (itt != manifest_.textures.end()) {
+        resolvedPath = itt->second;
+    }
+
+    const auto normalizedPath = std::filesystem::absolute(std::filesystem::path(resolvedPath)).string();
     auto it = textureCache_.find(normalizedPath);
     if (it != textureCache_.end()) {
         return *it->second;

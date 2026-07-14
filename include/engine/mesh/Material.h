@@ -25,6 +25,8 @@ struct Material {
     float shininess = 32.0f;
     float alpha = 1.0f;
 
+    std::string texturePath;
+
     // Advanced: Link to a specific shader effect
     std::shared_ptr<ShaderEffect> effect;
 };
@@ -36,6 +38,8 @@ inline constexpr uint32_t kMaxGpuMaterials = 16;
 struct GpuMaterial {
     float diffuse[4] = {0.8f, 0.8f, 0.8f, 1.0f};  // rgb + alpha
     float specular[4] = {0.5f, 0.5f, 0.5f, 32.0f}; // rgb + Ns
+    uint32_t hasTexture = 0;
+    float _pad[3];
 };
 
 /// GPU uniform block: array of 16 materials (std140, 512 bytes).

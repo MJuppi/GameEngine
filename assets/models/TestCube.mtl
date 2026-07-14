@@ -10,6 +10,7 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 2
+map_Kd textures/grid_texture.png
 
 newmtl bottom_green
 Ns 32.000008
@@ -20,6 +21,7 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 2
+map_Kd textures/grid_texture.png
 
 newmtl front_blue
 Ns 32.000008
@@ -30,6 +32,7 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 2
+map_Kd textures/grid_texture.png
 
 newmtl left_cyan
 Ns 32.000008
@@ -40,6 +43,7 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 2
+map_Kd textures/grid_texture.png
 
 newmtl right_magenta
 Ns 32.000008
@@ -50,6 +54,7 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 2
+map_Kd textures/grid_texture.png
 
 newmtl top_red
 Ns 32.000008
@@ -60,3 +65,4 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 2
+map_Kd textures/grid_texture.png

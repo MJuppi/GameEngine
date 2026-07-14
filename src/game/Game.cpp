@@ -24,6 +24,8 @@ void Game::initialize() {
     std::cout << "Initializing game engine...\n";
     state_ = GameState::Loading;
 
+    assetManager_.loadManifest("assets/manifest.json");
+
     initializeLevels();
 
     Level* currentLevel = levelManager_.getCurrentLevel();

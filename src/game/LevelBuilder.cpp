@@ -4,7 +4,7 @@
 namespace ge {
 
 void LevelBuilder::registerDefaultLevels(LevelManager& levelManager) {
-    levelManager.addLevel("TestCube", "assets/models/TestCube.obj", [](Level& level) {
+    levelManager.addLevel("TestCube", "assets/models/TestCubeTexture.obj", [](Level& level) {
         SceneFactory::configureTestLevel(level);
     });
 

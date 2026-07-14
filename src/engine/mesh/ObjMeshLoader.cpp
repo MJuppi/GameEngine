@@ -21,6 +21,11 @@ struct Vec3 {
     float z = 0.0f;
 };
 
+struct Vec2 {
+    float x = 0.0f;
+    float y = 0.0f;
+};
+
 int resolveIndex(int rawIndex, size_t count) {
     // Convert OBJ's 1-based or negative indices into zero-based indices.
     if (rawIndex > 0) {
@@ -88,9 +93,10 @@ Vertex makeVertexFromCorner(
     const std::string& cornerToken,
     const std::vector<Vec3>& positions,
     const std::vector<Vec3>& normals,
+    const std::vector<Vec2>& texCoords,
     uint32_t materialIndex)
 {
-    // Parse a face corner token like "1/2/3" and construct a Vertex with position and normal.
+    // Parse a face corner token like "1/2/3" and construct a Vertex with position, normal and UV.
     const std::vector<std::string> parts = splitByChar(cornerToken, '/');
     if (parts.empty() || parts[0].empty()) {
         throw std::runtime_error("OBJ face corner is missing a vertex index");
@@ -107,6 +113,19 @@ Vertex makeVertexFromCorner(
     vtx.position[1] = positions[static_cast<size_t>(vi)].y;
     vtx.position[2] = positions[static_cast<size_t>(vi)].z;
     vtx.materialIndex = materialIndex;
+
+    int rawVt = 0;
+    if (parts.size() >= 2 && !parts[1].empty()) {
+        rawVt = std::stoi(parts[1]);
+    }
+
+    if (rawVt != 0) {
+        const int ti = resolveIndex(rawVt, texCoords.size());
+        if (ti >= 0 && ti < static_cast<int>(texCoords.size())) {
+            vtx.texCoord[0] = texCoords[static_cast<size_t>(ti)].x;
+            vtx.texCoord[1] = texCoords[static_cast<size_t>(ti)].y;
+        }
+    }
 
     int rawVn = 0;
     if (parts.size() >= 3 && !parts[2].empty()) {
@@ -148,6 +167,7 @@ MeshData loadObjFile(const std::string& path) {
 
     std::vector<Vec3> positions;
     std::vector<Vec3> normals;
+    std::vector<Vec2> texCoords;
     MeshData mesh;
     mesh.materials = {makeDefaultMaterial("default")};
 
@@ -203,6 +223,10 @@ MeshData loadObjFile(const std::string& path) {
         }
 
         if (startsWith(view, "vt ")) {
+            std::istringstream iss(line.substr(3));
+            Vec2 t{};
+            iss >> t.x >> t.y;
+            texCoords.push_back(t);
             continue;
         }
 
@@ -228,7 +252,7 @@ MeshData loadObjFile(const std::string& path) {
             const uint32_t baseIndex = static_cast<uint32_t>(mesh.vertices.size());
             for (const std::string& c : corners) {
                 mesh.vertices.push_back(
-                    makeVertexFromCorner(c, positions, normals, currentMaterialIndex));
+                    makeVertexFromCorner(c, positions, normals, texCoords, currentMaterialIndex));
             }
 
             for (size_t i = 1; i + 1 < corners.size(); ++i) {

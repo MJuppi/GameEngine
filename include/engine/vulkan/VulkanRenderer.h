@@ -18,6 +18,7 @@
 #include "engine/mesh/MeshData.h"
 #include "engine/scene/Light.h"
 #include "engine/scene/MaterialSystem.h"
+#include "engine/vulkan/VulkanImage.h"
 
 struct GLFWwindow;
 
@@ -42,6 +43,7 @@ struct SceneUbo {
     alignas(16) glm::mat4 viewProj;
     alignas(16) glm::mat4 normalMatrix;
     alignas(16) glm::vec4 lightDir;
+    alignas(16) glm::vec4 cameraPos;
     alignas(16) PointLight pointLight;
 };
 
@@ -56,6 +58,12 @@ public:
     void drawFrame();
     void onFramebufferResize();
     void setModelMatrix(const glm::mat4& model) { m_modelMatrix = model; }
+
+    void setCamera(const glm::vec3& position, const glm::vec3& front, const glm::vec3& up) {
+        m_cameraPosition = position;
+        m_cameraFront = front;
+        m_cameraUp = up;
+    }
 
     void addDynamicObject(const glm::mat4& transform, std::shared_ptr<Material> material);
     void clearDynamicObjects() { m_dynamicObjects.clear(); }
@@ -76,6 +84,7 @@ private:
     void createBoxMeshBuffers();
     void createSceneBuffers();
     void createMaterialBuffer();
+    void createTextureImage();
     void createDescriptorPool();
     void createDescriptorSets();
     void createUiPipeline();
@@ -90,9 +99,6 @@ private:
 
     void recreateSwapchain();
     void cleanupSwapchain();
-    void updateCamera(float deltaTime);
-    void resetCamera(const MeshBounds& bounds);
-    void updateCameraVectors();
 
     Window& m_window;
     MeshData m_mesh;
@@ -124,6 +130,8 @@ private:
     std::unique_ptr<VulkanBuffer> m_materialBuffer;
     MaterialBufferObject m_materialGpu{};
 
+    VulkanImage m_texture;
+
     VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
     std::vector<VkDescriptorSet> m_descriptorSets;
 
@@ -147,20 +155,8 @@ private:
     glm::vec3 m_cameraPosition = glm::vec3(0.0f, 0.0f, 0.0f);
     glm::vec3 m_cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
     glm::vec3 m_cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
-    glm::vec3 m_cameraRight = glm::vec3(1.0f, 0.0f, 0.0f);
-    glm::vec3 m_cameraWorldUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-    float m_cameraYaw = -90.0f;
-    float m_cameraPitch = 0.0f;
-    float m_cameraSpeed = 5.0f;
-    float m_mouseSensitivity = 0.15f;
-
-    double m_lastCursorX = 0.0;
-    double m_lastCursorY = 0.0;
-    bool m_firstMouse = true;
-    bool m_mouseCaptured = false;
     double m_lastFrameTime = 0.0;
-
     double m_lastUiUpdateTime = 0.0;
     float m_lastRenderedFps = 0.0f;
     float m_lastRenderedMinFrameTimeMs = 0.0f;

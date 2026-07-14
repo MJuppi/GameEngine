@@ -42,6 +42,12 @@ public:
     [[nodiscard]] VkQueue graphicsQueue() const { return m_graphicsQueue; }
     [[nodiscard]] VkQueue presentQueue() const { return m_presentQueue; }
 
+    [[nodiscard]] VkPhysicalDeviceProperties properties() const {
+        VkPhysicalDeviceProperties props;
+        vkGetPhysicalDeviceProperties(m_physicalDevice, &props);
+        return props;
+    }
+
     [[nodiscard]] VkFormat findSupportedFormat(
         const std::vector<VkFormat>& candidates,
         VkImageTiling tiling,

@@ -27,6 +27,7 @@ void fillMaterialBuffer(const std::vector<Material>& materials, MaterialBufferOb
         dst.specular[1] = src.specular[1];
         dst.specular[2] = src.specular[2];
         dst.specular[3] = src.shininess;
+        dst.hasTexture = src.texturePath.empty() ? 0 : 1;
     }
 
     for (uint32_t i = count; i < kMaxGpuMaterials; ++i) {

@@ -12,8 +12,8 @@ namespace ge {
 struct Vertex {
     float position[3];
     float normal[3];
+    float texCoord[2];
     uint32_t materialIndex = 0;
-    float _pad = 0.0f;
 };
 
 } // namespace ge

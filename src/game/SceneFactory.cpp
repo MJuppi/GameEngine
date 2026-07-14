@@ -70,7 +70,7 @@ RigidBody* SceneFactory::spawnProjectile(Engine& engine,
         projectile->setVelocity(fireDirection * 15.0f + velocityOffset);
         projectile->setAngularVelocity(glm::vec3(0.5f, 1.0f, 0.2f));
     }
-    
+
     return projectile;
 }
 

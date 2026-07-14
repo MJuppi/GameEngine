@@ -111,6 +111,7 @@ set(ENGINE_SOURCES
     src/engine/vulkan/VulkanSwapchain.cpp
     src/engine/vulkan/VulkanPipeline.cpp
     src/engine/vulkan/VulkanBuffer.cpp
+    src/engine/vulkan/VulkanImage.cpp
     src/engine/vulkan/VulkanRenderer.cpp
     src/engine/physics/BoxCollider.cpp
     src/engine/physics/Collider.cpp

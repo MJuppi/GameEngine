@@ -20,7 +20,15 @@ PhysicsMeshObject ObjectBuilder::createStatic(
     const glm::vec3& halfExtents,
     const RigidBodyProps& props) {
 
-    return PhysicsMeshObject(std::move(name), std::move(meshPath), location, halfExtents, ObjectType::Static, props);
+    RigidBodyProps staticProps = props;
+    // Default to static behavior if mass is default 1.0 or mass 0 without kinematic
+    if (staticProps.mass == 1.0f && !staticProps.isKinematic) {
+        staticProps.mass = 0.0f;
+        staticProps.isKinematic = true;
+        staticProps.useGravity = false;
+    }
+
+    return PhysicsMeshObject(std::move(name), std::move(meshPath), location, halfExtents, ObjectType::Static, staticProps);
 }
 
 PhysicsMeshObject ObjectBuilder::createActive(

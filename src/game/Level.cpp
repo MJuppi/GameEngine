@@ -8,7 +8,7 @@ namespace {
 
 void postProcessMesh(MeshData& mesh) {
     centerMesh(mesh);
-    orientMeshYUpToZUp(mesh);
+    // orientMeshYUpToZUp(mesh); // Engine is Y-up, so we don't need this if assets are Y-up
     flipMeshWinding(mesh);
 }
 

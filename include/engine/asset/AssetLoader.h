@@ -18,10 +18,10 @@ public:
 
     [[nodiscard]] static MeshData loadMesh(const std::string& path);
     [[nodiscard]] static TextureData loadTexture(const std::string& path);
+    [[nodiscard]] static std::filesystem::path resolveAssetPath(const std::filesystem::path& path);
 
 private:
     [[nodiscard]] static std::string getExtension(const std::filesystem::path& path);
-    [[nodiscard]] static std::filesystem::path resolveAssetPath(const std::filesystem::path& path);
 };
 
 } // namespace ge

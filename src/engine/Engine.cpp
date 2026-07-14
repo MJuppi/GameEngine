@@ -85,6 +85,10 @@ void Engine::setPointLight(const PointLight& pointLight) {
     m_impl->renderer.setPointLight(pointLight);
 }
 
+void Engine::setCamera(const glm::vec3& position, const glm::vec3& front, const glm::vec3& up) {
+    m_impl->renderer.setCamera(position, front, up);
+}
+
 void Engine::setFrameUpdateCallback(FrameUpdateCallback callback) {
     m_impl->frameUpdateCallback = std::move(callback);
 }
