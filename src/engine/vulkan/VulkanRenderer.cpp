@@ -340,9 +340,9 @@ void VulkanRenderer::drawFrame() {
 
     SceneUbo scene{};
     scene.model = m_modelMatrix;
-    scene.viewProj = glm::perspective(glm::radians(90.0f), aspect, 0.1f, 1000.0f) *
-                     glm::lookAt(m_cameraPosition, m_cameraPosition + m_cameraFront, m_cameraUp);
-    scene.viewProj[1] *= -1.0f;
+    glm::mat4 proj = glm::perspective(glm::radians(90.0f), aspect, 0.1f, 1000.0f);
+    proj[1][1] *= -1.0f;
+    scene.viewProj = proj * glm::lookAt(m_cameraPosition, m_cameraPosition + m_cameraFront, m_cameraUp);
     scene.normalMatrix = glm::transpose(glm::inverse(m_modelMatrix));
     scene.lightDir = glm::vec4(glm::normalize(glm::vec3(0.35f, 0.55f, 0.75f)), 0.0f);
     scene.cameraPos = glm::vec4(m_cameraPosition, 1.0f);
