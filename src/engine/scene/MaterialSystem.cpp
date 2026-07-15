@@ -36,4 +36,18 @@ Material MaterialSystem::createMaterial(const std::string& name, std::shared_ptr
     return mat;
 }
 
+Material MaterialSystem::createLitMaterial(const std::string& name, const glm::vec3& color, float shininess) {
+    Material mat = createMaterial(name);
+    mat.diffuse = color;
+    mat.shininess = shininess;
+    return mat;
+}
+
+Material MaterialSystem::createTexturedMaterial(const std::string& name, const std::string& texturePath, float shininess) {
+    Material mat = createMaterial(name);
+    mat.texturePath = texturePath;
+    mat.shininess = shininess;
+    return mat;
+}
+
 } // namespace ge

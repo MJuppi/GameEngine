@@ -4,35 +4,20 @@
 #include "engine/vulkan/VulkanSwapchain.h"
 #include "engine/math/Types.h"
 #include <glm/glm.hpp>
-
 #include <cstddef>
+#include <iostream>
 #include <stdexcept>
-
-namespace {
-
-struct UiVertex {
-    float position[2];
-    float color[4];
-};
-
-} // namespace
 
 namespace ge {
 
 VulkanPipeline::VulkanPipeline(
     VulkanDevice& device,
     VulkanSwapchain& swapchain,
-    const std::string& vertSpvPath,
-    const std::string& fragSpvPath,
-    bool useUi)
+    const PipelineConfig& config)
     : m_device(device)
-    , m_vertPath(vertSpvPath)
-    , m_fragPath(fragSpvPath)
-    , m_useUi(useUi)
+    , m_config(config)
 {
-    if (!m_useUi) {
-        createDescriptorSetLayout();
-    }
+    createDescriptorSetLayout();
     createGraphicsPipeline(swapchain);
 }
 
@@ -49,91 +34,40 @@ void VulkanPipeline::recreate(VulkanSwapchain& swapchain) {
 }
 
 VkVertexInputBindingDescription VulkanPipeline::vertexBindingDescription() {
-    // Describe how vertex data is laid out in memory: stride and input rate.
     VkVertexInputBindingDescription binding{};
     binding.binding = 0;
+    binding.stride = sizeof(Vertex);
     binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-    binding.stride = m_useUi ? sizeof(UiVertex) : sizeof(Vertex);
     return binding;
 }
 
 std::vector<VkVertexInputAttributeDescription> VulkanPipeline::vertexAttributeDescriptions() {
-    if (m_useUi) {
-        std::vector<VkVertexInputAttributeDescription> attrs(2);
-        attrs[0].binding = 0;
-        attrs[0].location = 0;
-        attrs[0].format = VK_FORMAT_R32G32_SFLOAT;
-        attrs[0].offset = offsetof(UiVertex, position);
-
-        attrs[1].binding = 0;
-        attrs[1].location = 1;
-        attrs[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-        attrs[1].offset = offsetof(UiVertex, color);
-        return attrs;
-    }
-
     std::vector<VkVertexInputAttributeDescription> attrs(4);
-    attrs[0].binding = 0;
-    attrs[0].location = 0;
-    attrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-    attrs[0].offset = offsetof(Vertex, position);
-
-    attrs[1].binding = 0;
-    attrs[1].location = 1;
-    attrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-    attrs[1].offset = offsetof(Vertex, normal);
-
-    attrs[2].binding = 0;
-    attrs[2].location = 2;
-    attrs[2].format = VK_FORMAT_R32G32_SFLOAT;
-    attrs[2].offset = offsetof(Vertex, texCoord);
-
-    attrs[3].binding = 0;
-    attrs[3].location = 3;
-    attrs[3].format = VK_FORMAT_R32_UINT;
-    attrs[3].offset = offsetof(Vertex, materialIndex);
-
+    attrs[0] = { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position) };
+    attrs[1] = { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal) };
+    attrs[2] = { 2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, texCoord) };
+    attrs[3] = { 3, 0, VK_FORMAT_R32_UINT, offsetof(Vertex, materialIndex) };
     return attrs;
 }
 
 void VulkanPipeline::createDescriptorSetLayout() {
-    if (m_useUi) {
-        return;
-    }
-
-    // Binding 0: Scene UBO
-    // Binding 1: Material UBO
-    // Binding 2: Texture Sampler
     VkDescriptorSetLayoutBinding bindings[3]{};
-
-    bindings[0].binding = 0;
-    bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    bindings[0].descriptorCount = 1;
-    bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    bindings[1].binding = 1;
-    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    bindings[1].descriptorCount = 1;
-    bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    bindings[2].binding = 2;
-    bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    bindings[2].descriptorCount = 1;
-    bindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    bindings[0] = { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr };
+    bindings[1] = { 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr };
+    bindings[2] = { 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr };
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layoutInfo.bindingCount = 3;
     layoutInfo.pBindings = bindings;
 
-    if (vkCreateDescriptorSetLayout(m_device.logical(), &layoutInfo, nullptr, &m_descriptorSetLayout) !=
-        VK_SUCCESS) {
+    if (vkCreateDescriptorSetLayout(m_device.logical(), &layoutInfo, nullptr, &m_descriptorSetLayout) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create descriptor set layout");
     }
+    std::cout << "[VulkanPipeline] Descriptor set layout created." << std::endl;
 }
 
 VkShaderModule VulkanPipeline::createShaderModule(VulkanDevice& device, const std::vector<char>& code) {
-    // Create a VkShaderModule from SPIR-V bytecode.
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = code.size();
@@ -147,52 +81,39 @@ VkShaderModule VulkanPipeline::createShaderModule(VulkanDevice& device, const st
 }
 
 void VulkanPipeline::createGraphicsPipeline(VulkanSwapchain& swapchain) {
-    // Load SPIR-V, create shader modules and assemble the fixed-function pipeline state.
-    auto vertCode = readSpvFile(m_vertPath);
-    auto fragCode = readSpvFile(m_fragPath);
+    auto vertCode = readSpvFile(m_config.vertPath);
+    auto fragCode = readSpvFile(m_config.fragPath);
 
     VkShaderModule vertModule = createShaderModule(m_device, vertCode);
     VkShaderModule fragModule = createShaderModule(m_device, fragCode);
 
-    VkPipelineShaderStageCreateInfo vertStage{};
-    vertStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vertStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    vertStage.module = vertModule;
-    vertStage.pName = "main";
+    VkPipelineShaderStageCreateInfo stages[2]{};
+    stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    stages[0].module = vertModule;
+    stages[0].pName = "main";
 
-    VkPipelineShaderStageCreateInfo fragStage{};
-    fragStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    fragStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    fragStage.module = fragModule;
-    fragStage.pName = "main";
+    stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    stages[1].module = fragModule;
+    stages[1].pName = "main";
 
-    VkPipelineShaderStageCreateInfo stages[] = {vertStage, fragStage};
-
-    auto bindingDescription = vertexBindingDescription();
-    auto attributeDescriptions = vertexAttributeDescriptions();
+    auto bindingDesc = vertexBindingDescription();
+    auto attrDescs = vertexAttributeDescriptions();
 
     VkPipelineVertexInputStateCreateInfo vertexInput{};
     vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInput.vertexBindingDescriptionCount = 1;
-    vertexInput.pVertexBindingDescriptions = &bindingDescription;
-    vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-    vertexInput.pVertexAttributeDescriptions = attributeDescriptions.data();
+    vertexInput.pVertexBindingDescriptions = &bindingDesc;
+    vertexInput.vertexAttributeDescriptionCount = (uint32_t)attrDescs.size();
+    vertexInput.pVertexAttributeDescriptions = attrDescs.data();
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(swapchain.extent().width);
-    viewport.height = static_cast<float>(swapchain.extent().height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = swapchain.extent();
+    VkViewport viewport{ 0.0f, 0.0f, (float)swapchain.extent().width, (float)swapchain.extent().height, 0.0f, 1.0f };
+    VkRect2D scissor{ {0, 0}, swapchain.extent() };
 
     VkPipelineViewportStateCreateInfo viewportState{};
     viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -203,19 +124,18 @@ void VulkanPipeline::createGraphicsPipeline(VulkanSwapchain& swapchain) {
 
     VkPipelineRasterizationStateCreateInfo rasterizer{};
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-    rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = m_useUi ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT;
+    rasterizer.polygonMode = m_config.wireframe ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
+    rasterizer.cullMode = m_config.cullMode;
     rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.lineWidth = 1.0f;
 
     VkPipelineMultisampleStateCreateInfo multisampling{};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    if (m_useUi) {
+    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    if (m_config.blendEnable) {
         colorBlendAttachment.blendEnable = VK_TRUE;
         colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
         colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -232,28 +152,20 @@ void VulkanPipeline::createGraphicsPipeline(VulkanSwapchain& swapchain) {
 
     VkPipelineDepthStencilStateCreateInfo depthStencil{};
     depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depthStencil.depthTestEnable = m_useUi ? VK_FALSE : VK_TRUE;
-    depthStencil.depthWriteEnable = m_useUi ? VK_FALSE : VK_TRUE;
+    depthStencil.depthTestEnable = m_config.depthTest;
+    depthStencil.depthWriteEnable = m_config.depthWrite;
     depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-    depthStencil.depthBoundsTestEnable = VK_FALSE;
-    depthStencil.stencilTestEnable = VK_FALSE;
 
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = m_useUi ? 0 : 1;
-    pipelineLayoutInfo.pSetLayouts = m_useUi ? nullptr : &m_descriptorSetLayout;
+    VkPushConstantRange pushRange{ VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4) * 2 };
 
-    VkPushConstantRange pushConstantRange{};
-    if (!m_useUi) {
-        pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        pushConstantRange.offset = 0;
-        pushConstantRange.size = sizeof(glm::mat4) * 2;
-        pipelineLayoutInfo.pushConstantRangeCount = 1;
-        pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
-    }
+    VkPipelineLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layoutInfo.setLayoutCount = 1;
+    layoutInfo.pSetLayouts = &m_descriptorSetLayout;
+    layoutInfo.pushConstantRangeCount = 1;
+    layoutInfo.pPushConstantRanges = &pushRange;
 
-    if (vkCreatePipelineLayout(m_device.logical(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout) !=
-        VK_SUCCESS) {
+    if (vkCreatePipelineLayout(m_device.logical(), &layoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create pipeline layout");
     }
 
@@ -272,24 +184,20 @@ void VulkanPipeline::createGraphicsPipeline(VulkanSwapchain& swapchain) {
     pipelineInfo.renderPass = swapchain.renderPass();
     pipelineInfo.subpass = 0;
 
-    if (vkCreateGraphicsPipelines(
-            m_device.logical(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create graphics pipeline");
+    if (vkCreateGraphicsPipelines(m_device.logical(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create graphics pipeline for " + m_config.vertPath);
     }
+    std::cout << "[VulkanPipeline] Graphics pipeline created: " << m_config.vertPath << " & " << m_config.fragPath << std::endl;
 
     vkDestroyShaderModule(m_device.logical(), fragModule, nullptr);
     vkDestroyShaderModule(m_device.logical(), vertModule, nullptr);
 }
 
 void VulkanPipeline::destroyPipeline() {
-    if (m_pipeline != VK_NULL_HANDLE) {
-        vkDestroyPipeline(m_device.logical(), m_pipeline, nullptr);
-        m_pipeline = VK_NULL_HANDLE;
-    }
-    if (m_pipelineLayout != VK_NULL_HANDLE) {
-        vkDestroyPipelineLayout(m_device.logical(), m_pipelineLayout, nullptr);
-        m_pipelineLayout = VK_NULL_HANDLE;
-    }
+    if (m_pipeline != VK_NULL_HANDLE) vkDestroyPipeline(m_device.logical(), m_pipeline, nullptr);
+    if (m_pipelineLayout != VK_NULL_HANDLE) vkDestroyPipelineLayout(m_device.logical(), m_pipelineLayout, nullptr);
+    m_pipeline = VK_NULL_HANDLE;
+    m_pipelineLayout = VK_NULL_HANDLE;
 }
 
 } // namespace ge

@@ -13,18 +13,21 @@ void SceneFactory::configureTestLevel(Level& level) {
     light.color = {1.0f, 0.95f, 0.8f, 1.0f};
     light.parameters = {1.0f, 0.09f, 0.032f, 8.0f};
 
-    const std::string modelPath = "test_cube";
-    const glm::vec3 cubeHalfExtents{0.5f, 0.5f, 0.5f};
+    // Simplify adding models using the new fluent API and auto-extents
+    level.add("TestCube.obj").at(0.0f, 4.0f, 0.0f).asActive();
+    level.add("TestCube.obj").at(0.0f, 10.0f, 0.0f).asActive();
 
-    // Add active physics objects
-    level.addActive("TestCube", modelPath, {0.0f, 4.0f, 0.0f}, cubeHalfExtents);
-    level.addActive("TestCube2", modelPath, {0.0f, 10.0f, 0.0f}, cubeHalfExtents);
+    // Example of using the new material refactor
+    Material redMat = makeDefaultMaterial("RedCube");
+    redMat.diffuse = {1.0f, 0.0f, 0.0f};
+    redMat.shininess = 64.0f;
+    level.add("suomi").name("Suomi").at(2.0f, 6.0f, 0.0f).asStatic();
 
-    // Add static ground
-    level.addStatic("Ground", "", {0.0f, -2.0f, 0.0f}, {50.0f, 0.5f, 50.0f});
+    // Add static ground (empty path uses fallback unit cube)
+    level.add("").name("Ground").at(0.0f, -2.0f, 0.0f).extents({50.0f, 0.5f, 50.0f}).asStatic();
 
-    // Example: Add a visual-only prop (no physics)
-    // level.addVisual("BackgroundMountain", "assets/models/Mountain.obj", {0.0f, 0.0f, -100.0f}, {10.0f, 10.0f, 10.0f});
+    // Example: Add a visual-only prop from an OBJ file with automatic bounds calculation
+    // level.add("models/Mountain.obj").at(0.0f, 0.0f, -100.0f).asVisual();
 }
 
 RigidBodyProps SceneFactory::makeDynamicBoxProps(float mass,

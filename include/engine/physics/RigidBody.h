@@ -3,6 +3,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <memory>
+#include <optional>
+#include "engine/mesh/MeshData.h"
 
 namespace ge {
 
@@ -44,6 +46,9 @@ public:
     }
     std::shared_ptr<Material> getMaterial() const { return material_; }
 
+    const std::optional<MeshData>& getMesh() const { return mesh_; }
+    void setMesh(MeshData mesh) { mesh_ = std::move(mesh); }
+
     void addForce(const glm::vec3& force);
     void addTorque(const glm::vec3& torque);
     void integrate(float deltaTime);
@@ -65,6 +70,7 @@ private:
     glm::vec3 totalTorque_;
     glm::quat rotation_;
     std::shared_ptr<Material> material_;
+    std::optional<MeshData> mesh_;
 
     mutable glm::mat3 inverseInertiaTensor_;
     mutable bool inverseInertiaTensorDirty_;

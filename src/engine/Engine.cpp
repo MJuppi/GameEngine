@@ -7,6 +7,7 @@
 #include "engine/vulkan/VulkanRenderer.h"
 
 #include <GLFW/glfw3.h>
+#include <iostream>
 
 namespace ge {
 
@@ -49,7 +50,8 @@ public:
             renderer.clearDynamicObjects();
             for (const auto& body : bodies) {
                 if (!body->getProps().isKinematic && body->getProps().mass > 0.0f) {
-                    renderer.addDynamicObject(body->getWorldTransform(), body->getMaterial());
+                    const auto& mesh = body->getMesh();
+                    renderer.addDynamicObject(body->getWorldTransform(), body->getMaterial(), mesh.has_value() ? &mesh.value() : nullptr);
                 }
             }
 
@@ -62,9 +64,6 @@ public:
 
 private:
     void handleWindowInput() {
-        if (glfwGetKey(window.handle(), GLFW_KEY_ESCAPE) == GLFW_PRESS) {
-            glfwSetWindowShouldClose(window.handle(), GLFW_TRUE);
-        }
     }
 };
 

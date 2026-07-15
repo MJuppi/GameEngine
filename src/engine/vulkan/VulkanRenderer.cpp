@@ -11,6 +11,7 @@
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
+#include <iostream>
 #include <array>
 #include <cmath>
 #include <cstring>
@@ -29,170 +30,7 @@ namespace ge {
 
 namespace {
 
-struct UiVertex {
-    glm::vec2 position;
-    glm::vec4 color;
-};
-
-// TODO: make fonts from png
-static constexpr std::array<std::array<uint8_t, 7>, 10> kDigitGlyphs = {
-    std::array<uint8_t, 7>{0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110},
-    std::array<uint8_t, 7>{0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110},
-    std::array<uint8_t, 7>{0b01110, 0b10001, 0b00001, 0b00010, 0b00100, 0b01000, 0b11111},
-    std::array<uint8_t, 7>{0b01110, 0b10001, 0b00001, 0b00110, 0b00001, 0b10001, 0b01110},
-    std::array<uint8_t, 7>{0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010},
-    std::array<uint8_t, 7>{0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110},
-    std::array<uint8_t, 7>{0b00110, 0b01000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110},
-    std::array<uint8_t, 7>{0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000},
-    std::array<uint8_t, 7>{0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110},
-    std::array<uint8_t, 7>{0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100},
-};
-
-static constexpr std::array<uint8_t, 7> kFontF = {0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000};
-static constexpr std::array<uint8_t, 7> kFontP = {0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000};
-static constexpr std::array<uint8_t, 7> kFontS = {0b01110, 0b10000, 0b10000, 0b01110, 0b00001, 0b00001, 0b11110};
-static constexpr std::array<uint8_t, 7> kFontA = {0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001};
-static constexpr std::array<uint8_t, 7> kFontI = {0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b11111};
-static constexpr std::array<uint8_t, 7> kFontM = {0b10001, 0b11011, 0b10101, 0b10101, 0b10001, 0b10001, 0b10001};
-static constexpr std::array<uint8_t, 7> kFontN = {0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001, 0b10001};
-static constexpr std::array<uint8_t, 7> kFontX = {0b10001, 0b01010, 0b00100, 0b00100, 0b01010, 0b10001, 0b10001};
-static constexpr std::array<uint8_t, 7> kFontDot = {0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00100, 0b00100};
-
-static std::string formatFixed(float value, int decimals) {
-    if (decimals <= 0) {
-        return std::to_string(static_cast<int>(std::round(value)));
-    }
-    const float absValue = std::fabs(value);
-    int whole = static_cast<int>(absValue);
-    float fracFloat = absValue - whole;
-    int fraction = static_cast<int>(std::round(fracFloat * std::pow(10.0f, decimals)));
-    if (fraction >= static_cast<int>(std::pow(10.0f, decimals))) {
-        whole += 1;
-        fraction = 0;
-    }
-    std::string result = std::to_string(whole) + ".";
-    result += std::to_string(fraction);
-    while (static_cast<int>(result.size()) - static_cast<int>(result.find('.')) - 1 < decimals) {
-        result += '0';
-    }
-    return result;
-}
-
-static glm::vec2 pixelToNdc(float x, float y, uint32_t width, uint32_t height) {
-    // Vulkan clip space uses Y-down, so top-of-screen maps to -1 and bottom to +1.
-    return {
-        (x / static_cast<float>(width)) * 2.0f - 1.0f,
-        (y / static_cast<float>(height)) * 2.0f - 1.0f,
-    };
-}
-
-static void appendQuad(
-    std::vector<UiVertex>& vertices,
-    float left,
-    float top,
-    float right,
-    float bottom,
-    glm::vec4 color,
-    uint32_t screenWidth,
-    uint32_t screenHeight)
-{
-    const glm::vec2 tl = pixelToNdc(left, top, screenWidth, screenHeight);
-    const glm::vec2 bl = pixelToNdc(left, bottom, screenWidth, screenHeight);
-    const glm::vec2 br = pixelToNdc(right, bottom, screenWidth, screenHeight);
-    const glm::vec2 tr = pixelToNdc(right, top, screenWidth, screenHeight);
-
-    vertices.push_back({tl, color});
-    vertices.push_back({bl, color});
-    vertices.push_back({br, color});
-    vertices.push_back({tl, color});
-    vertices.push_back({br, color});
-    vertices.push_back({tr, color});
-}
-
-static bool getGlyphPattern(char c, std::array<uint8_t, 7>& pattern, uint32_t& width) {
-    if (c >= '0' && c <= '9') {
-        pattern = kDigitGlyphs[static_cast<size_t>(c - '0')];
-        width = 5;
-        return true;
-    }
-
-    switch (c) {
-    case 'F':
-        pattern = kFontF;
-        width = 5;
-        return true;
-    case 'P':
-        pattern = kFontP;
-        width = 5;
-        return true;
-    case 'S':
-        pattern = kFontS;
-        width = 5;
-        return true;
-    case 'A':
-        pattern = kFontA;
-        width = 5;
-        return true;
-    case 'I':
-        pattern = kFontI;
-        width = 5;
-        return true;
-    case 'M':
-        pattern = kFontM;
-        width = 5;
-        return true;
-    case 'N':
-        pattern = kFontN;
-        width = 5;
-        return true;
-    case 'X':
-        pattern = kFontX;
-        width = 5;
-        return true;
-    case '.':
-        pattern = kFontDot;
-        width = 3;
-        return true;
-    case ' ':
-        pattern.fill(0);
-        width = 3;
-        return true;
-    default:
-        return false;
-    }
-}
-
-static void appendGlyph(
-    std::vector<UiVertex>& vertices,
-    char c,
-    float x,
-    float y,
-    float pixelSize,
-    glm::vec4 color,
-    uint32_t screenWidth,
-    uint32_t screenHeight)
-{
-    std::array<uint8_t, 7> pattern{};
-    uint32_t glyphWidth = 0;
-    if (!getGlyphPattern(c, pattern, glyphWidth)) {
-        return;
-    }
-
-    for (uint32_t row = 0; row < 7; ++row) {
-        for (uint32_t col = 0; col < glyphWidth; ++col) {
-            if ((pattern[row] >> (glyphWidth - 1 - col)) & 1u) {
-                float left = x + col * pixelSize;
-                float top = y + row * pixelSize;
-                float right = left + pixelSize;
-                float bottom = top + pixelSize;
-                appendQuad(vertices, left, top, right, bottom, color, screenWidth, screenHeight);
-            }
-        }
-    }
-}
-
 void framebufferResizeCallback(GLFWwindow* window, int /*width*/, int /*height*/) {
-    // GLFW framebuffer resize callback: notify the renderer to recreate swapchain.
     auto* renderer = reinterpret_cast<VulkanRenderer*>(glfwGetWindowUserPointer(window));
     if (renderer) {
         renderer->onFramebufferResize();
@@ -205,20 +43,15 @@ VulkanRenderer::VulkanRenderer(Window& window, MeshData mesh)
     : m_window(window)
     , m_mesh(std::move(mesh))
     , m_shaderDir(SHADER_DIR)
+    , m_boxMesh(makeUnitCubeMesh())
 {
-    // Ensure the box mesh used for dynamic objects matches our winding order
     flipMeshWinding(m_boxMesh);
-
-    // Compute mesh bounds, register resize callback, initialize camera, and create Vulkan resources.
-    const MeshBounds bounds = computeMeshBounds(m_mesh);
-    m_meshRadius = bounds.radius;
     glfwSetWindowUserPointer(m_window.handle(), this);
     glfwSetFramebufferSizeCallback(m_window.handle(), framebufferResizeCallback);
     initVulkan();
 }
 
 VulkanRenderer::~VulkanRenderer() {
-    // Ensure GPU is idle and clean up all Vulkan resources and buffers.
     if (m_device) {
         vkDeviceWaitIdle(m_device->logical());
     }
@@ -229,38 +62,21 @@ VulkanRenderer::~VulkanRenderer() {
         }
     }
 
-    if (m_indexBuffer) {
-        m_indexBuffer->destroy(*m_device);
-        m_indexBuffer.reset();
-    }
-    if (m_vertexBuffer) {
-        m_vertexBuffer->destroy(*m_device);
-        m_vertexBuffer.reset();
-    }
-    if (m_boxIndexBuffer) {
-        m_boxIndexBuffer->destroy(*m_device);
-        m_boxIndexBuffer.reset();
-    }
-    if (m_boxVertexBuffer) {
-        m_boxVertexBuffer->destroy(*m_device);
-        m_boxVertexBuffer.reset();
-    }
-    if (m_uiVertexBuffer) {
-        m_uiVertexBuffer->destroy(*m_device);
-        m_uiVertexBuffer.reset();
-    }
+    if (m_indexBuffer) m_indexBuffer->destroy(*m_device);
+    if (m_vertexBuffer) m_vertexBuffer->destroy(*m_device);
+
     for (auto& ub : m_sceneBuffers) {
-        if (ub) {
-            ub->destroy(*m_device);
-        }
+        if (ub) ub->destroy(*m_device);
     }
-    if (m_materialBuffer) {
-        m_materialBuffer->destroy(*m_device);
-        m_materialBuffer.reset();
+    if (m_materialBuffer) m_materialBuffer->destroy(*m_device);
+
+    for (auto& [mesh, buffers] : m_dynamicMeshCache) {
+        if (buffers.vb) buffers.vb->destroy(*m_device);
+        if (buffers.ib) buffers.ib->destroy(*m_device);
     }
+    m_dynamicMeshCache.clear();
 
     m_texture.destroy(*m_device);
-
     cleanupSwapchain();
 
     if (m_descriptorPool != VK_NULL_HANDLE) {
@@ -281,7 +97,6 @@ void VulkanRenderer::initVulkan() {
     const bool enableValidation = false;
 #endif
 
-    // Create Vulkan context, device, swapchain, pipeline and all render resources.
     m_context = std::make_unique<VulkanContext>(enableValidation);
     m_context->init(m_window.handle());
 
@@ -292,16 +107,14 @@ void VulkanRenderer::initVulkan() {
 
     createCommandPool();
     createMeshBuffers();
-    createBoxMeshBuffers();
     createSceneBuffers();
     createMaterialBuffer();
     createTextureImage();
     createDescriptorPool();
     createDescriptorSets();
     createCommandBuffers();
-    createUiPipeline();
-    createUiBuffers();
     createSyncObjects();
+    std::cout << "[VulkanRenderer] initVulkan completed." << std::endl;
 }
 
 void VulkanRenderer::createCommandPool() {
@@ -310,14 +123,12 @@ void VulkanRenderer::createCommandPool() {
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     poolInfo.queueFamilyIndex = m_device->queueFamilies().graphics.value();
 
-    // Allocate a command pool for transient command buffers used for transfers and drawing.
     if (vkCreateCommandPool(m_device->logical(), &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create command pool");
     }
 }
 
 void VulkanRenderer::createMeshBuffers() {
-    // Upload vertex and index data to GPU buffers using staging buffers.
     if (m_mesh.vertices.empty() || m_mesh.indices.empty()) {
         throw std::runtime_error("Mesh has no vertices or indices");
     }
@@ -326,111 +137,26 @@ void VulkanRenderer::createMeshBuffers() {
     VkDeviceSize indexSize = sizeof(uint32_t) * m_mesh.indices.size();
     m_indexCount = static_cast<uint32_t>(m_mesh.indices.size());
 
-    // Staging (CPU-visible) -> copy -> device-local (GPU-fast)
     VulkanBuffer stagingVertex;
-    stagingVertex.create(
-        *m_device,
-        vertexSize,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    stagingVertex.create(*m_device, vertexSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    VulkanBuffer::write(
-        *m_device, stagingVertex.handle(), stagingVertex.memory(), m_mesh.vertices.data(), vertexSize);
+    VulkanBuffer::write(*m_device, stagingVertex.handle(), stagingVertex.memory(), m_mesh.vertices.data(), vertexSize);
 
     m_vertexBuffer = std::make_unique<VulkanBuffer>();
-    m_vertexBuffer->create(
-        *m_device,
-        vertexSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+    m_vertexBuffer->create(*m_device, vertexSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    VulkanBuffer::copyBuffer(
-        *m_device,
-        m_commandPool,
-        m_device->graphicsQueue(),
-        stagingVertex.handle(),
-        m_vertexBuffer->handle(),
-        vertexSize);
+    VulkanBuffer::copyBuffer(*m_device, m_commandPool, m_device->graphicsQueue(), stagingVertex.handle(), m_vertexBuffer->handle(), vertexSize);
     stagingVertex.destroy(*m_device);
 
     VulkanBuffer stagingIndex;
-    stagingIndex.create(
-        *m_device,
-        indexSize,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    stagingIndex.create(*m_device, indexSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    VulkanBuffer::write(
-        *m_device, stagingIndex.handle(), stagingIndex.memory(), m_mesh.indices.data(), indexSize);
+    VulkanBuffer::write(*m_device, stagingIndex.handle(), stagingIndex.memory(), m_mesh.indices.data(), indexSize);
 
     m_indexBuffer = std::make_unique<VulkanBuffer>();
-    m_indexBuffer->create(
-        *m_device,
-        indexSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+    m_indexBuffer->create(*m_device, indexSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    VulkanBuffer::copyBuffer(
-        *m_device,
-        m_commandPool,
-        m_device->graphicsQueue(),
-        stagingIndex.handle(),
-        m_indexBuffer->handle(),
-        indexSize);
-    stagingIndex.destroy(*m_device);
-}
-
-void VulkanRenderer::createBoxMeshBuffers() {
-    if (m_boxMesh.vertices.empty() || m_boxMesh.indices.empty()) {
-        throw std::runtime_error("Box mesh has no vertices or indices");
-    }
-
-    VkDeviceSize vertexSize = sizeof(Vertex) * m_boxMesh.vertices.size();
-    VkDeviceSize indexSize = sizeof(uint32_t) * m_boxMesh.indices.size();
-    m_boxIndexCount = static_cast<uint32_t>(m_boxMesh.indices.size());
-
-    VulkanBuffer stagingVertex;
-    stagingVertex.create(
-        *m_device,
-        vertexSize,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    VulkanBuffer::write(
-        *m_device, stagingVertex.handle(), stagingVertex.memory(), m_boxMesh.vertices.data(), vertexSize);
-
-    m_boxVertexBuffer = std::make_unique<VulkanBuffer>();
-    m_boxVertexBuffer->create(
-        *m_device,
-        vertexSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    VulkanBuffer::copyBuffer(
-        *m_device,
-        m_commandPool,
-        m_device->graphicsQueue(),
-        stagingVertex.handle(),
-        m_boxVertexBuffer->handle(),
-        vertexSize);
-    stagingVertex.destroy(*m_device);
-
-    VulkanBuffer stagingIndex;
-    stagingIndex.create(
-        *m_device,
-        indexSize,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    VulkanBuffer::write(
-        *m_device, stagingIndex.handle(), stagingIndex.memory(), m_boxMesh.indices.data(), indexSize);
-
-    m_boxIndexBuffer = std::make_unique<VulkanBuffer>();
-    m_boxIndexBuffer->create(
-        *m_device,
-        indexSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    VulkanBuffer::copyBuffer(
-        *m_device,
-        m_commandPool,
-        m_device->graphicsQueue(),
-        stagingIndex.handle(),
-        m_boxIndexBuffer->handle(),
-        indexSize);
+    VulkanBuffer::copyBuffer(*m_device, m_commandPool, m_device->graphicsQueue(), stagingIndex.handle(), m_indexBuffer->handle(), indexSize);
     stagingIndex.destroy(*m_device);
 }
 
@@ -441,38 +167,18 @@ void VulkanRenderer::createSceneBuffers() {
 
     for (int i = 0; i < kMaxFramesInFlight; ++i) {
         m_sceneBuffers[i] = std::make_unique<VulkanBuffer>();
-        m_sceneBuffers[i]->create(
-            *m_device,
-            bufferSize,
-            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        m_sceneBuffers[i]->create(*m_device, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-        vkMapMemory(
-            m_device->logical(),
-            m_sceneBuffers[i]->memory(),
-            0,
-            bufferSize,
-            0,
-            &m_sceneBuffersMapped[i]);
+        vkMapMemory(m_device->logical(), m_sceneBuffers[i]->memory(), 0, bufferSize, 0, &m_sceneBuffersMapped[i]);
     }
 }
 
 void VulkanRenderer::createMaterialBuffer() {
     fillMaterialBuffer(m_mesh.materials, m_materialGpu);
-
     m_materialBuffer = std::make_unique<VulkanBuffer>();
-    m_materialBuffer->create(
-        *m_device,
-        sizeof(MaterialBufferObject),
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    m_materialBuffer->create(*m_device, sizeof(MaterialBufferObject), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-    VulkanBuffer::write(
-        *m_device,
-        m_materialBuffer->handle(),
-        m_materialBuffer->memory(),
-        &m_materialGpu,
-        sizeof(MaterialBufferObject));
+    VulkanBuffer::write(*m_device, m_materialBuffer->handle(), m_materialBuffer->memory(), &m_materialGpu, sizeof(MaterialBufferObject));
 }
 
 void VulkanRenderer::createTextureImage() {
@@ -488,121 +194,23 @@ void VulkanRenderer::createTextureImage() {
         const auto resolved = AssetLoader::resolveAssetPath(texturePath);
         TextureData data = loadTextureFile(resolved.string());
         m_texture = VulkanImage::fromTextureData(*m_device, m_commandPool, m_device->graphicsQueue(), data);
-    } catch (const std::exception& e) {
-        // Fallback to a tiny 2x2 checkerboard if texture fails to load
+    } catch (...) {
         TextureData dummy;
-        dummy.width = 2;
-        dummy.height = 2;
-        dummy.channels = 4;
-        dummy.pixels = {
-            255, 255, 255, 255,   0,   0,   0, 255,
-              0,   0,   0, 255, 255, 255, 255, 255
-        };
+        dummy.width = 2; dummy.height = 2; dummy.channels = 4;
+        dummy.pixels = { 255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255 };
         m_texture = VulkanImage::fromTextureData(*m_device, m_commandPool, m_device->graphicsQueue(), dummy);
-    }
-}
-
-void VulkanRenderer::createUiPipeline() {
-    m_uiPipeline = std::make_unique<VulkanPipeline>(
-        *m_device,
-        *m_swapchain,
-        m_shaderDir + "/ui.vert.spv",
-        m_shaderDir + "/ui.frag.spv",
-        true);
-}
-
-void VulkanRenderer::createUiBuffers() {
-    const VkDeviceSize bufferSize = sizeof(UiVertex) * kMaxUiVertices;
-    m_uiVertexBuffer = std::make_unique<VulkanBuffer>();
-    m_uiVertexBuffer->create(
-        *m_device,
-        bufferSize,
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-}
-
-void VulkanRenderer::updateUiVertexBuffer(
-    uint32_t width,
-    uint32_t height,
-    float fps,
-    float minFrameTimeMs,
-    float maxFrameTimeMs)
-{
-    std::vector<UiVertex> vertices;
-    vertices.reserve(kMaxUiVertices);
-
-    std::string text = "FPS " + std::to_string(static_cast<int>(std::round(fps))) +
-        " MIN " + formatFixed(minFrameTimeMs, 1) + "MS" +
-        " MAX " + formatFixed(maxFrameTimeMs, 1) + "MS";
-    constexpr float pixelSize = 4.0f;
-    constexpr float charSpacing = 1.0f;
-    constexpr float textPadding = 6.0f;
-    constexpr float margin = 16.0f;
-
-    float textWidth = 0.0f;
-    for (char c : text) {
-        std::array<uint8_t, 7> pattern;
-        uint32_t glyphWidth = 0;
-        if (!getGlyphPattern(c, pattern, glyphWidth)) {
-            continue;
-        }
-        textWidth += (glyphWidth * pixelSize) + charSpacing;
-    }
-    if (textWidth > 0.0f) {
-        textWidth -= charSpacing;
-    }
-
-    const float textHeight = 7.0f * pixelSize;
-    const float xStart = static_cast<float>(width) - margin - textWidth - textPadding * 2.0f;
-    const float yStart = margin + textPadding;
-    const float panelLeft = xStart - textPadding;
-    const float panelTop = margin;
-    const float panelRight = static_cast<float>(width) - margin;
-    const float panelBottom = yStart + textHeight + textPadding;
-
-    appendQuad(
-        vertices,
-        panelLeft,
-        panelTop,
-        panelRight,
-        panelBottom,
-        glm::vec4(0.0f, 0.0f, 0.0f, 0.55f),
-        width,
-        height);
-
-    float cursorX = xStart;
-    for (char c : text) {
-        appendGlyph(vertices, c, cursorX, yStart, pixelSize, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), width, height);
-        std::array<uint8_t, 7> pattern;
-        uint32_t glyphWidth = 0;
-        if (getGlyphPattern(c, pattern, glyphWidth)) {
-            cursorX += (glyphWidth * pixelSize) + charSpacing;
-        }
-    }
-
-    m_uiVertexCount = static_cast<uint32_t>(std::min<size_t>(vertices.size(), kMaxUiVertices));
-    if (m_uiVertexCount > 0) {
-        VulkanBuffer::write(
-            *m_device,
-            m_uiVertexBuffer->handle(),
-            m_uiVertexBuffer->memory(),
-            vertices.data(),
-            sizeof(UiVertex) * m_uiVertexCount);
     }
 }
 
 void VulkanRenderer::createDescriptorPool() {
     std::array<VkDescriptorPoolSize, 3> poolSizes{};
-    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[0].descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight);
-    poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[1].descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight);
-    poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[2].descriptorCount = static_cast<uint32_t>(kMaxFramesInFlight);
+    poolSizes[0] = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, static_cast<uint32_t>(kMaxFramesInFlight) };
+    poolSizes[1] = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, static_cast<uint32_t>(kMaxFramesInFlight) };
+    poolSizes[2] = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, static_cast<uint32_t>(kMaxFramesInFlight) };
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.poolSizeCount = 3;
     poolInfo.pPoolSizes = poolSizes.data();
     poolInfo.maxSets = static_cast<uint32_t>(kMaxFramesInFlight);
 
@@ -613,8 +221,8 @@ void VulkanRenderer::createDescriptorPool() {
 
 void VulkanRenderer::createDescriptorSets() {
     auto defaultEffect = m_materialSystem->createMaterial("temp").effect;
-    std::vector<VkDescriptorSetLayout> layouts(
-        kMaxFramesInFlight, defaultEffect->getPipeline().descriptorSetLayout());
+    std::vector<VkDescriptorSetLayout> layouts(kMaxFramesInFlight, defaultEffect->getPipeline().descriptorSetLayout());
+
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     allocInfo.descriptorPool = m_descriptorPool;
@@ -627,57 +235,25 @@ void VulkanRenderer::createDescriptorSets() {
     }
 
     for (int i = 0; i < kMaxFramesInFlight; ++i) {
-        VkDescriptorBufferInfo sceneInfo{};
-        sceneInfo.buffer = m_sceneBuffers[i]->handle();
-        sceneInfo.offset = 0;
-        sceneInfo.range = sizeof(SceneUbo);
-
-        VkDescriptorBufferInfo materialInfo{};
-        materialInfo.buffer = m_materialBuffer->handle();
-        materialInfo.offset = 0;
-        materialInfo.range = sizeof(MaterialBufferObject);
-
-        VkDescriptorImageInfo imageInfo{};
-        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfo.imageView = m_texture.view();
-        imageInfo.sampler = m_texture.sampler();
+        VkDescriptorBufferInfo sceneInfo{ m_sceneBuffers[i]->handle(), 0, sizeof(SceneUbo) };
+        VkDescriptorBufferInfo materialInfo{ m_materialBuffer->handle(), 0, sizeof(MaterialBufferObject) };
+        VkDescriptorImageInfo imageInfo{ m_texture.sampler(), m_texture.view(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
 
         std::array<VkWriteDescriptorSet, 3> writes{};
-
-        writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[0].dstSet = m_descriptorSets[i];
-        writes[0].dstBinding = 0;
-        writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writes[0].descriptorCount = 1;
-        writes[0].pBufferInfo = &sceneInfo;
-
-        writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[1].dstSet = m_descriptorSets[i];
-        writes[1].dstBinding = 1;
-        writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writes[1].descriptorCount = 1;
-        writes[1].pBufferInfo = &materialInfo;
-
-        writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[2].dstSet = m_descriptorSets[i];
-        writes[2].dstBinding = 2;
-        writes[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writes[2].descriptorCount = 1;
-        writes[2].pImageInfo = &imageInfo;
-
-        vkUpdateDescriptorSets(m_device->logical(), static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+        writes[0] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_descriptorSets[i], 0, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &sceneInfo, nullptr };
+        writes[1] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_descriptorSets[i], 1, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &materialInfo, nullptr };
+        writes[2] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_descriptorSets[i], 2, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &imageInfo, nullptr, nullptr };
+        vkUpdateDescriptorSets(m_device->logical(), 3, writes.data(), 0, nullptr);
     }
 }
 
 void VulkanRenderer::createCommandBuffers() {
     m_commandBuffers.resize(m_swapchain->imageCount());
-
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.commandPool = m_commandPool;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandBufferCount = static_cast<uint32_t>(m_commandBuffers.size());
-
     if (vkAllocateCommandBuffers(m_device->logical(), &allocInfo, m_commandBuffers.data()) != VK_SUCCESS) {
         throw std::runtime_error("Failed to allocate command buffers");
     }
@@ -685,7 +261,6 @@ void VulkanRenderer::createCommandBuffers() {
 
 void VulkanRenderer::createSyncObjects() {
     const size_t imageCount = m_swapchain->imageCount();
-
     m_imageAvailableSemaphores.resize(kMaxFramesInFlight);
     m_renderFinishedSemaphores.resize(imageCount);
     m_inFlightFences.resize(kMaxFramesInFlight);
@@ -699,313 +274,220 @@ void VulkanRenderer::createSyncObjects() {
     fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
     for (int i = 0; i < kMaxFramesInFlight; ++i) {
-        if (vkCreateSemaphore(
-                m_device->logical(), &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]) != VK_SUCCESS ||
-            vkCreateFence(m_device->logical(), &fenceInfo, nullptr, &m_inFlightFences[i]) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create frame sync objects");
-        }
+        vkCreateSemaphore(m_device->logical(), &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]);
+        vkCreateFence(m_device->logical(), &fenceInfo, nullptr, &m_inFlightFences[i]);
     }
-
     for (size_t i = 0; i < imageCount; ++i) {
-        if (vkCreateSemaphore(
-                m_device->logical(), &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create present sync objects");
-        }
+        vkCreateSemaphore(m_device->logical(), &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]);
     }
 }
 
 void VulkanRenderer::destroySyncObjects() {
-    for (VkSemaphore sem : m_imageAvailableSemaphores) {
-        if (sem != VK_NULL_HANDLE) {
-            vkDestroySemaphore(m_device->logical(), sem, nullptr);
-        }
-    }
+    for (auto s : m_imageAvailableSemaphores) vkDestroySemaphore(m_device->logical(), s, nullptr);
+    for (auto s : m_renderFinishedSemaphores) vkDestroySemaphore(m_device->logical(), s, nullptr);
+    for (auto f : m_inFlightFences) vkDestroyFence(m_device->logical(), f, nullptr);
     m_imageAvailableSemaphores.clear();
-
-    for (VkSemaphore sem : m_renderFinishedSemaphores) {
-        if (sem != VK_NULL_HANDLE) {
-            vkDestroySemaphore(m_device->logical(), sem, nullptr);
-        }
-    }
     m_renderFinishedSemaphores.clear();
-
-    for (VkFence fence : m_inFlightFences) {
-        if (fence != VK_NULL_HANDLE) {
-            vkDestroyFence(m_device->logical(), fence, nullptr);
-        }
-    }
     m_inFlightFences.clear();
     m_imagesInFlight.clear();
 }
 
-void VulkanRenderer::onFramebufferResize() {
-    m_framebufferResized = true;
-}
+void VulkanRenderer::onFramebufferResize() { m_framebufferResized = true; }
 
 void VulkanRenderer::recreateSwapchain() {
-    int width = 0, height = 0;
-    glfwGetFramebufferSize(m_window.handle(), &width, &height);
-    while (width == 0 || height == 0) {
-        glfwGetFramebufferSize(m_window.handle(), &width, &height);
+    int w = 0, h = 0;
+    glfwGetFramebufferSize(m_window.handle(), &w, &h);
+    while (w == 0 || h == 0) {
+        glfwGetFramebufferSize(m_window.handle(), &w, &h);
         glfwWaitEvents();
     }
-
     vkDeviceWaitIdle(m_device->logical());
-
     destroySyncObjects();
-
     m_swapchain->recreate(m_window.handle());
-
-    // Note: In a real engine, we'd loop through all effects and recreate them.
-    // Since our effects are currently pointers, we'll need to update the MaterialSystem.
-    // For now, we recreate the whole system or just the default one.
-    // Actually, MaterialSystem should probably handle this.
-    // We'll leave this as a TODO or implement a simple refresh.
-
-    if (m_uiPipeline) {
-        m_uiPipeline->recreate(*m_swapchain);
-    }
-
     vkDestroyCommandPool(m_device->logical(), m_commandPool, nullptr);
     createCommandPool();
     createCommandBuffers();
     createSyncObjects();
 }
 
-void VulkanRenderer::cleanupSwapchain() {
-    m_uiPipeline.reset();
-    m_swapchain.reset();
-}
+void VulkanRenderer::cleanupSwapchain() { m_swapchain.reset(); }
 
 void VulkanRenderer::drawFrame() {
-    vkWaitForFences(
-        m_device->logical(), 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
+    VkResult res;
+
+    res = vkWaitForFences(m_device->logical(), 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
+    if (res != VK_SUCCESS) {
+         std::cerr << "[VulkanRenderer] vkWaitForFences failed: " << res << std::endl;
+    }
 
     uint32_t imageIndex = 0;
-    VkResult acquireResult = vkAcquireNextImageKHR(
-        m_device->logical(),
-        m_swapchain->handle(),
-        UINT64_MAX,
-        m_imageAvailableSemaphores[m_currentFrame],
-        VK_NULL_HANDLE,
-        &imageIndex);
+    res = vkAcquireNextImageKHR(m_device->logical(), m_swapchain->handle(), UINT64_MAX, m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
 
-    if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR || m_framebufferResized) {
+    if (res == VK_ERROR_OUT_OF_DATE_KHR || m_framebufferResized) {
         m_framebufferResized = false;
         recreateSwapchain();
         return;
-    }
-    if (acquireResult != VK_SUCCESS && acquireResult != VK_SUBOPTIMAL_KHR) {
+    } else if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) {
         throw std::runtime_error("Failed to acquire swapchain image");
     }
 
-    // Do not reuse this swapchain image until the previous submission using it has finished.
     if (m_imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
         vkWaitForFences(m_device->logical(), 1, &m_imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
     }
+    m_imagesInFlight[imageIndex] = m_inFlightFences[m_currentFrame];
 
-    const double currentFrameTime = glfwGetTime();
-    const float deltaTime = static_cast<float>(currentFrameTime - m_lastFrameTime);
-    m_lastFrameTime = currentFrameTime;
-    const float frameTimeMs = deltaTime * 1000.0f;
-
-    if (currentFrameTime - m_frameTimeWindowStart >= 1.0) {
-        m_frameTimeWindowStart = currentFrameTime;
-        m_minFrameTimeMs = std::numeric_limits<float>::infinity();
-        m_maxFrameTimeMs = 0.0f;
-    }
-
-    if (frameTimeMs < m_minFrameTimeMs) {
-        m_minFrameTimeMs = frameTimeMs;
-    }
-    if (frameTimeMs > m_maxFrameTimeMs) {
-        m_maxFrameTimeMs = frameTimeMs;
-    }
-
-    const float r = m_meshRadius;
-    const float aspect =
-        m_swapchain->extent().width / static_cast<float>(m_swapchain->extent().height);
-
-    const glm::mat4 model = m_modelMatrix;
-    const glm::mat4 view = glm::lookAt(
-        m_cameraPosition,
-        m_cameraPosition + m_cameraFront,
-        m_cameraUp);
-    glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, r * 0.05f, r * 50.0f);
-    proj[1][1] *= -1.0f;
+    const float aspect = m_swapchain->extent().width / static_cast<float>(m_swapchain->extent().height);
 
     SceneUbo scene{};
-    scene.model = model;
-    scene.viewProj = proj * view;
-    scene.normalMatrix = glm::transpose(glm::inverse(model));
+    scene.model = m_modelMatrix;
+    scene.viewProj = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 1000.0f) *
+                     glm::lookAt(m_cameraPosition, m_cameraPosition + m_cameraFront, m_cameraUp);
+    scene.viewProj[1][1] *= -1.0f;
+    scene.normalMatrix = glm::transpose(glm::inverse(m_modelMatrix));
     scene.lightDir = glm::vec4(glm::normalize(glm::vec3(0.35f, 0.55f, 0.75f)), 0.0f);
     scene.cameraPos = glm::vec4(m_cameraPosition, 1.0f);
     scene.pointLight = m_pointLight;
 
-    std::memcpy(m_sceneBuffersMapped[m_currentFrame], &scene, sizeof(scene));
-
-    const float fps = deltaTime > 0.0f ? 1.0f / deltaTime : 0.0f;
-    const double uiUpdateInterval = 0.125;
-    if (currentFrameTime - m_lastUiUpdateTime >= uiUpdateInterval ||
-        std::abs(fps - m_lastRenderedFps) > 0.1f ||
-        std::abs(m_minFrameTimeMs - m_lastRenderedMinFrameTimeMs) > 0.1f ||
-        std::abs(m_maxFrameTimeMs - m_lastRenderedMaxFrameTimeMs) > 0.1f) {
-        updateUiVertexBuffer(
-            m_swapchain->extent().width,
-            m_swapchain->extent().height,
-            fps,
-            m_minFrameTimeMs,
-            m_maxFrameTimeMs);
-        m_lastUiUpdateTime = currentFrameTime;
-        m_lastRenderedFps = fps;
-        m_lastRenderedMinFrameTimeMs = m_minFrameTimeMs;
-        m_lastRenderedMaxFrameTimeMs = m_maxFrameTimeMs;
+    if (m_sceneBuffersMapped[m_currentFrame] != nullptr) {
+        std::memcpy(m_sceneBuffersMapped[m_currentFrame], &scene, sizeof(scene));
     }
 
     vkResetFences(m_device->logical(), 1, &m_inFlightFences[m_currentFrame]);
     vkResetCommandBuffer(m_commandBuffers[imageIndex], 0);
     recordCommandBuffer(m_commandBuffers[imageIndex], imageIndex);
 
-    VkSemaphore waitSemaphores[] = {m_imageAvailableSemaphores[m_currentFrame]};
-    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-
+    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitSemaphores = &m_imageAvailableSemaphores[m_currentFrame];
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &m_commandBuffers[imageIndex];
-
-    VkSemaphore signalSemaphores[] = {m_renderFinishedSemaphores[imageIndex]};
     submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = signalSemaphores;
+    submitInfo.pSignalSemaphores = &m_renderFinishedSemaphores[imageIndex];
 
-    if (vkQueueSubmit(m_device->graphicsQueue(), 1, &submitInfo, m_inFlightFences[m_currentFrame]) !=
-        VK_SUCCESS) {
+    if (vkQueueSubmit(m_device->graphicsQueue(), 1, &submitInfo, m_inFlightFences[m_currentFrame]) != VK_SUCCESS) {
         throw std::runtime_error("Failed to submit draw command buffer");
     }
 
-    m_imagesInFlight[imageIndex] = m_inFlightFences[m_currentFrame];
-
+    VkSwapchainKHR swapChains[] = { m_swapchain->handle() };
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = signalSemaphores;
-    VkSwapchainKHR swapchain = m_swapchain->handle();
+    presentInfo.pWaitSemaphores = &m_renderFinishedSemaphores[imageIndex];
     presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &swapchain;
+    presentInfo.pSwapchains = swapChains;
     presentInfo.pImageIndices = &imageIndex;
 
-    VkResult presentResult = vkQueuePresentKHR(m_device->presentQueue(), &presentInfo);
+    res = vkQueuePresentKHR(m_device->presentQueue(), &presentInfo);
 
-    if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR ||
-        m_framebufferResized) {
+    if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR || m_framebufferResized) {
+        std::cout << "[VulkanRenderer] Present result: " << res << ", recreating swapchain..." << std::endl;
         m_framebufferResized = false;
         recreateSwapchain();
-    } else if (presentResult != VK_SUCCESS) {
+    } else if (res != VK_SUCCESS) {
         throw std::runtime_error("Failed to present swapchain image");
     }
 
     m_currentFrame = (m_currentFrame + 1) % kMaxFramesInFlight;
 }
 
-void VulkanRenderer::addDynamicObject(const glm::mat4& transform, std::shared_ptr<Material> material) {
-    m_dynamicObjects.push_back({transform, material});
+void VulkanRenderer::addDynamicObject(const glm::mat4& transform, std::shared_ptr<Material> material, const MeshData* mesh) {
+    m_dynamicObjects.push_back({transform, material, mesh});
 }
 
-void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
+void VulkanRenderer::recordCommandBuffer(VkCommandBuffer cb, uint32_t idx) {
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+    if (vkBeginCommandBuffer(cb, &beginInfo) != VK_SUCCESS) {
         throw std::runtime_error("Failed to begin recording command buffer");
     }
 
-    VkRenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = m_swapchain->renderPass();
-    renderPassInfo.framebuffer = m_swapchain->framebuffers()[imageIndex];
-    renderPassInfo.renderArea.offset = {0, 0};
-    renderPassInfo.renderArea.extent = m_swapchain->extent();
+    VkClearValue clears[2]{};
+    clears[0].color = {{0.05f, 0.05f, 0.08f, 1.0f}};
+    clears[1].depthStencil = {1.0f, 0};
 
-    VkClearValue clearValues[2]{};
-    clearValues[0].color = {{0.05f, 0.05f, 0.08f, 1.0f}};
-    clearValues[1].depthStencil = {1.0f, 0};
-    renderPassInfo.clearValueCount = 2;
-    renderPassInfo.pClearValues = clearValues;
+    VkRenderPassBeginInfo rpInfo{};
+    rpInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    rpInfo.renderPass = m_swapchain->renderPass();
+    rpInfo.framebuffer = m_swapchain->framebuffers()[idx];
+    rpInfo.renderArea.offset = {0, 0};
+    rpInfo.renderArea.extent = m_swapchain->extent();
+    rpInfo.clearValueCount = 2;
+    rpInfo.pClearValues = clears;
 
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBeginRenderPass(cb, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    // We assume for now all standard effects share the same descriptor layout
     auto defaultEffect = m_materialSystem->createMaterial("temp").effect;
     VkPipelineLayout layout = defaultEffect->getPipeline().layout();
 
-    vkCmdBindDescriptorSets(
-        commandBuffer,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        layout,
-        0,
-        1,
-        &m_descriptorSets[m_currentFrame],
-        0,
-        nullptr);
+    vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &m_descriptorSets[m_currentFrame], 0, nullptr);
 
-    struct {
-        glm::mat4 model;
-        glm::mat4 normalMatrix;
-    } push;
+    // Draw Static
+    vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, defaultEffect->getPipeline().handle());
+    if (m_vertexBuffer && m_indexBuffer) {
+        VkBuffer vbs[] = { m_vertexBuffer->handle() };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(cb, 0, 1, vbs, offsets);
+        vkCmdBindIndexBuffer(cb, m_indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
 
-    // --- Draw Static Level Mesh ---
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, defaultEffect->getPipeline().handle());
+        struct { glm::mat4 m; glm::mat4 n; } push { m_modelMatrix, glm::transpose(glm::inverse(m_modelMatrix)) };
+        vkCmdPushConstants(cb, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push), &push);
+        vkCmdDrawIndexed(cb, m_indexCount, 1, 0, 0, 0);
+    }
 
-    VkBuffer vertexBuffers[] = {m_vertexBuffer->handle()};
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
+    // Draw Dynamic
+    for (size_t i = 0; i < m_dynamicObjects.size(); ++i) {
+        const auto& obj = m_dynamicObjects[i];
+        const MeshData* mesh = obj.mesh ? obj.mesh : &m_boxMesh;
 
-    push.model = m_modelMatrix;
-    push.normalMatrix = glm::transpose(glm::inverse(m_modelMatrix));
-    vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push), &push);
+        // Ensure mesh is in cache
+        auto it = m_dynamicMeshCache.find(mesh);
+        if (it == m_dynamicMeshCache.end()) {
+            if (mesh->vertices.empty() || mesh->indices.empty()) continue;
 
-    vkCmdDrawIndexed(commandBuffer, m_indexCount, 1, 0, 0, 0);
+            MeshBuffers buffers;
+            VkDeviceSize vSize = sizeof(Vertex) * mesh->vertices.size();
+            VkDeviceSize iSize = sizeof(uint32_t) * mesh->indices.size();
+            buffers.indexCount = (uint32_t)mesh->indices.size();
 
-    // --- Draw Dynamic Objects Grouped by Effect ---
-    if (m_boxVertexBuffer && m_boxIndexBuffer && !m_dynamicObjects.empty()) {
-        VkBuffer boxBuffers[] = {m_boxVertexBuffer->handle()};
-        VkDeviceSize boxOffsets[] = {0};
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, boxBuffers, boxOffsets);
-        vkCmdBindIndexBuffer(commandBuffer, m_boxIndexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
+            VulkanBuffer sVb;
+            sVb.create(*m_device, vSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+            VulkanBuffer::write(*m_device, sVb.handle(), sVb.memory(), mesh->vertices.data(), vSize);
+            buffers.vb = std::make_unique<VulkanBuffer>();
+            buffers.vb->create(*m_device, vSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+            VulkanBuffer::copyBuffer(*m_device, m_commandPool, m_device->graphicsQueue(), sVb.handle(), buffers.vb->handle(), vSize);
+            sVb.destroy(*m_device);
 
-        // Simple grouping: loop through objects and switch pipeline only when effect changes
-        std::shared_ptr<ShaderEffect> currentEffect = nullptr;
+            VulkanBuffer sIb;
+            sIb.create(*m_device, iSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+            VulkanBuffer::write(*m_device, sIb.handle(), sIb.memory(), mesh->indices.data(), iSize);
+            buffers.ib = std::make_unique<VulkanBuffer>();
+            buffers.ib->create(*m_device, iSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+            VulkanBuffer::copyBuffer(*m_device, m_commandPool, m_device->graphicsQueue(), sIb.handle(), buffers.ib->handle(), iSize);
+            sIb.destroy(*m_device);
 
-        for (const auto& obj : m_dynamicObjects) {
-            auto effect = obj.material ? obj.material->effect : defaultEffect;
-            if (effect != currentEffect) {
-                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, effect->getPipeline().handle());
-                currentEffect = effect;
-            }
-
-            push.model = obj.transform;
-            push.normalMatrix = glm::transpose(glm::inverse(obj.transform));
-            vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push), &push);
-
-            vkCmdDrawIndexed(commandBuffer, m_boxIndexCount, 1, 0, 0, 0);
+            it = m_dynamicMeshCache.emplace(mesh, std::move(buffers)).first;
         }
+
+        const auto& buf = it->second;
+        auto effect = (obj.material && obj.material->effect) ? obj.material->effect : defaultEffect;
+        if (!effect) continue;
+
+        vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, effect->getPipeline().handle());
+        VkBuffer vbs[] = { buf.vb->handle() };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(cb, 0, 1, vbs, offsets);
+        vkCmdBindIndexBuffer(cb, buf.ib->handle(), 0, VK_INDEX_TYPE_UINT32);
+
+        struct { glm::mat4 m; glm::mat4 n; } push { obj.transform, glm::transpose(glm::inverse(obj.transform)) };
+        vkCmdPushConstants(cb, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push), &push);
+        vkCmdDrawIndexed(cb, buf.indexCount, 1, 0, 0, 0);
     }
 
-    if (m_uiPipeline && m_uiVertexCount > 0) {
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_uiPipeline->handle());
-        VkBuffer uiBuffers[] = {m_uiVertexBuffer->handle()};
-        VkDeviceSize uiOffsets[] = {0};
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, uiBuffers, uiOffsets);
-        vkCmdDraw(commandBuffer, m_uiVertexCount, 1, 0, 0);
-    }
-
-    vkCmdEndRenderPass(commandBuffer);
-
-    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+    vkCmdEndRenderPass(cb);
+    if (vkEndCommandBuffer(cb) != VK_SUCCESS) {
         throw std::runtime_error("Failed to record command buffer");
     }
 }

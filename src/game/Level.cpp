@@ -14,11 +14,10 @@ void postProcessMesh(MeshData& mesh) {
 
 MeshData makeFallbackMesh(const glm::vec3& halfExtents) {
     MeshData mesh = makeUnitCubeMesh();
-    const glm::vec3 scale = halfExtents * 2.0f;
     for (auto& vertex : mesh.vertices) {
-        vertex.position[0] *= scale.x;
-        vertex.position[1] *= scale.y;
-        vertex.position[2] *= scale.z;
+        vertex.position[0] *= halfExtents.x;
+        vertex.position[1] *= halfExtents.y;
+        vertex.position[2] *= halfExtents.z;
     }
     return mesh;
 }
@@ -30,18 +29,39 @@ bool loadObjectMesh(PhysicsMeshObject& object,
         object.name = levelName;
     }
 
+    const bool isAuto = (object.halfExtents.x < 0.0f);
+
     if (object.meshPath.empty()) {
+        if (isAuto) {
+            object.halfExtents = {0.5f, 0.5f, 0.5f};
+        }
         object.mesh = makeFallbackMesh(object.halfExtents);
+        postProcessMesh(object.mesh);
         return true;
     }
 
     try {
         object.mesh = assetManager.loadMesh(object.meshPath);
         postProcessMesh(object.mesh);
+
+        if (isAuto) {
+            auto bounds = computeMeshBounds(object.mesh);
+            object.halfExtents = bounds.getHalfExtents();
+            // Ensure non-zero extents
+            object.halfExtents.x = std::max(object.halfExtents.x, 0.01f);
+            object.halfExtents.y = std::max(object.halfExtents.y, 0.01f);
+            object.halfExtents.z = std::max(object.halfExtents.z, 0.01f);
+        }
+
         return true;
     } catch (const std::exception& e) {
         std::cerr << "Failed to load object '" << object.name << "' for level '" << levelName << "' ("
                   << object.meshPath << "): " << e.what() << "\nFalling back to unit cube.\n";
+
+        if (isAuto) {
+            object.halfExtents = {0.5f, 0.5f, 0.5f};
+        }
+
         object.mesh = makeFallbackMesh(object.halfExtents);
         postProcessMesh(object.mesh);
         return true;

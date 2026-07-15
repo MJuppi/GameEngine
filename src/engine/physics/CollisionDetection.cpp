@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <glm/glm.hpp>
+#include <iostream>
 
 namespace ge {
 

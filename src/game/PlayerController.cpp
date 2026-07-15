@@ -38,18 +38,20 @@ void PlayerController::updateCamera(float deltaTime) {
     if (!window) return;
 
     const float velocity = cameraSpeed_ * deltaTime;
+    glm::vec3 horizontalFront = glm::normalize(glm::vec3(cameraFront_.x, 0.0f, cameraFront_.z));
+    glm::vec3 horizontalRight = glm::normalize(glm::vec3(cameraRight_.x, 0.0f, cameraRight_.z));
 
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-        cameraPosition_ += cameraFront_ * velocity;
+        cameraPosition_ += horizontalFront * velocity;
     }
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-        cameraPosition_ -= cameraFront_ * velocity;
+        cameraPosition_ -= horizontalFront * velocity;
     }
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-        cameraPosition_ -= cameraRight_ * velocity;
+        cameraPosition_ -= horizontalRight * velocity;
     }
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-        cameraPosition_ += cameraRight_ * velocity;
+        cameraPosition_ += horizontalRight * velocity;
     }
     if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
         cameraPosition_ += cameraWorldUp_ * velocity;
@@ -58,13 +60,22 @@ void PlayerController::updateCamera(float deltaTime) {
         cameraPosition_ -= cameraWorldUp_ * velocity;
     }
 
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+    // Toggle mouse capture
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
         if (!mouseCaptured_) {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
             firstMouse_ = true;
             mouseCaptured_ = true;
         }
+    }
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+        if (mouseCaptured_) {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            mouseCaptured_ = false;
+        }
+    }
 
+    if (mouseCaptured_) {
         double xpos, ypos;
         glfwGetCursorPos(window, &xpos, &ypos);
         if (firstMouse_) {
@@ -74,7 +85,7 @@ void PlayerController::updateCamera(float deltaTime) {
         }
 
         float xoffset = static_cast<float>(xpos - lastCursorX_);
-        float yoffset = static_cast<float>(lastCursorY_ - ypos);
+        float yoffset = static_cast<float>(ypos - lastCursorY_);
         lastCursorX_ = xpos;
         lastCursorY_ = ypos;
 
@@ -82,14 +93,10 @@ void PlayerController::updateCamera(float deltaTime) {
         yoffset *= mouseSensitivity_;
 
         cameraYaw_ += xoffset;
-        cameraPitch_ += yoffset;
+        cameraPitch_ -= yoffset; // Fixed pitch inversion
         cameraPitch_ = glm::clamp(cameraPitch_, -89.0f, 89.0f);
 
         updateCameraVectors();
-    } else if (mouseCaptured_) {
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-        mouseCaptured_ = false;
-        firstMouse_ = true;
     }
 
     engine_.setCamera(cameraPosition_, cameraFront_, cameraUp_);
@@ -106,8 +113,8 @@ void PlayerController::updateCameraVectors() {
 }
 
 void PlayerController::fireProjectile() {
-    const glm::vec3 spawnPosition = glm::vec3(0.0f, 1.0f, 0.0f);
-    const glm::vec3 fireDirection = glm::vec3(0.0f, 0.0f, -1.0f);
+    const glm::vec3 spawnPosition = cameraPosition_ + cameraFront_ * 1.5f;
+    const glm::vec3 fireDirection = cameraFront_;
 
     auto* projectile = SceneFactory::spawnProjectile(engine_, spawnPosition, fireDirection);
     if (projectile) {

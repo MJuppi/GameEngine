@@ -1,276 +1,101 @@
 #include "engine/mesh/ObjMeshLoader.h"
-
-#include "engine/mesh/Material.h"
 #include "engine/mesh/MtlLoader.h"
-
+#include <glm/glm.hpp>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <sstream>
 #include <stdexcept>
-#include <string_view>
 #include <unordered_map>
-#include <vector>
 
 namespace ge {
 
 namespace {
+void trim(std::string& s) {
+    s.erase(0, s.find_first_not_of(" \t\r\n"));
+    s.erase(s.find_last_not_of(" \t\r\n") + 1);
+}
 
-struct Vec3 {
-    float x = 0.0f;
-    float y = 0.0f;
-    float z = 0.0f;
+struct ObjVertex {
+    int p = -1, t = -1, n = -1;
+    bool operator==(const ObjVertex& other) const { return p == other.p && t == other.t && n == other.n; }
 };
 
-struct Vec2 {
-    float x = 0.0f;
-    float y = 0.0f;
+struct ObjVertexHash {
+    size_t operator()(const ObjVertex& v) const {
+        return ((std::hash<int>()(v.p) ^ (std::hash<int>()(v.t) << 1)) >> 1) ^ (std::hash<int>()(v.n) << 1);
+    }
 };
 
-int resolveIndex(int rawIndex, size_t count) {
-    // Convert OBJ's 1-based or negative indices into zero-based indices.
-    if (rawIndex > 0) {
-        return rawIndex - 1;
+ObjVertex parseObjVertex(std::string_view s) {
+    ObjVertex v;
+    size_t f = s.find('/'), l = s.rfind('/');
+    v.p = std::stoi(std::string(s.substr(0, f)));
+    if (f != std::string_view::npos) {
+        if (l > f + 1) v.t = std::stoi(std::string(s.substr(f + 1, l - f - 1)));
+        if (l != std::string_view::npos) v.n = std::stoi(std::string(s.substr(l + 1)));
     }
-    if (rawIndex < 0) {
-        return static_cast<int>(count) + rawIndex;
-    }
-    return -1;
+    return v;
 }
-
-void trimInPlace(std::string& s) {
-    // Trim leading/trailing whitespace and CR/LF from a line.
-    while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) {
-        s.erase(s.begin());
-    }
-    while (!s.empty() &&
-           (s.back() == ' ' || s.back() == '\t' || s.back() == '\r' || s.back() == '\n')) {
-        s.pop_back();
-    }
-}
-
-bool startsWith(std::string_view line, std::string_view prefix) {
-    return line.size() >= prefix.size() && line.compare(0, prefix.size(), prefix) == 0;
-}
-
-std::vector<std::string> splitByChar(const std::string& s, char delim) {
-    // Split a string by a single character delimiter (used for corner tokens like "v/vt/vn").
-    std::vector<std::string> parts;
-    std::string token;
-    for (char c : s) {
-        if (c == delim) {
-            parts.push_back(token);
-            token.clear();
-        } else {
-            token.push_back(c);
-        }
-    }
-    parts.push_back(token);
-    return parts;
-}
-
-uint32_t resolveMaterialIndex(
-    const std::string& name,
-    const std::vector<Material>& materials,
-    std::unordered_map<std::string, uint32_t>& cache)
-{
-    // Map material name to its index in the materials vector (with simple caching).
-    const auto found = cache.find(name);
-    if (found != cache.end()) {
-        return found->second;
-    }
-
-    for (uint32_t i = 0; i < materials.size(); ++i) {
-        if (materials[i].name == name) {
-            cache[name] = i;
-            return i;
-        }
-    }
-
-    return 0;
-}
-
-Vertex makeVertexFromCorner(
-    const std::string& cornerToken,
-    const std::vector<Vec3>& positions,
-    const std::vector<Vec3>& normals,
-    const std::vector<Vec2>& texCoords,
-    uint32_t materialIndex)
-{
-    // Parse a face corner token like "1/2/3" and construct a Vertex with position, normal and UV.
-    const std::vector<std::string> parts = splitByChar(cornerToken, '/');
-    if (parts.empty() || parts[0].empty()) {
-        throw std::runtime_error("OBJ face corner is missing a vertex index");
-    }
-
-    const int rawV = std::stoi(parts[0]);
-    const int vi = resolveIndex(rawV, positions.size());
-    if (vi < 0 || vi >= static_cast<int>(positions.size())) {
-        throw std::runtime_error("OBJ face references an invalid vertex index");
-    }
-
-    Vertex vtx{};
-    vtx.position[0] = positions[static_cast<size_t>(vi)].x;
-    vtx.position[1] = positions[static_cast<size_t>(vi)].y;
-    vtx.position[2] = positions[static_cast<size_t>(vi)].z;
-    vtx.materialIndex = materialIndex;
-
-    int rawVt = 0;
-    if (parts.size() >= 2 && !parts[1].empty()) {
-        rawVt = std::stoi(parts[1]);
-    }
-
-    if (rawVt != 0) {
-        const int ti = resolveIndex(rawVt, texCoords.size());
-        if (ti >= 0 && ti < static_cast<int>(texCoords.size())) {
-            vtx.texCoord[0] = texCoords[static_cast<size_t>(ti)].x;
-            vtx.texCoord[1] = texCoords[static_cast<size_t>(ti)].y;
-        }
-    }
-
-    int rawVn = 0;
-    if (parts.size() >= 3 && !parts[2].empty()) {
-        rawVn = std::stoi(parts[2]);
-    }
-
-    if (rawVn != 0) {
-        const int ni = resolveIndex(rawVn, normals.size());
-        if (ni >= 0 && ni < static_cast<int>(normals.size())) {
-            const Vec3& n = normals[static_cast<size_t>(ni)];
-            vtx.normal[0] = n.x;
-            vtx.normal[1] = n.y;
-            vtx.normal[2] = n.z;
-        } else {
-            vtx.normal[0] = 0.0f;
-            vtx.normal[1] = 0.0f;
-            vtx.normal[2] = 1.0f;
-        }
-    } else {
-        vtx.normal[0] = 0.0f;
-        vtx.normal[1] = 0.0f;
-        vtx.normal[2] = 1.0f;
-    }
-
-    return vtx;
-}
-
 } // namespace
 
 MeshData loadObjFile(const std::string& path) {
-    // Load a Wavefront OBJ file, its optional MTL library and convert to MeshData.
     std::ifstream file(path);
-    if (!file) {
-        throw std::runtime_error("Could not open OBJ file: " + path);
-    }
+    if (!file) throw std::runtime_error("No OBJ: " + path);
 
-    const std::filesystem::path objPath(path);
-    const std::filesystem::path objDir = objPath.parent_path();
-
-    std::vector<Vec3> positions;
-    std::vector<Vec3> normals;
-    std::vector<Vec2> texCoords;
+    std::vector<glm::vec3> p, n;
+    std::vector<glm::vec2> t;
+    std::unordered_map<ObjVertex, uint32_t, ObjVertexHash> cache;
     MeshData mesh;
-    mesh.materials = {makeDefaultMaterial("default")};
+    mesh.materials = {makeDefaultMaterial()};
+    uint32_t curMatIdx = 0;
+    std::string line, tag;
 
-    std::string mtlLibraryPath;
-    std::string currentMaterialName = mesh.materials[0].name;
-    std::unordered_map<std::string, uint32_t> materialIndexCache{{currentMaterialName, 0}};
-    uint32_t currentMaterialIndex = 0;
-    bool mtlLoaded = false;
-
-    std::string line;
     while (std::getline(file, line)) {
-        trimInPlace(line);
-        if (line.empty() || line[0] == '#') {
-            continue;
-        }
+        trim(line);
+        if (line.empty() || line[0] == '#') continue;
+        std::istringstream iss(line);
+        iss >> tag;
 
-        const std::string_view view = line;
+        if (tag == "v") { glm::vec3 v; iss >> v.x >> v.y >> v.z; p.push_back(v); }
+        else if (tag == "vt") { glm::vec2 v; iss >> v.x >> v.y; t.push_back(v); }
+        else if (tag == "vn") { glm::vec3 v; iss >> v.x >> v.y >> v.z; n.push_back(v); }
+        else if (tag == "f") {
+            std::vector<uint32_t> faceIndices;
+            std::string s;
+            while (iss >> s) {
+                ObjVertex ov = parseObjVertex(s);
+                if (ov.p < 0) ov.p += (int)p.size() + 1;
+                if (ov.t < 0) ov.t += (int)t.size() + 1;
+                if (ov.n < 0) ov.n += (int)n.size() + 1;
 
-        if (startsWith(view, "mtllib ")) {
-            std::string mtlFileName = line.substr(7);
-            trimInPlace(mtlFileName);
-            mtlLibraryPath = (objDir / mtlFileName).string();
-            continue;
-        }
-
-        if (startsWith(view, "usemtl ")) {
-            if (!mtlLoaded && !mtlLibraryPath.empty()) {
-                mesh.materials = loadMtlFile(mtlLibraryPath);
-                mtlLoaded = true;
-                materialIndexCache.clear();
+                if (cache.count(ov)) faceIndices.push_back(cache[ov]);
+                else {
+                    uint32_t idx = (uint32_t)mesh.vertices.size();
+                    Vertex v{};
+                    v.position[0] = p[ov.p - 1].x; v.position[1] = p[ov.p - 1].y; v.position[2] = p[ov.p - 1].z;
+                    if (ov.t > 0) { v.texCoord[0] = t[ov.t - 1].x; v.texCoord[1] = t[ov.t - 1].y; }
+                    if (ov.n > 0) { v.normal[0] = n[ov.n - 1].x; v.normal[1] = n[ov.n - 1].y; v.normal[2] = n[ov.n - 1].z; }
+                    v.materialIndex = curMatIdx;
+                    mesh.vertices.push_back(v);
+                    cache[ov] = idx;
+                    faceIndices.push_back(idx);
+                }
             }
-
-            currentMaterialName = line.substr(7);
-            trimInPlace(currentMaterialName);
-            currentMaterialIndex = resolveMaterialIndex(currentMaterialName, mesh.materials, materialIndexCache);
-            continue;
-        }
-
-        if (startsWith(view, "v ")) {
-            std::istringstream iss(line.substr(2));
-            Vec3 p{};
-            iss >> p.x >> p.y >> p.z;
-            positions.push_back(p);
-            continue;
-        }
-
-        if (startsWith(view, "vn ")) {
-            std::istringstream iss(line.substr(3));
-            Vec3 n{};
-            iss >> n.x >> n.y >> n.z;
-            normals.push_back(n);
-            continue;
-        }
-
-        if (startsWith(view, "vt ")) {
-            std::istringstream iss(line.substr(3));
-            Vec2 t{};
-            iss >> t.x >> t.y;
-            texCoords.push_back(t);
-            continue;
-        }
-
-        if (startsWith(view, "f ")) {
-            if (!mtlLoaded && !mtlLibraryPath.empty()) {
-                mesh.materials = loadMtlFile(mtlLibraryPath);
-                mtlLoaded = true;
-                materialIndexCache.clear();
-                currentMaterialIndex =
-                    resolveMaterialIndex(currentMaterialName, mesh.materials, materialIndexCache);
+            for (size_t i = 1; i + 1 < faceIndices.size(); ++i) {
+                mesh.indices.push_back(faceIndices[0]);
+                mesh.indices.push_back(faceIndices[i]);
+                mesh.indices.push_back(faceIndices[i + 1]);
             }
-
-            std::istringstream iss(line.substr(2));
-            std::vector<std::string> corners;
-            std::string corner;
-            while (iss >> corner) {
-                corners.push_back(corner);
-            }
-            if (corners.size() < 3) {
-                throw std::runtime_error("OBJ face has fewer than 3 corners");
-            }
-
-            const uint32_t baseIndex = static_cast<uint32_t>(mesh.vertices.size());
-            for (const std::string& c : corners) {
-                mesh.vertices.push_back(
-                    makeVertexFromCorner(c, positions, normals, texCoords, currentMaterialIndex));
-            }
-
-            for (size_t i = 1; i + 1 < corners.size(); ++i) {
-                mesh.indices.push_back(baseIndex);
-                mesh.indices.push_back(static_cast<uint32_t>(baseIndex + i));
-                mesh.indices.push_back(static_cast<uint32_t>(baseIndex + i + 1));
-            }
+        } else if (tag == "mtllib") {
+            std::string mtlName; iss >> mtlName;
+            auto mtlPath = std::filesystem::path(path).parent_path() / mtlName;
+            if (std::filesystem::exists(mtlPath)) mesh.materials = loadMtlFile(mtlPath.string());
+        } else if (tag == "usemtl") {
+            std::string mtlName; iss >> mtlName;
+            for (uint32_t i = 0; i < mesh.materials.size(); ++i) if (mesh.materials[i].name == mtlName) curMatIdx = i;
         }
     }
-
-    if (mesh.vertices.empty() || mesh.indices.empty()) {
-        throw std::runtime_error("OBJ file contained no drawable faces: " + path);
-    }
-
-    if (mesh.materials.size() > kMaxGpuMaterials) {
-        throw std::runtime_error("Too many materials (max " + std::to_string(kMaxGpuMaterials) + ")");
-    }
-
     return mesh;
 }
 

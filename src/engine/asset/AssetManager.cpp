@@ -8,31 +8,37 @@
 namespace ge {
 
 const MeshData& AssetManager::loadMesh(const std::string& path) {
-    std::string resolvedPath = path;
+    std::string pathOrAlias = path;
     auto itm = manifest_.meshes.find(path);
     if (itm != manifest_.meshes.end()) {
-        resolvedPath = itm->second;
+        pathOrAlias = itm->second;
     }
 
-    const auto normalizedPath = std::filesystem::absolute(std::filesystem::path(resolvedPath)).string();
-    auto it = meshCache_.find(normalizedPath);
+    // Use AssetLoader to find the actual file on disk before caching
+    const auto resolvedPath = AssetLoader::resolveAssetPath(pathOrAlias).string();
+
+    auto it = meshCache_.find(resolvedPath);
     if (it != meshCache_.end()) {
         return *it->second;
     }
 
-    auto meshPtr = std::make_shared<MeshData>(AssetLoader::loadMesh(normalizedPath));
-    auto [insertIt, inserted] = meshCache_.emplace(normalizedPath, meshPtr);
+    auto meshPtr = std::make_shared<MeshData>(AssetLoader::loadMesh(resolvedPath));
+    auto [insertIt, inserted] = meshCache_.emplace(resolvedPath, meshPtr);
     return *insertIt->second;
 }
 
 bool AssetManager::hasMesh(const std::string& path) const {
-    const auto normalizedPath = std::filesystem::absolute(std::filesystem::path(path)).string();
-    return meshCache_.find(normalizedPath) != meshCache_.end();
+    try {
+        const auto resolvedPath = AssetLoader::resolveAssetPath(path).string();
+        return meshCache_.find(resolvedPath) != meshCache_.end();
+    } catch (...) {
+        return false;
+    }
 }
 
 const MeshData& AssetManager::getMesh(const std::string& path) const {
-    const auto normalizedPath = std::filesystem::absolute(std::filesystem::path(path)).string();
-    auto it = meshCache_.find(normalizedPath);
+    const auto resolvedPath = AssetLoader::resolveAssetPath(path).string();
+    auto it = meshCache_.find(resolvedPath);
     if (it == meshCache_.end()) {
         throw std::runtime_error("AssetManager: Mesh not loaded: " + path);
     }
@@ -40,31 +46,36 @@ const MeshData& AssetManager::getMesh(const std::string& path) const {
 }
 
 const TextureData& AssetManager::loadTexture(const std::string& path) {
-    std::string resolvedPath = path;
+    std::string pathOrAlias = path;
     auto itt = manifest_.textures.find(path);
     if (itt != manifest_.textures.end()) {
-        resolvedPath = itt->second;
+        pathOrAlias = itt->second;
     }
 
-    const auto normalizedPath = std::filesystem::absolute(std::filesystem::path(resolvedPath)).string();
-    auto it = textureCache_.find(normalizedPath);
+    const auto resolvedPath = AssetLoader::resolveAssetPath(pathOrAlias).string();
+
+    auto it = textureCache_.find(resolvedPath);
     if (it != textureCache_.end()) {
         return *it->second;
     }
 
-    auto texPtr = std::make_shared<TextureData>(AssetLoader::loadTexture(normalizedPath));
-    auto [insertIt, inserted] = textureCache_.emplace(normalizedPath, texPtr);
+    auto texPtr = std::make_shared<TextureData>(AssetLoader::loadTexture(resolvedPath));
+    auto [insertIt, inserted] = textureCache_.emplace(resolvedPath, texPtr);
     return *insertIt->second;
 }
 
 bool AssetManager::hasTexture(const std::string& path) const {
-    const auto normalizedPath = std::filesystem::absolute(std::filesystem::path(path)).string();
-    return textureCache_.find(normalizedPath) != textureCache_.end();
+    try {
+        const auto resolvedPath = AssetLoader::resolveAssetPath(path).string();
+        return textureCache_.find(resolvedPath) != textureCache_.end();
+    } catch (...) {
+        return false;
+    }
 }
 
 const TextureData& AssetManager::getTexture(const std::string& path) const {
-    const auto normalizedPath = std::filesystem::absolute(std::filesystem::path(path)).string();
-    auto it = textureCache_.find(normalizedPath);
+    const auto resolvedPath = AssetLoader::resolveAssetPath(path).string();
+    auto it = textureCache_.find(resolvedPath);
     if (it == textureCache_.end()) {
         throw std::runtime_error("AssetManager: Texture not loaded: " + path);
     }
@@ -77,27 +88,39 @@ void AssetManager::loadManifest(const std::filesystem::path& manifestPath) {
 
 std::future<std::shared_ptr<MeshData>> AssetManager::loadMeshAsync(const std::string& path) {
     return std::async(std::launch::async, [this, path]() {
-        const auto normalizedPath = std::filesystem::absolute(std::filesystem::path(path)).string();
+        std::string pathOrAlias = path;
+        auto itm = manifest_.meshes.find(path);
+        if (itm != manifest_.meshes.end()) {
+            pathOrAlias = itm->second;
+        }
+        const auto resolvedPath = AssetLoader::resolveAssetPath(pathOrAlias).string();
+
         // Check cache again inside async context
         {
-            auto it = meshCache_.find(normalizedPath);
+            auto it = meshCache_.find(resolvedPath);
             if (it != meshCache_.end()) return it->second;
         }
-        auto meshPtr = std::make_shared<MeshData>(AssetLoader::loadMesh(normalizedPath));
-        meshCache_.emplace(normalizedPath, meshPtr);
+        auto meshPtr = std::make_shared<MeshData>(AssetLoader::loadMesh(resolvedPath));
+        meshCache_.emplace(resolvedPath, meshPtr);
         return meshPtr;
     });
 }
 
 std::future<std::shared_ptr<TextureData>> AssetManager::loadTextureAsync(const std::string& path) {
     return std::async(std::launch::async, [this, path]() {
-        const auto normalizedPath = std::filesystem::absolute(std::filesystem::path(path)).string();
+        std::string pathOrAlias = path;
+        auto itt = manifest_.textures.find(path);
+        if (itt != manifest_.textures.end()) {
+            pathOrAlias = itt->second;
+        }
+        const auto resolvedPath = AssetLoader::resolveAssetPath(pathOrAlias).string();
+
         {
-            auto it = textureCache_.find(normalizedPath);
+            auto it = textureCache_.find(resolvedPath);
             if (it != textureCache_.end()) return it->second;
         }
-        auto texPtr = std::make_shared<TextureData>(AssetLoader::loadTexture(normalizedPath));
-        textureCache_.emplace(normalizedPath, texPtr);
+        auto texPtr = std::make_shared<TextureData>(AssetLoader::loadTexture(resolvedPath));
+        textureCache_.emplace(resolvedPath, texPtr);
         return texPtr;
     });
 }

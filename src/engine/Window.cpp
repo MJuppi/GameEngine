@@ -29,6 +29,10 @@ Window::Window(int width, int height, const char* title)
         glfwTerminate();
         throw std::runtime_error("Failed to create GLFW window");
     }
+
+    if (glfwRawMouseMotionSupported()) {
+        glfwSetInputMode(m_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+    }
 }
 
 Window::~Window() {

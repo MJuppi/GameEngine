@@ -1,5 +1,4 @@
 #include "engine/vulkan/VulkanContext.h"
-
 #include <GLFW/glfw3.h>
 #include <cstring>
 #include <iostream>
@@ -9,176 +8,100 @@ namespace ge {
 
 namespace {
 
-// Vulkan calls this when validation reports a message (errors, warnings, info).
 VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     VkDebugUtilsMessageTypeFlagsEXT /*type*/,
     const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
     void* /*userData*/)
 {
-    // Log validation messages (warnings and errors) to stderr.
-    if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-        std::cerr << "[Vulkan] " << callbackData->pMessage << '\n';
+    if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+        std::cerr << "[Vulkan ERROR] " << callbackData->pMessage << std::endl;
+    } else if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+        std::cerr << "[Vulkan WARNING] " << callbackData->pMessage << std::endl;
+    } else {
+        // Optionally log verbose/info here
     }
     return VK_FALSE;
 }
 
-VkResult createDebugUtilsMessengerEXT(
-    VkInstance instance,
-    const VkDebugUtilsMessengerCreateInfoEXT* createInfo,
-    const VkAllocationCallbacks* allocator,
-    VkDebugUtilsMessengerEXT* messenger)
-{
-    // Wrapper to load the extension function dynamically and create the debug messenger.
-    auto func = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
-        vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
-    if (func) {
-        return func(instance, createInfo, allocator, messenger);
-    }
-    return VK_ERROR_EXTENSION_NOT_PRESENT;
-}
-
-void destroyDebugUtilsMessengerEXT(
-    VkInstance instance,
-    VkDebugUtilsMessengerEXT messenger,
-    const VkAllocationCallbacks* allocator)
-{
-    // Wrapper to optionally destroy the debug messenger if the extension is available.
-    auto func = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
-        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
-    if (func) {
-        func(instance, messenger, allocator);
-    }
-}
-
 } // namespace
 
-VulkanContext::VulkanContext(bool enableValidation)
-    : m_enableValidation(enableValidation)
-{
+VulkanContext::VulkanContext(bool enableValidation) : m_enableValidation(enableValidation) {
     if (m_enableValidation && !checkValidationLayerSupport()) {
         throw std::runtime_error("Validation layers requested but not available");
     }
 }
 
+VulkanContext::~VulkanContext() {
+    destroyDebugMessenger();
+    if (m_instance != VK_NULL_HANDLE) vkDestroyInstance(m_instance, nullptr);
+}
+
 void VulkanContext::init(GLFWwindow* window) {
-    // Create Vulkan instance and, if enabled, set up the validation debug messenger.
+    std::cout << "[VulkanContext] Initializing Vulkan Instance..." << std::endl;
     createInstance(window);
     createDebugMessenger();
 }
 
-VulkanContext::~VulkanContext() {
-    // Tear down debug messenger and destroy the Vulkan instance.
-    destroyDebugMessenger();
-    if (m_instance != VK_NULL_HANDLE) {
-        vkDestroyInstance(m_instance, nullptr);
-    }
-}
-
 std::vector<const char*> VulkanContext::requiredExtensions(GLFWwindow* /*window*/) const {
-    uint32_t glfwExtensionCount = 0;
-    const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-    std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
-
-    // Include debug utils extension when validation is enabled.
-    if (m_enableValidation) {
-        extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-    }
-    return extensions;
+    uint32_t count = 0;
+    const char** glfwExts = glfwGetRequiredInstanceExtensions(&count);
+    std::vector<const char*> exts(glfwExts, glfwExts + count);
+    if (m_enableValidation) exts.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    return exts;
 }
 
 void VulkanContext::createInstance(GLFWwindow* window) {
-    VkApplicationInfo appInfo{};
-    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    appInfo.pApplicationName = "GameEngine";
-    appInfo.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
-    appInfo.pEngineName = "GameEngine";
-    appInfo.engineVersion = VK_MAKE_VERSION(0, 1, 0);
-  // 1.0 is widely supported; bump when you need newer API features.
-    appInfo.apiVersion = VK_API_VERSION_1_0;
+    VkApplicationInfo app{ VK_STRUCTURE_TYPE_APPLICATION_INFO, nullptr, "GameEngine", 1, "GameEngine", 1, VK_API_VERSION_1_0 };
+    auto exts = requiredExtensions(window);
 
-    auto extensions = requiredExtensions(window);
+    VkInstanceCreateInfo info{ VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, nullptr, 0, &app, 0, nullptr, (uint32_t)exts.size(), exts.data() };
+    VkDebugUtilsMessengerCreateInfoEXT debug{ VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT, nullptr, 0,
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+        debugCallback, nullptr };
 
-    VkInstanceCreateInfo createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    createInfo.pApplicationInfo = &appInfo;
-    createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-    createInfo.ppEnabledExtensionNames = extensions.data();
-
-    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
     if (m_enableValidation) {
-        createInfo.enabledLayerCount = static_cast<uint32_t>(m_validationLayers.size());
-        createInfo.ppEnabledLayerNames = m_validationLayers.data();
-
-        debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        debugCreateInfo.messageSeverity =
-            VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        debugCreateInfo.messageType =
-            VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        debugCreateInfo.pfnUserCallback = debugCallback;
-        createInfo.pNext = &debugCreateInfo;
+        info.enabledLayerCount = (uint32_t)m_validationLayers.size();
+        info.ppEnabledLayerNames = m_validationLayers.data();
+        info.pNext = &debug;
     }
 
-    // Create the VkInstance; throw on failure.
-    if (vkCreateInstance(&createInfo, nullptr, &m_instance) != VK_SUCCESS) {
+    if (vkCreateInstance(&info, nullptr, &m_instance) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create Vulkan instance");
     }
+    std::cout << "[VulkanContext] Vulkan Instance created." << std::endl;
 }
 
-// Called from VulkanDevice after we have GLFW window — instance needs surface extensions.
 void VulkanContext::createDebugMessenger() {
-    // Create the debug messenger used to receive validation messages; no-op if validation disabled.
-    if (!m_enableValidation) {
-        return;
-    }
+    if (!m_enableValidation) return;
+    VkDebugUtilsMessengerCreateInfoEXT info{ VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT, nullptr, 0,
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
+        debugCallback, nullptr };
 
-    VkDebugUtilsMessengerCreateInfoEXT createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    createInfo.messageSeverity =
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    createInfo.messageType =
-        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-    createInfo.pfnUserCallback = debugCallback;
-
-    if (createDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr, &m_debugMessenger) !=
-        VK_SUCCESS) {
+    auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_instance, "vkCreateDebugUtilsMessengerEXT");
+    if (!func || func(m_instance, &info, nullptr, &m_debugMessenger) != VK_SUCCESS) {
         throw std::runtime_error("Failed to set up debug messenger");
     }
 }
 
 void VulkanContext::destroyDebugMessenger() {
-    // Destroy the debug messenger if it was created.
-    if (m_debugMessenger != VK_NULL_HANDLE) {
-        destroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
-        m_debugMessenger = VK_NULL_HANDLE;
-    }
+    if (m_debugMessenger == VK_NULL_HANDLE) return;
+    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_instance, "vkDestroyDebugUtilsMessengerEXT");
+    if (func) func(m_instance, m_debugMessenger, nullptr);
+    m_debugMessenger = VK_NULL_HANDLE;
 }
 
 bool VulkanContext::checkValidationLayerSupport() const {
-    uint32_t layerCount = 0;
-    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-    std::vector<VkLayerProperties> available(layerCount);
-    vkEnumerateInstanceLayerProperties(&layerCount, available.data());
-
-    // Ensure all requested validation layers are available on this system.
-    for (const char* layerName : m_validationLayers) {
+    uint32_t count;
+    vkEnumerateInstanceLayerProperties(&count, nullptr);
+    std::vector<VkLayerProperties> available(count);
+    vkEnumerateInstanceLayerProperties(&count, available.data());
+    for (const char* name : m_validationLayers) {
         bool found = false;
-        for (const auto& layer : available) {
-            if (strcmp(layerName, layer.layerName) == 0) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            return false;
-        }
+        for (const auto& layer : available) if (strcmp(name, layer.layerName) == 0) { found = true; break; }
+        if (!found) return false;
     }
     return true;
 }

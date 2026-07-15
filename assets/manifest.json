@@ -1,10 +1,10 @@
 {
   "meshes": {
     "suomi": "models/SuomiKP.obj",
-    "test_cube": "models/TestCubeTexture.obj"
+    "test_cube": "models/TestCube.obj",
+    "test_cube_texture": "models/TestCubeTexture.obj"
   },
   "textures": {
-    "suomi_albedo": "textures/suomi_albedo.png",
     "grid_texture": "textures/grid_texture.png"
   }
 }

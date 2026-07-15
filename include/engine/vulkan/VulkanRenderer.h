@@ -13,6 +13,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <map>
 
 #include "engine/mesh/Material.h"
 #include "engine/mesh/MeshData.h"
@@ -35,6 +36,7 @@ class MaterialSystem;
 struct RenderObject {
     glm::mat4 transform;
     std::shared_ptr<Material> material;
+    const MeshData* mesh = nullptr;
 };
 
 /// Scene uniform — must match GLSL SceneUbo in basic.vert / basic.frag.
@@ -65,7 +67,7 @@ public:
         m_cameraUp = up;
     }
 
-    void addDynamicObject(const glm::mat4& transform, std::shared_ptr<Material> material);
+    void addDynamicObject(const glm::mat4& transform, std::shared_ptr<Material> material, const MeshData* mesh = nullptr);
     void clearDynamicObjects() { m_dynamicObjects.clear(); }
 
     void setPointLight(const PointLight& pointLight) { m_pointLight = pointLight; }
@@ -87,15 +89,13 @@ private:
     void createTextureImage();
     void createDescriptorPool();
     void createDescriptorSets();
-    void createUiPipeline();
-    void createUiBuffers();
-    void updateUiVertexBuffer(
-        uint32_t width,
-        uint32_t height,
-        float fps,
-        float minFrameTimeMs,
-        float maxFrameTimeMs);
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+
+    struct MeshBuffers {
+        std::unique_ptr<VulkanBuffer> vb;
+        std::unique_ptr<VulkanBuffer> ib;
+        uint32_t indexCount = 0;
+    };
 
     void recreateSwapchain();
     void cleanupSwapchain();
@@ -107,7 +107,6 @@ private:
     std::unique_ptr<VulkanContext> m_context;
     std::unique_ptr<VulkanDevice> m_device;
     std::unique_ptr<VulkanSwapchain> m_swapchain;
-    std::unique_ptr<VulkanPipeline> m_uiPipeline;
 
     VkCommandPool m_commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> m_commandBuffers;
@@ -118,11 +117,6 @@ private:
     std::unique_ptr<VulkanBuffer> m_boxVertexBuffer;
     std::unique_ptr<VulkanBuffer> m_boxIndexBuffer;
     uint32_t m_boxIndexCount = 0;
-
-    static constexpr uint32_t kMaxUiVertices = 16384;
-
-    std::unique_ptr<VulkanBuffer> m_uiVertexBuffer;
-    uint32_t m_uiVertexCount = 0;
 
     std::vector<std::unique_ptr<VulkanBuffer>> m_sceneBuffers;
     std::vector<void*> m_sceneBuffersMapped;
@@ -144,11 +138,6 @@ private:
     static constexpr int kMaxFramesInFlight = 2;
     size_t m_currentFrame = 0;
     bool m_framebufferResized = false;
-    float m_meshRadius = 1.0f;
-
-    float m_minFrameTimeMs = std::numeric_limits<float>::infinity();
-    float m_maxFrameTimeMs = 0.0f;
-    double m_frameTimeWindowStart = 0.0;
 
     PointLight m_pointLight{};
 
@@ -156,15 +145,10 @@ private:
     glm::vec3 m_cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
     glm::vec3 m_cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-    double m_lastFrameTime = 0.0;
-    double m_lastUiUpdateTime = 0.0;
-    float m_lastRenderedFps = 0.0f;
-    float m_lastRenderedMinFrameTimeMs = 0.0f;
-    float m_lastRenderedMaxFrameTimeMs = 0.0f;
-
     glm::mat4 m_modelMatrix = glm::mat4(1.0f);
     std::vector<RenderObject> m_dynamicObjects;
-    MeshData m_boxMesh = makeUnitCubeMesh();
+    std::map<const MeshData*, MeshBuffers> m_dynamicMeshCache;
+    MeshData m_boxMesh{};
     std::unique_ptr<MaterialSystem> m_materialSystem;
 };
 

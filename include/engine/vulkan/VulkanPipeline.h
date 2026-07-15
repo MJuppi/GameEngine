@@ -18,12 +18,17 @@ class VulkanSwapchain;
 
 class VulkanPipeline {
 public:
-    VulkanPipeline(
-        VulkanDevice& device,
-        VulkanSwapchain& swapchain,
-        const std::string& vertSpvPath,
-        const std::string& fragSpvPath,
-        bool useUi = false);
+    struct PipelineConfig {
+        std::string vertPath;
+        std::string fragPath;
+        bool depthTest = true;
+        bool depthWrite = true;
+        bool blendEnable = false;
+        bool wireframe = false;
+        VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
+    };
+
+    VulkanPipeline(VulkanDevice& device, VulkanSwapchain& swapchain, const PipelineConfig& config);
     ~VulkanPipeline();
 
     VulkanPipeline(const VulkanPipeline&) = delete;
@@ -49,9 +54,7 @@ private:
     static VkShaderModule createShaderModule(VulkanDevice& device, const std::vector<char>& code);
 
     VulkanDevice& m_device;
-    std::string m_vertPath;
-    std::string m_fragPath;
-    bool m_useUi = false;
+    PipelineConfig m_config;
 
     VkDescriptorSetLayout m_descriptorSetLayout = VK_NULL_HANDLE;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;

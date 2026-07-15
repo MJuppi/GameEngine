@@ -1,92 +1,45 @@
 #include "engine/mesh/MtlLoader.h"
-
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
-#include <string_view>
 
 namespace ge {
 
 namespace {
-
-void trimInPlace(std::string& s) {
-    // Trim leading and trailing whitespace and CR/LF from a line.
-    while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) {
-        s.erase(s.begin());
-    }
-    while (!s.empty() &&
-           (s.back() == ' ' || s.back() == '\t' || s.back() == '\r' || s.back() == '\n')) {
-        s.pop_back();
-    }
+void trim(std::string& s) {
+    s.erase(0, s.find_first_not_of(" \t\r\n"));
+    s.erase(s.find_last_not_of(" \t\r\n") + 1);
 }
-
-bool startsWith(std::string_view line, std::string_view prefix) {
-    return line.size() >= prefix.size() && line.compare(0, prefix.size(), prefix) == 0;
-}
-
-Material& currentOrCreate(std::vector<Material>& materials) {
-    // Return the last material in the list, creating a default one if the list is empty.
-    if (materials.empty()) {
-        materials.push_back(makeDefaultMaterial());
-    }
-    return materials.back();
-}
-
 } // namespace
 
 std::vector<Material> loadMtlFile(const std::string& path) {
-    // Parse a Wavefront .mtl file and return all Material entries. Throws on error.
     std::ifstream file(path);
-    if (!file) {
-        throw std::runtime_error("Could not open MTL file: " + path);
-    }
+    if (!file) throw std::runtime_error("No MTL: " + path);
 
     std::vector<Material> materials;
-    std::string line;
+    std::string line, tag;
 
     while (std::getline(file, line)) {
-        trimInPlace(line);
-        if (line.empty() || line[0] == '#') {
-            continue;
-        }
+        trim(line);
+        if (line.empty() || line[0] == '#') continue;
 
-        const std::string_view view = line;
+        std::istringstream iss(line);
+        iss >> tag;
 
-        if (startsWith(view, "newmtl ")) {
+        if (tag == "newmtl") {
             Material m;
-            m.name = line.substr(7);
-            trimInPlace(m.name);
+            iss >> m.name;
             materials.push_back(m);
-            continue;
-        }
-
-        Material& m = currentOrCreate(materials);
-
-        if (startsWith(view, "Kd ")) {
-            std::istringstream iss(line.substr(3));
-            iss >> m.diffuse[0] >> m.diffuse[1] >> m.diffuse[2];
-        } else if (startsWith(view, "Ks ")) {
-            std::istringstream iss(line.substr(3));
-            iss >> m.specular[0] >> m.specular[1] >> m.specular[2];
-        } else if (startsWith(view, "Ka ")) {
-            std::istringstream iss(line.substr(3));
-            iss >> m.ambient[0] >> m.ambient[1] >> m.ambient[2];
-        } else if (startsWith(view, "Ns ")) {
-            std::istringstream iss(line.substr(3));
-            iss >> m.shininess;
-        } else if (startsWith(view, "d ")) {
-            std::istringstream iss(line.substr(2));
-            iss >> m.alpha;
-        } else if (startsWith(view, "map_Kd ")) {
-            m.texturePath = line.substr(7);
-            trimInPlace(m.texturePath);
+        } else if (!materials.empty()) {
+            Material& m = materials.back();
+            if (tag == "Kd") iss >> m.diffuse.x >> m.diffuse.y >> m.diffuse.z;
+            else if (tag == "Ks") iss >> m.specular.x >> m.specular.y >> m.specular.z;
+            else if (tag == "Ns") iss >> m.shininess;
+            else if (tag == "d") iss >> m.alpha;
+            else if (tag == "map_Kd") { iss >> m.texturePath; trim(m.texturePath); }
         }
     }
-
-    if (materials.empty()) {
-        throw std::runtime_error("MTL file contained no materials: " + path);
-    }
-
+    if (materials.empty()) throw std::runtime_error("Empty MTL: " + path);
     return materials;
 }
 

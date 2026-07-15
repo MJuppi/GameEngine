@@ -32,6 +32,13 @@ MeshData AssetLoader::loadMesh(const std::string& path) {
     throw std::runtime_error("AssetLoader: Unsupported mesh format: " + extension + " (" + normalizedPath + ")");
 }
 
+Model AssetLoader::loadModel(const std::string& path) {
+    Model model;
+    model.mesh = loadMesh(path);
+    model.bounds = computeMeshBounds(model.mesh);
+    return model;
+}
+
 TextureData AssetLoader::loadTexture(const std::string& path) {
     const std::filesystem::path filePath(path);
     const auto resolved = resolveAssetPath(filePath);

@@ -1,6 +1,7 @@
 #include "engine/scene/ObjectBuilder.h"
 
 #include <utility>
+#include <iostream>
 
 namespace ge {
 
@@ -70,13 +71,30 @@ RigidBody* ObjectBuilder::attachPhysics(PhysicsEngine& physicsEngine, PhysicsMes
         return nullptr;
     }
 
+    // Build the initial transform. For active objects, we also bake the half-extents as scale
+    // so that the renderer (which often uses a unit cube for dynamics) displays the correct size.
+    glm::mat4 initialTransform = object.getWorldTransform();
+    if (object.type == ObjectType::Active && object.halfExtents != kAutoExtents) {
+        initialTransform = glm::scale(initialTransform, object.halfExtents);
+    }
+
     auto* body = physicsEngine.createBoxBody(
         object.halfExtents,
-        object.getWorldTransform(),
+        initialTransform,
         object.physicsProps);
 
-    if (body && !object.mesh.materials.empty()) {
-        body->setMaterial(std::make_shared<Material>(object.mesh.materials[0]));
+    if (body) {
+        std::cout << "[Physics] Attached body to '" << object.name << "' at ("
+                  << object.spawnLocation.x << ", " << object.spawnLocation.y << ", " << object.spawnLocation.z
+                  << ") extents=(" << object.halfExtents.x << ", " << object.halfExtents.y << ", " << object.halfExtents.z << ")\n";
+
+        if (!object.mesh.materials.empty()) {
+            body->setMaterial(std::make_shared<Material>(object.mesh.materials[0]));
+        }
+
+        if (object.type == ObjectType::Active && !object.mesh.vertices.empty()) {
+            body->setMesh(object.mesh);
+        }
     }
 
     return body;

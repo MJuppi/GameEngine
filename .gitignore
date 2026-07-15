@@ -8,9 +8,12 @@ cmake-build-*/
 .idea/
 .cache/
 .vs/
-.vscode/
+.vscode
 *.user
 *.suo
+
+#AI
+.artifacts
 
 # Compiled shaders (generated at build time)
 shaders/*.spv

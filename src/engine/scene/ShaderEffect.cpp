@@ -5,15 +5,23 @@ namespace ge {
 
 ShaderEffect::ShaderEffect(VulkanDevice& device, VulkanSwapchain& swapchain, const Config& config)
     : config_(config) {
-    // Note: We need to adapt VulkanPipeline to accept these configuration flags.
-    // For now, we use the paths. The 'transparent' flag can map to the 'useUi'
-    // flag in VulkanPipeline as a temporary measure since useUi enables blending.
-    pipeline_ = std::make_unique<VulkanPipeline>(
-        device,
-        swapchain,
-        config.vertexShaderPath,
-        config.fragmentShaderPath,
-        config.transparent);
+
+    VulkanPipeline::PipelineConfig pipelineConfig;
+    pipelineConfig.vertPath = config.vertexShaderPath;
+    pipelineConfig.fragPath = config.fragmentShaderPath;
+    pipelineConfig.depthTest = config.depthTest;
+    pipelineConfig.depthWrite = config.depthWrite;
+    pipelineConfig.blendEnable = config.transparent;
+    pipelineConfig.wireframe = config.wireframe;
+
+    switch (config.cullMode) {
+        case Config::CullMode::None:  pipelineConfig.cullMode = VK_CULL_MODE_NONE; break;
+        case Config::CullMode::Front: pipelineConfig.cullMode = VK_CULL_MODE_FRONT_BIT; break;
+        case Config::CullMode::Back:  pipelineConfig.cullMode = VK_CULL_MODE_BACK_BIT; break;
+        case Config::CullMode::Both:  pipelineConfig.cullMode = VK_CULL_MODE_FRONT_AND_BACK; break;
+    }
+
+    pipeline_ = std::make_unique<VulkanPipeline>(device, swapchain, pipelineConfig);
 }
 
 ShaderEffect::~ShaderEffect() = default;

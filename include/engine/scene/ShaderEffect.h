@@ -18,10 +18,19 @@ public:
     struct Config {
         std::string vertexShaderPath;
         std::string fragmentShaderPath;
+
         bool depthTest = true;
         bool depthWrite = true;
         bool transparent = false;
-        // Add more state like cull mode here later
+        bool wireframe = false;
+
+        enum class CullMode {
+            None,
+            Front,
+            Back,
+            Both
+        };
+        CullMode cullMode = CullMode::Back;
     };
 
     ShaderEffect(VulkanDevice& device, VulkanSwapchain& swapchain, const Config& config);

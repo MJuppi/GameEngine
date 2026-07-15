@@ -1,32 +1,22 @@
 #include "engine/mesh/Material.h"
-
 #include <algorithm>
 
 namespace ge {
 
 Material makeDefaultMaterial(const std::string& name) {
-    // Construct a Material with default parameters and given name.
     Material m;
     m.name = name;
     return m;
 }
 
 void fillMaterialBuffer(const std::vector<Material>& materials, MaterialBufferObject& out) {
-    // Convert CPU-side Material instances into the packed GPU-friendly MaterialBufferObject.
-    const uint32_t count =
-        static_cast<uint32_t>(std::min(materials.size(), size_t{kMaxGpuMaterials}));
+    const uint32_t count = static_cast<uint32_t>(std::min(materials.size(), (size_t)kMaxGpuMaterials));
 
     for (uint32_t i = 0; i < count; ++i) {
-        const Material& src = materials[i];
-        GpuMaterial& dst = out.materials[i];
-        dst.diffuse[0] = src.diffuse[0];
-        dst.diffuse[1] = src.diffuse[1];
-        dst.diffuse[2] = src.diffuse[2];
-        dst.diffuse[3] = src.alpha;
-        dst.specular[0] = src.specular[0];
-        dst.specular[1] = src.specular[1];
-        dst.specular[2] = src.specular[2];
-        dst.specular[3] = src.shininess;
+        const auto& src = materials[i];
+        auto& dst = out.materials[i];
+        dst.diffuse = glm::vec4(src.diffuse, src.alpha);
+        dst.specular = glm::vec4(src.specular, src.shininess);
         dst.hasTexture = src.texturePath.empty() ? 0 : 1;
     }
 

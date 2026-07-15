@@ -57,11 +57,9 @@ void PhysicsWorld::step(float deltaTime, int /*maxSubSteps*/) {
     }
 
     std::vector<Contact> contacts;
-    for (int iteration = 0; iteration < solverIterations_; ++iteration) {
-        CollisionDetection::detectCollisions(bodies_, contacts);
-        if (contacts.empty()) {
-            break;
-        }
+    CollisionDetection::detectCollisions(bodies_, contacts);
+
+    if (!contacts.empty()) {
         CollisionDetection::resolveCollisions(contacts);
     }
 }

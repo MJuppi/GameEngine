@@ -10,6 +10,8 @@
 
 namespace ge {
 
+inline constexpr glm::vec3 kAutoExtents{-1.0f, -1.0f, -1.0f};
+
 enum class ObjectType {
     Visual, // No physics, baked into level mesh
     Static, // Static physics (mass 0), baked into level mesh
@@ -21,7 +23,7 @@ struct PhysicsMeshObject {
     std::string meshPath;
     MeshData mesh;
     glm::mat4 transform{1.0f};
-    glm::vec3 halfExtents{0.5f, 0.5f, 0.5f};
+    glm::vec3 halfExtents = kAutoExtents;
     glm::vec3 spawnLocation{0.0f, 0.0f, 0.0f};
     RigidBodyProps physicsProps;
     ObjectType type = ObjectType::Static;
@@ -46,20 +48,20 @@ public:
         std::string name,
         std::string meshPath,
         const glm::vec3& location = {0.0f, 0.0f, 0.0f},
-        const glm::vec3& halfExtents = {0.5f, 0.5f, 0.5f});
+        const glm::vec3& halfExtents = kAutoExtents);
 
     static PhysicsMeshObject createStatic(
         std::string name,
         std::string meshPath,
         const glm::vec3& location = {0.0f, 0.0f, 0.0f},
-        const glm::vec3& halfExtents = {0.5f, 0.5f, 0.5f},
+        const glm::vec3& halfExtents = kAutoExtents,
         const RigidBodyProps& props = {});
 
     static PhysicsMeshObject createActive(
         std::string name,
         std::string meshPath,
         const glm::vec3& location = {0.0f, 0.0f, 0.0f},
-        const glm::vec3& halfExtents = {0.5f, 0.5f, 0.5f},
+        const glm::vec3& halfExtents = kAutoExtents,
         const RigidBodyProps& props = {1.0f});
 
     // Legacy support / General purpose

@@ -8,6 +8,11 @@
 
 namespace ge {
 
+struct Model {
+    MeshData mesh;
+    MeshBounds bounds;
+};
+
 class AssetLoader {
 public:
     AssetLoader() = delete;
@@ -17,6 +22,7 @@ public:
     AssetLoader& operator=(const AssetLoader&) = delete;
 
     [[nodiscard]] static MeshData loadMesh(const std::string& path);
+    [[nodiscard]] static Model loadModel(const std::string& path);
     [[nodiscard]] static TextureData loadTexture(const std::string& path);
     [[nodiscard]] static std::filesystem::path resolveAssetPath(const std::filesystem::path& path);
 
