@@ -41,11 +41,17 @@ struct RenderObject {
 
 /// Scene uniform — must match GLSL SceneUbo in basic.vert / basic.frag.
 struct SceneUbo {
+    /// @brief  The model matrix for the current object being rendered. This transforms the object's local coordinates into world space.
     alignas(16) glm::mat4 model;
+    /// @brief The combined view and projection matrix. This is used to transform world coordinates into clip space for rendering.
     alignas(16) glm::mat4 viewProj;
+    /// @brief The normal matrix, which is the transpose of the inverse of the model matrix. This is used to correctly transform normals for lighting calculations.
     alignas(16) glm::mat4 normalMatrix;
+    /// @brief The direction of the main light source in the scene, represented as a 4D vector. The w component is typically set to 0.0f to indicate that it's a direction rather than a position.
     alignas(16) glm::vec4 lightDir;
+    /// @brief The position of the camera in world space, represented as a 4D vector. The w component is typically set to 1.0f to indicate that it's a position.
     alignas(16) glm::vec4 cameraPos;
+    /// @brief The point light in the scene, represented as a PointLight structure. This includes the light's position, color, and parameters such as attenuation factors.
     alignas(16) PointLight pointLight;
 };
 
@@ -142,7 +148,7 @@ private:
     PointLight m_pointLight{};
 
     glm::vec3 m_cameraPosition = glm::vec3(0.0f, 0.0f, 0.0f);
-    glm::vec3 m_cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+    glm::vec3 m_cameraFront = glm::vec3(0.0f, 0.0f, 1.0f);
     glm::vec3 m_cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
     glm::mat4 m_modelMatrix = glm::mat4(1.0f);

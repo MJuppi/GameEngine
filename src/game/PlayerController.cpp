@@ -59,6 +59,11 @@ void PlayerController::updateCamera(float deltaTime) {
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
         cameraPosition_ -= cameraWorldUp_ * velocity;
     }
+    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+        cameraSpeed_ = 10.0f; // Sprint speed
+    } else {
+        cameraSpeed_ = 5.0f; // Normal speed
+    }
 
     // Toggle mouse capture
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
@@ -93,7 +98,7 @@ void PlayerController::updateCamera(float deltaTime) {
         yoffset *= mouseSensitivity_;
 
         cameraYaw_ += xoffset;
-        cameraPitch_ -= yoffset; // Fixed pitch inversion
+        cameraPitch_ += yoffset;
         cameraPitch_ = glm::clamp(cameraPitch_, -89.0f, 89.0f);
 
         updateCameraVectors();
@@ -113,14 +118,14 @@ void PlayerController::updateCameraVectors() {
 }
 
 void PlayerController::fireProjectile() {
-    const glm::vec3 spawnPosition = cameraPosition_ + cameraFront_ * 1.5f;
-    const glm::vec3 fireDirection = cameraFront_;
+    const glm::vec3 spawnPosition = {cameraPosition_.x, cameraPosition_.y * -1.0f, cameraPosition_.z};
+    const glm::vec3 fireDirection = {cameraFront_.x, cameraFront_.y * -1.0f, cameraFront_.z};
 
-    auto* projectile = SceneFactory::spawnProjectile(engine_, spawnPosition, fireDirection);
+    auto* projectile = SceneFactory::spawnProjectile(engine_, spawnPosition, fireDirection, {0.0f, 1.0f, 0.0f}, {0.1f, 0.1f, 0.1f});
     if (projectile) {
         spawnedProjectiles_.push_back(projectile);
         ++boxesShot_;
-        std::cout << "Fired box " << boxesShot_ << '/' << kBoxesToShoot << "\n";
+        std::cout << "Fired box at: " << spawnPosition.x << ", " << spawnPosition.y << ", " << spawnPosition.z << " | Boxes shot: " << boxesShot_ << '/' << kBoxesToShoot << "\n";
     } else {
         std::cerr << "Failed to spawn projectile\n";
     }

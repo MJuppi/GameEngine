@@ -23,7 +23,7 @@ private:
 
     Engine& engine_;
     bool leftMouseDown_ = false;
-    static constexpr std::size_t kBoxesToShoot = 8;
+    static constexpr std::size_t kBoxesToShoot = 99;
     std::size_t boxesShot_ = 0;
     std::size_t boxesScored_ = 0;
     std::vector<RigidBody*> spawnedProjectiles_;
@@ -32,7 +32,7 @@ private:
     glm::vec3 targetMax_{2.5f, 2.5f, 8.5f};
 
     // Camera state
-    glm::vec3 cameraPosition_{2.0f, 2.0f, 5.0f};
+    glm::vec3 cameraPosition_{0.0f, 0.0f, 0.0f};
     glm::vec3 cameraFront_{0.0f, 0.0f, -1.0f};
     glm::vec3 cameraUp_{0.0f, 1.0f, 0.0f};
     glm::vec3 cameraRight_{1.0f, 0.0f, 0.0f};
