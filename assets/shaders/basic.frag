@@ -7,16 +7,34 @@
 struct PointLight {
     vec4 position;
     vec4 color;
-    vec4 parameters;
+    vec4 parameters; // x: constant, y: linear, z: quadratic, w: intensity
+};
+
+struct DirectionalLight {
+    vec4 direction;
+    vec4 color;
+    float intensity;
+};
+
+struct AmbientLight {
+    vec4 color;
+    float intensity;
+};
+
+struct SceneLights {
+    DirectionalLight directional;
+    AmbientLight ambient;
+    PointLight pointLights[8];
+    uint pointLightCount;
 };
 
 layout(set = 0, binding = 0) uniform SceneUbo {
     mat4 model;
     mat4 viewProj;
     mat4 normalMatrix;
-    vec4 lightDir;
+    vec4 lightDir; // Obsolete, use lights.directional
     vec4 cameraPos;
-    PointLight pointLight;
+    SceneLights lights;
 } scene;
 
 struct Material {
@@ -48,27 +66,35 @@ void main() {
         baseColor *= texture(texSampler, fragTexCoord);
     }
 
-    vec3 ambientLight = baseColor.rgb * 0.15;
+    vec3 ambientLight = baseColor.rgb * scene.lights.ambient.color.rgb * scene.lights.ambient.intensity;
 
-    // Direct lighting (directional light from SceneUbo)
-    vec3 L_dir = normalize(scene.lightDir.xyz);
+    // Direct lighting (directional light)
+    vec3 L_dir = normalize(scene.lights.directional.direction.xyz);
     float diff_dir = max(dot(N, L_dir), 0.0);
-    vec3 diffuse_dir = baseColor.rgb * diff_dir * 0.5; // Half strength for directional light
+    vec3 diffuse_dir = baseColor.rgb * diff_dir * scene.lights.directional.color.rgb * scene.lights.directional.intensity;
 
-    // Point light
-    vec3 lightPos = scene.pointLight.position.xyz;
-    vec3 L = normalize(lightPos - fragPos);
+    // Point lights
+    vec3 totalPointDiffuse = vec3(0.0);
+    vec3 totalPointSpecular = vec3(0.0);
     vec3 V = normalize(scene.cameraPos.xyz - fragPos);
-    vec3 H = normalize(L + V);
 
-    float distanceToLight = length(lightPos - fragPos);
-    float attenuation = 1.0 / (scene.pointLight.parameters.x + scene.pointLight.parameters.y * distanceToLight + scene.pointLight.parameters.z * distanceToLight * distanceToLight);
+    uint lightCount = min(scene.lights.pointLightCount, 8u);
+    for (uint i = 0; i < lightCount; ++i) {
+        PointLight pl = scene.lights.pointLights[i];
+        vec3 lightPos = pl.position.xyz;
+        vec3 L = normalize(lightPos - fragPos);
+        vec3 H = normalize(L + V);
 
-    float diff = max(dot(N, L), 0.0);
-    float spec = pow(max(dot(N, H), 0.0), mat.specular.w);
+        float distanceToLight = length(lightPos - fragPos);
+        float attenuation = 1.0 / (pl.parameters.x + pl.parameters.y * distanceToLight + pl.parameters.z * distanceToLight * distanceToLight);
+        attenuation *= pl.parameters.w; // intensity
 
-    vec3 diffuse = baseColor.rgb * diff * attenuation * scene.pointLight.color.rgb;
-    vec3 specular = mat.specular.rgb * spec * attenuation * scene.pointLight.color.rgb;
+        float diff = max(dot(N, L), 0.0);
+        float spec = pow(max(dot(N, H), 0.0), mat.specular.w);
 
-    outColor = vec4(ambientLight + diffuse_dir + diffuse + specular, baseColor.a);
+        totalPointDiffuse += baseColor.rgb * diff * attenuation * pl.color.rgb;
+        totalPointSpecular += mat.specular.rgb * spec * attenuation * pl.color.rgb;
+    }
+
+    outColor = vec4(ambientLight + diffuse_dir + totalPointDiffuse + totalPointSpecular, baseColor.a);
 }

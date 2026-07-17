@@ -344,9 +344,9 @@ void VulkanRenderer::drawFrame() {
     proj[1][1] *= -1.0f;
     scene.viewProj = proj * glm::lookAt(m_cameraPosition, m_cameraPosition + m_cameraFront, m_cameraUp);
     scene.normalMatrix = glm::transpose(glm::inverse(m_modelMatrix));
-    scene.lightDir = glm::vec4(glm::normalize(glm::vec3(0.35f, 0.55f, 0.75f)), 0.0f);
+    scene.lightDir = m_sceneLights.directional.direction;
     scene.cameraPos = glm::vec4(m_cameraPosition, 1.0f);
-    scene.pointLight = m_pointLight;
+    scene.lights = m_sceneLights;
 
     if (m_sceneBuffersMapped[m_currentFrame] != nullptr) {
         std::memcpy(m_sceneBuffersMapped[m_currentFrame], &scene, sizeof(scene));

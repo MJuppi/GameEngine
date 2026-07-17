@@ -114,6 +114,7 @@ set(ENGINE_SOURCES
     src/engine/vulkan/VulkanImage.cpp
     src/engine/vulkan/VulkanRenderer.cpp
     src/engine/physics/BoxCollider.cpp
+    src/engine/physics/BroadPhase.cpp
     src/engine/physics/Collider.cpp
     src/engine/physics/CollisionDetection.cpp
     src/engine/physics/PhysicsEngine.cpp

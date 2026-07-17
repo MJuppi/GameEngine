@@ -12,7 +12,8 @@ public:
     explicit PlayerController(Engine& engine);
     ~PlayerController() = default;
 
-    void update(float deltaTime);
+    void fixedUpdate(float deltaTime);
+    void variableUpdate(float deltaTime, float alpha);
 
 private:
     void updateCamera(float deltaTime);
@@ -23,6 +24,7 @@ private:
 
     Engine& engine_;
     bool leftMouseDown_ = false;
+    bool pendingFire_ = false;
     static constexpr std::size_t kBoxesToShoot = 99;
     std::size_t boxesShot_ = 0;
     std::size_t boxesScored_ = 0;
@@ -33,6 +35,7 @@ private:
 
     // Camera state
     glm::vec3 cameraPosition_{0.0f, 0.0f, 0.0f};
+    glm::vec3 prevCameraPosition_{0.0f, 0.0f, 0.0f};
     glm::vec3 cameraFront_{0.0f, 0.0f, -1.0f};
     glm::vec3 cameraUp_{0.0f, 1.0f, 0.0f};
     glm::vec3 cameraRight_{1.0f, 0.0f, 0.0f};
@@ -42,6 +45,9 @@ private:
     float cameraPitch_ = 0.0f;
     float cameraSpeed_ = 5.0f;
     float mouseSensitivity_ = 0.15f;
+
+    float fireCooldown_ = 0.0f;
+    static constexpr float kFireRate = 0.15f;
 
     double lastCursorX_ = 0.0;
     double lastCursorY_ = 0.0;

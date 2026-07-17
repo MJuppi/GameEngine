@@ -15,13 +15,31 @@ struct PointLight {
     vec4 parameters;
 };
 
+struct DirectionalLight {
+    vec4 direction;
+    vec4 color;
+    float intensity;
+};
+
+struct AmbientLight {
+    vec4 color;
+    float intensity;
+};
+
+struct SceneLights {
+    DirectionalLight directional;
+    AmbientLight ambient;
+    PointLight pointLights[8];
+    uint pointLightCount;
+};
+
 layout(set = 0, binding = 0) uniform SceneUbo {
     mat4 model;
     mat4 viewProj;
     mat4 normalMatrix;
     vec4 lightDir;
     vec4 cameraPos;
-    PointLight pointLight;
+    SceneLights lights;
 } scene;
 
 layout(push_constant) uniform PushConstants {

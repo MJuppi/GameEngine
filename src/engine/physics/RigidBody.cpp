@@ -1,3 +1,5 @@
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/norm.hpp>
 #include "engine/physics/RigidBody.h"
 #include "engine/physics/Collider.h"
 #include "engine/physics/BoxCollider.h"
@@ -13,6 +15,7 @@ RigidBody::RigidBody(std::unique_ptr<Collider> collider,
       transform_(transform),
       worldTransform_(transform),
       position_(glm::vec3(transform[3])),
+      prevPosition_(glm::vec3(transform[3])),
       props_(props),
       velocity_(0.0f),
       angularVelocity_(0.0f),
@@ -20,6 +23,7 @@ RigidBody::RigidBody(std::unique_ptr<Collider> collider,
       totalForce_(0.0f),
       totalTorque_(0.0f),
       rotation_(glm::quat_cast(transform)),
+      prevRotation_(glm::quat_cast(transform)),
       inverseInertiaTensorDirty_(true)
 {
     updateTransform();
@@ -28,13 +32,16 @@ RigidBody::RigidBody(std::unique_ptr<Collider> collider,
 void RigidBody::setTransform(const glm::mat4& transform) {
     transform_ = transform;
     position_ = glm::vec3(transform[3]);
+    prevPosition_ = position_;
     rotation_ = glm::quat_cast(transform);
+    prevRotation_ = rotation_;
     inverseInertiaTensorDirty_ = true;
     updateTransform();
 }
 
 void RigidBody::setPosition(const glm::vec3& position) {
     position_ = position;
+    prevPosition_ = position;
     transform_[3] = glm::vec4(position, 1.0f);
     updateTransform();
 }
@@ -116,6 +123,26 @@ void RigidBody::updateInertiaTensor() const {
     inverseInertiaTensorDirty_ = false;
 }
 
+glm::mat4 RigidBody::getInterpolatedTransform(float alpha) const {
+    glm::vec3 interpolatedPosition = glm::mix(prevPosition_, position_, alpha);
+    glm::quat interpolatedRotation = glm::slerp(prevRotation_, rotation_, alpha);
+
+    glm::mat4 interpolatedTransform = glm::mat4_cast(interpolatedRotation);
+    interpolatedTransform[3] = glm::vec4(interpolatedPosition, 1.0f);
+
+    // Apply scale if needed
+    if (transform_ != glm::mat4(1.0f)) {
+        glm::vec3 scale = glm::vec3(
+            glm::length(glm::vec3(transform_[0])),
+            glm::length(glm::vec3(transform_[1])),
+            glm::length(glm::vec3(transform_[2]))
+        );
+        interpolatedTransform = glm::scale(interpolatedTransform, scale);
+    }
+
+    return interpolatedTransform;
+}
+
 void RigidBody::resetForces() {
     totalForce_ = glm::vec3(0.0f);
     totalTorque_ = glm::vec3(0.0f);
@@ -132,6 +159,10 @@ void RigidBody::integrate(float deltaTime) {
         return;
     }
 
+    // Save state for interpolation before updating
+    prevPosition_ = position_;
+    prevRotation_ = rotation_;
+
     // Update inertia tensor if needed
     updateInertiaTensor();
 
@@ -145,6 +176,11 @@ void RigidBody::integrate(float deltaTime) {
 
     applyDamping(velocity_, props_.linearDamping, deltaTime);
 
+    // Sleep threshold for linear velocity
+    if (glm::length2(velocity_) < 0.001f) {
+        velocity_ = glm::vec3(0.0f);
+    }
+
     // Update position
     position_ += velocity_ * deltaTime;
 
@@ -157,8 +193,13 @@ void RigidBody::integrate(float deltaTime) {
 
     applyDamping(angularVelocity_, props_.angularDamping, deltaTime);
 
+    // Sleep threshold for angular velocity
+    if (glm::length2(angularVelocity_) < 0.001f) {
+        angularVelocity_ = glm::vec3(0.0f);
+    }
+
     // Update rotation (using quaternions)
-    if (glm::length(angularVelocity_) > 0.001f) {
+    if (glm::length2(angularVelocity_) > 0.001f) {
         glm::quat angularVelocityQuat(0.0f, angularVelocity_);
         glm::quat rotationDelta = angularVelocityQuat * (deltaTime * 0.5f);
         rotation_ = glm::normalize(rotation_ + rotationDelta * rotation_);

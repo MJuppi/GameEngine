@@ -11,7 +11,7 @@ public:
 
     std::string getType() const override;
     void getLocalBounds(glm::vec3& min, glm::vec3& max) const override;
-    CollisionResult checkCollision(
+    ContactManifold checkCollision(
         const Collider& other,
         const glm::mat4& transformA,
         const glm::mat4& transformB

@@ -20,66 +20,187 @@ void BoxCollider::getLocalBounds(glm::vec3& min, glm::vec3& max) const {
     max = halfExtents_;
 }
 
-CollisionResult BoxCollider::checkCollision(
+namespace {
+
+struct OBB {
+    glm::vec3 center;
+    glm::vec3 axes[3];
+    glm::vec3 halfExtents;
+};
+
+OBB getOBB(const glm::vec3& halfExtents, const glm::mat4& transform) {
+    OBB obb;
+    obb.center = glm::vec3(transform[3]);
+    obb.axes[0] = glm::normalize(glm::vec3(transform[0]));
+    obb.axes[1] = glm::normalize(glm::vec3(transform[1]));
+    obb.axes[2] = glm::normalize(glm::vec3(transform[2]));
+
+    // Scale half-extents by the transform scale
+    glm::vec3 scale = glm::vec3(
+        glm::length(glm::vec3(transform[0])),
+        glm::length(glm::vec3(transform[1])),
+        glm::length(glm::vec3(transform[2]))
+    );
+    obb.halfExtents = halfExtents * scale;
+    return obb;
+}
+
+float getOverlap(const OBB& a, const OBB& b, const glm::vec3& axis) {
+    if (glm::length2(axis) < 0.0001f) return std::numeric_limits<float>::max();
+
+    glm::vec3 n = glm::normalize(axis);
+
+    float radiusA = 0.0f;
+    for (int i = 0; i < 3; ++i) radiusA += std::abs(glm::dot(a.axes[i] * a.halfExtents[i], n));
+
+    float radiusB = 0.0f;
+    for (int i = 0; i < 3; ++i) radiusB += std::abs(glm::dot(b.axes[i] * b.halfExtents[i], n));
+
+    float distance = std::abs(glm::dot(b.center - a.center, n));
+    return (radiusA + radiusB) - distance;
+}
+
+struct ClipVertex {
+    glm::vec3 v;
+    uint32_t id;
+};
+
+void clip(std::vector<ClipVertex>& vIn, const glm::vec3& n, float offset, std::vector<ClipVertex>& vOut) {
+    vOut.clear();
+    if (vIn.empty()) return;
+
+    ClipVertex vA = vIn.back();
+    float distA = glm::dot(vA.v, n) - offset;
+
+    for (const auto& vB : vIn) {
+        float distB = glm::dot(vB.v, n) - offset;
+
+        if (distA * distB < 0.0f) {
+            float t = distA / (distA - distB);
+            vOut.push_back({vA.v + t * (vB.v - vA.v), vA.id}); // Simplified ID for clipping
+        }
+
+        if (distB >= 0.0f) {
+            vOut.push_back(vB);
+        }
+
+        vA = vB;
+        distA = distB;
+    }
+}
+
+} // namespace
+
+ContactManifold BoxCollider::checkCollision(
     const Collider& other,
     const glm::mat4& transformA,
     const glm::mat4& transformB
 ) const {
-    CollisionResult result;
+    ContactManifold result;
 
-    // Check if the other collider is a BoxCollider
     if (other.getType() == std::string("Box")) {
         const BoxCollider& boxB = static_cast<const BoxCollider&>(other);
 
-        // Extract OBB information from both boxes
-        glm::vec3 aMin, aMax;
-        getWorldBounds(aMin, aMax, transformA);
+        OBB obbA = getOBB(halfExtents_, transformA);
+        OBB obbB = getOBB(boxB.getHalfExtents(), transformB);
 
-        glm::vec3 bMin, bMax;
-        boxB.getWorldBounds(bMin, bMax, transformB);
+        glm::vec3 axes[15];
+        for (int i = 0; i < 3; ++i) axes[i] = obbA.axes[i];
+        for (int i = 0; i < 3; ++i) axes[i + 3] = obbB.axes[i];
 
-        // Simple AABB collision detection for now
-        // TODO: Implement proper OBB collision detection
-        bool colliding = true;
-        colliding &= (aMin.x <= bMax.x && aMax.x >= bMin.x);
-        colliding &= (aMin.y <= bMax.y && aMax.y >= bMin.y);
-        colliding &= (aMin.z <= bMax.z && aMax.z >= bMin.z);
-
-        if (colliding) {
-            result.isColliding = true;
-
-            const float overlapX1 = aMax.x - bMin.x;
-            const float overlapX2 = bMax.x - aMin.x;
-            const float overlapY1 = aMax.y - bMin.y;
-            const float overlapY2 = bMax.y - aMin.y;
-            const float overlapZ1 = aMax.z - bMin.z;
-            const float overlapZ2 = bMax.z - aMin.z;
-
-            float penetration = overlapX1;
-            glm::vec3 normal{1.0f, 0.0f, 0.0f};
-
-            if (overlapX2 < penetration) { penetration = overlapX2; normal = {-1.0f, 0.0f, 0.0f}; }
-            if (overlapY1 < penetration) { penetration = overlapY1; normal = {0.0f, 1.0f, 0.0f}; }
-            if (overlapY2 < penetration) { penetration = overlapY2; normal = {0.0f, -1.0f, 0.0f}; }
-            if (overlapZ1 < penetration) { penetration = overlapZ1; normal = {0.0f, 0.0f, 1.0f}; }
-            if (overlapZ2 < penetration) { penetration = overlapZ2; normal = {0.0f, 0.0f, -1.0f}; }
-
-            const glm::vec3 centerA = (aMin + aMax) * 0.5f;
-            const glm::vec3 centerB = (bMin + bMax) * 0.5f;
-            if (glm::dot(normal, centerB - centerA) < 0.0f) {
-                normal = -normal;
+        int axisIdx = 6;
+        for (int i = 0; i < 3; ++i) {
+            for (int j = 0; j < 3; ++j) {
+                axes[axisIdx++] = glm::cross(obbA.axes[i], obbB.axes[j]);
             }
+        }
 
-            Contact contact;
-            contact.depth = penetration;
-            contact.normal = normal;
-            contact.point = {
-                (std::max(aMin.x, bMin.x) + std::min(aMax.x, bMax.x)) * 0.5f,
-                (std::max(aMin.y, bMin.y) + std::min(aMax.y, bMax.y)) * 0.5f,
-                (std::max(aMin.z, bMin.z) + std::min(aMax.z, bMax.z)) * 0.5f
-            };
+        float minOverlap = std::numeric_limits<float>::max();
+        int bestAxisIdx = -1;
 
-            result.contacts.push_back(contact);
+        for (int i = 0; i < 15; ++i) {
+            float overlap = getOverlap(obbA, obbB, axes[i]);
+            if (overlap <= 0.0f) return result;
+
+            float bias = (i >= 6) ? 0.95f : 1.0f;
+            if (overlap * bias < minOverlap) {
+                minOverlap = overlap;
+                bestAxisIdx = i;
+            }
+        }
+
+        result.isColliding = true;
+        glm::vec3 normal = glm::normalize(axes[bestAxisIdx]);
+        if (glm::dot(obbB.center - obbA.center, normal) < 0.0f) {
+            normal = -normal;
+        }
+        result.normal = normal;
+
+        // Identification of Reference and Incident Boxes
+        const OBB* ref = &obbA;
+        const OBB* inc = &obbB;
+        bool flipped = false;
+
+        // If the best axis is from Box B, Box B is the reference box
+        if (bestAxisIdx >= 3 && bestAxisIdx < 6) {
+            ref = &obbB;
+            inc = &obbA;
+            flipped = true;
+        }
+
+        // Find the incident face
+        glm::vec3 incNormal = flipped ? normal : -normal;
+        int incAxisIdx = 0;
+        float minDot = std::numeric_limits<float>::max();
+        for (int i = 0; i < 3; ++i) {
+            float d = glm::dot(incNormal, inc->axes[i]);
+            if (d < minDot) { minDot = d; incAxisIdx = i; }
+            if (-d < minDot) { minDot = -d; incAxisIdx = i + 3; }
+        }
+
+        glm::vec3 faceNormal = (incAxisIdx < 3) ? inc->axes[incAxisIdx] : -inc->axes[incAxisIdx - 3];
+
+        // Incident face vertices
+        std::vector<ClipVertex> incidentVertices;
+        glm::vec3 incAxes[2];
+        int incA0 = (incAxisIdx % 3 + 1) % 3;
+        int incA1 = (incAxisIdx % 3 + 2) % 3;
+        incAxes[0] = inc->axes[incA0];
+        incAxes[1] = inc->axes[incA1];
+
+        glm::vec3 faceCenter = inc->center + faceNormal * inc->halfExtents[incAxisIdx % 3];
+        incidentVertices.push_back({faceCenter + incAxes[0] * inc->halfExtents[incA0] + incAxes[1] * inc->halfExtents[incA1], 0});
+        incidentVertices.push_back({faceCenter - incAxes[0] * inc->halfExtents[incA0] + incAxes[1] * inc->halfExtents[incA1], 1});
+        incidentVertices.push_back({faceCenter - incAxes[0] * inc->halfExtents[incA0] - incAxes[1] * inc->halfExtents[incA1], 2});
+        incidentVertices.push_back({faceCenter + incAxes[0] * inc->halfExtents[incA0] - incAxes[1] * inc->halfExtents[incA1], 3});
+
+        // Clipping against reference face planes
+        int refAxisIdx = bestAxisIdx % 3;
+        glm::vec3 refAxes[2];
+        int refA0 = (refAxisIdx + 1) % 3;
+        int refA1 = (refAxisIdx + 2) % 3;
+        refAxes[0] = ref->axes[refA0];
+        refAxes[1] = ref->axes[refA1];
+
+        std::vector<ClipVertex> vOut;
+        clip(incidentVertices, refAxes[0], glm::dot(ref->center, refAxes[0]) - ref->halfExtents[refA0], vOut);
+        clip(vOut, -refAxes[0], -glm::dot(ref->center, refAxes[0]) - ref->halfExtents[refA0], incidentVertices);
+        clip(incidentVertices, refAxes[1], glm::dot(ref->center, refAxes[1]) - ref->halfExtents[refA1], vOut);
+        clip(vOut, -refAxes[1], -glm::dot(ref->center, refAxes[1]) - ref->halfExtents[refA1], incidentVertices);
+
+        // Keep points below reference face
+        float refOffset = glm::dot(ref->center, normal * (flipped ? -1.0f : 1.0f)) + ref->halfExtents[refAxisIdx];
+
+        for (const auto& v : incidentVertices) {
+            float depth = refOffset - glm::dot(v.v, normal * (flipped ? -1.0f : 1.0f));
+            if (depth >= 0.0f) {
+                Contact contact;
+                contact.point = v.v;
+                contact.normal = normal;
+                contact.depth = depth;
+                contact.persistentId = v.id; // More robust ID would hash features
+                result.contacts.push_back(contact);
+            }
         }
 
     } else if (other.getType() == std::string("Sphere")) {
@@ -116,6 +237,7 @@ CollisionResult BoxCollider::checkCollision(
 
             contact.point = glm::vec3(transformA * glm::vec4(localClosestPoint, 1.0f));
             result.contacts.push_back(contact);
+            result.normal = contact.normal;
         }
     }
 

@@ -24,7 +24,10 @@ public:
     void destroyBody(RigidBody* body);
     void setGravity(const glm::vec3& gravity);
     void setFixedTimeStep(float step) { fixedTimeStep_ = step; }
-    void update(float deltaTime, int maxSubSteps = 1);
+    void setSolverIterations(int iterations) { world_.setSolverIterations(iterations); }
+
+    // Returns interpolation alpha
+    float update(float deltaTime, int maxSubSteps = 1);
     void clear();
 
     PhysicsWorld& getWorld() { return world_; }

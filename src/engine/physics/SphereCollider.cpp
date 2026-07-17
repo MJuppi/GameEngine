@@ -19,12 +19,12 @@ void SphereCollider::getLocalBounds(glm::vec3& min, glm::vec3& max) const {
     max = {radius_, radius_, radius_};
 }
 
-CollisionResult SphereCollider::checkCollision(
+ContactManifold SphereCollider::checkCollision(
     const Collider& other,
     const glm::mat4& transformA,
     const glm::mat4& transformB
 ) const {
-    CollisionResult result;
+    ContactManifold result;
 
     if (other.getType() == std::string("Sphere")) {
         const SphereCollider& sphereB = static_cast<const SphereCollider&>(other);
@@ -50,6 +50,7 @@ CollisionResult SphereCollider::checkCollision(
 
             contact.point = centerA + contact.normal * radius_;
             result.contacts.push_back(contact);
+            result.normal = contact.normal;
         }
 
     } else if (other.getType() == std::string("Box")) {
@@ -85,6 +86,7 @@ CollisionResult SphereCollider::checkCollision(
 
             contact.point = glm::vec3(transformB * glm::vec4(localClosestPoint, 1.0f));
             result.contacts.push_back(contact);
+            result.normal = contact.normal;
         }
     }
 

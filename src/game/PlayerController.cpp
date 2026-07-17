@@ -15,55 +15,49 @@ namespace ge {
 PlayerController::PlayerController(Engine& engine)
     : engine_(engine) {}
 
-/// @brief Updates the player controller state, handling input and projectile firing.
+/// @brief Updates the player controller state in a fixed time step.
 /// @param deltaTime
-void PlayerController::update(float deltaTime) {
-    updateCamera(deltaTime);
+void PlayerController::fixedUpdate(float deltaTime) {
+    // Logical movement
+    prevCameraPosition_ = cameraPosition_;
 
     auto* window = engine_.getWindowHandle();
-    if (!window) {
-        return;
+    if (window && mouseCaptured_) {
+        const float velocity = cameraSpeed_ * deltaTime;
+        glm::vec3 horizontalFront = glm::normalize(glm::vec3(cameraFront_.x, 0.0f, cameraFront_.z));
+        glm::vec3 horizontalRight = glm::normalize(glm::vec3(cameraRight_.x, 0.0f, cameraRight_.z));
+
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) cameraPosition_ += horizontalFront * velocity;
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) cameraPosition_ -= horizontalFront * velocity;
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) cameraPosition_ -= horizontalRight * velocity;
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) cameraPosition_ += horizontalRight * velocity;
+        if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) cameraPosition_ += cameraWorldUp_ * velocity;
+        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) cameraPosition_ -= cameraWorldUp_ * velocity;
+
+        if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) cameraSpeed_ = 10.0f;
+        else cameraSpeed_ = 5.0f;
     }
 
-    const bool firePressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
-    if (firePressed && !leftMouseDown_ && boxesShot_ < kBoxesToShoot) {
-        fireProjectile();
+    // Cooldown and firing
+    if (fireCooldown_ > 0.0f) {
+        fireCooldown_ -= deltaTime;
     }
-    leftMouseDown_ = firePressed;
+
+    if (pendingFire_ && fireCooldown_ <= 0.0f) {
+        fireProjectile();
+        fireCooldown_ = kFireRate;
+        pendingFire_ = false;
+    }
+
     updateScoredProjectiles();
 }
 
-void PlayerController::updateCamera(float deltaTime) {
+/// @brief Updates the player controller state in a variable time step.
+/// @param deltaTime
+/// @param alpha
+void PlayerController::variableUpdate(float deltaTime, float alpha) {
     auto* window = engine_.getWindowHandle();
     if (!window) return;
-
-    const float velocity = cameraSpeed_ * deltaTime;
-    glm::vec3 horizontalFront = glm::normalize(glm::vec3(cameraFront_.x, 0.0f, cameraFront_.z));
-    glm::vec3 horizontalRight = glm::normalize(glm::vec3(cameraRight_.x, 0.0f, cameraRight_.z));
-
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-        cameraPosition_ += horizontalFront * velocity;
-    }
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-        cameraPosition_ -= horizontalFront * velocity;
-    }
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-        cameraPosition_ -= horizontalRight * velocity;
-    }
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-        cameraPosition_ += horizontalRight * velocity;
-    }
-    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
-        cameraPosition_ += cameraWorldUp_ * velocity;
-    }
-    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
-        cameraPosition_ -= cameraWorldUp_ * velocity;
-    }
-    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
-        cameraSpeed_ = 10.0f; // Sprint speed
-    } else {
-        cameraSpeed_ = 5.0f; // Normal speed
-    }
 
     // Toggle mouse capture
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
@@ -80,6 +74,7 @@ void PlayerController::updateCamera(float deltaTime) {
         }
     }
 
+    // Camera rotation (variable rate for smoothness)
     if (mouseCaptured_) {
         double xpos, ypos;
         glfwGetCursorPos(window, &xpos, &ypos);
@@ -94,17 +89,23 @@ void PlayerController::updateCamera(float deltaTime) {
         lastCursorX_ = xpos;
         lastCursorY_ = ypos;
 
-        xoffset *= mouseSensitivity_;
-        yoffset *= mouseSensitivity_;
-
-        cameraYaw_ += xoffset;
-        cameraPitch_ += -yoffset;
+        cameraYaw_ += xoffset * mouseSensitivity_;
+        cameraPitch_ += -yoffset * mouseSensitivity_;
         cameraPitch_ = glm::clamp(cameraPitch_, -89.0f, 89.0f);
 
         updateCameraVectors();
     }
 
-    engine_.setCamera(cameraPosition_, cameraFront_, cameraUp_);
+    // Position interpolation
+    glm::vec3 interpolatedPosition = glm::mix(prevCameraPosition_, cameraPosition_, alpha);
+    engine_.setCamera(interpolatedPosition, cameraFront_, cameraUp_);
+
+    // Input for fixed update
+    const bool firePressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+    if (firePressed && !leftMouseDown_ && boxesShot_ < kBoxesToShoot) {
+        pendingFire_ = true;
+    }
+    leftMouseDown_ = firePressed;
 }
 
 void PlayerController::updateCameraVectors() {

@@ -51,8 +51,8 @@ struct SceneUbo {
     alignas(16) glm::vec4 lightDir;
     /// @brief The position of the camera in world space, represented as a 4D vector. The w component is typically set to 1.0f to indicate that it's a position.
     alignas(16) glm::vec4 cameraPos;
-    /// @brief The point light in the scene, represented as a PointLight structure. This includes the light's position, color, and parameters such as attenuation factors.
-    alignas(16) PointLight pointLight;
+    /// @brief The lighting configuration for the scene.
+    alignas(16) SceneLights lights;
 };
 
 class VulkanRenderer {
@@ -76,7 +76,7 @@ public:
     void addDynamicObject(const glm::mat4& transform, std::shared_ptr<Material> material, const MeshData* mesh = nullptr);
     void clearDynamicObjects() { m_dynamicObjects.clear(); }
 
-    void setPointLight(const PointLight& pointLight) { m_pointLight = pointLight; }
+    void setSceneLights(const SceneLights& lights) { m_sceneLights = lights; }
     [[nodiscard]] glm::vec3 getCameraPosition() const { return m_cameraPosition; }
     [[nodiscard]] glm::vec3 getCameraFront() const { return m_cameraFront; }
 
@@ -145,7 +145,7 @@ private:
     size_t m_currentFrame = 0;
     bool m_framebufferResized = false;
 
-    PointLight m_pointLight{};
+    SceneLights m_sceneLights{};
 
     glm::vec3 m_cameraPosition = glm::vec3(0.0f, 0.0f, 0.0f);
     glm::vec3 m_cameraFront = glm::vec3(0.0f, 0.0f, 1.0f);

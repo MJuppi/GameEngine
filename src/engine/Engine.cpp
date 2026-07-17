@@ -21,37 +21,58 @@ public:
     VulkanRenderer renderer;
     PhysicsEngine physicsEngine;
     FrameTimer frameTimer;
-    FrameUpdateCallback frameUpdateCallback;
+    FixedUpdateCallback fixedUpdateCallback;
+    VariableUpdateCallback variableUpdateCallback;
 
-    explicit Impl(MeshData mesh, PointLight pointLight)
+    explicit Impl(MeshData mesh, SceneLights sceneLights)
         : renderer(window, std::move(mesh))
     {
-        renderer.setPointLight(pointLight);
+        renderer.setSceneLights(sceneLights);
 
         physicsEngine.setGravity({0.0f, -9.81f, 0.0f});
         physicsEngine.setFixedTimeStep(1.0f / 60.0f);
+        physicsEngine.setSolverIterations(8);
         frameTimer.reset();
     }
 
     void run() {
+        const float fixedStep = 1.0f / 60.0f;
+        float accumulator = 0.0f;
+
         while (!window.shouldClose()) {
             const float deltaTime = frameTimer.beginFrame();
             window.pollEvents();
-            handleWindowInput();
 
-            if (frameUpdateCallback) {
-                frameUpdateCallback(deltaTime);
+            accumulator += deltaTime;
+            if (accumulator > 0.25f) accumulator = 0.25f;
+
+            while (accumulator >= fixedStep) {
+                if (fixedUpdateCallback) {
+                    fixedUpdateCallback(fixedStep);
+                }
+
+                physicsEngine.update(fixedStep); // This internal update handles its own internal accumulator too,
+                                                 // but we want to call fixedUpdate logic here.
+                                                 // Actually, it's better if we let physicsEngine.update handle the loop
+                                                 // but we need to hook into each step.
+
+                accumulator -= fixedStep;
             }
 
-            physicsEngine.update(deltaTime);
+            const float alpha = accumulator / fixedStep;
 
-            // Sync physics transforms to renderer
+            if (variableUpdateCallback) {
+                variableUpdateCallback(deltaTime, alpha);
+            }
+
+            // Sync physics transforms to renderer with interpolation
             const auto& bodies = physicsEngine.getWorld().getBodies();
             renderer.clearDynamicObjects();
             for (const auto& body : bodies) {
                 if (!body->getProps().isKinematic && body->getProps().mass > 0.0f) {
                     const auto& mesh = body->getMesh();
-                    renderer.addDynamicObject(body->getWorldTransform(), body->getMaterial(), mesh.has_value() ? &mesh.value() : nullptr);
+                    glm::mat4 interpolatedTransform = body->getInterpolatedTransform(alpha);
+                    renderer.addDynamicObject(interpolatedTransform, body->getMaterial(), mesh.has_value() ? &mesh.value() : nullptr);
                 }
             }
 
@@ -67,8 +88,8 @@ private:
     }
 };
 
-Engine::Engine(MeshData mesh, PointLight pointLight)
-    : m_impl(new Impl(std::move(mesh), std::move(pointLight)))
+Engine::Engine(MeshData mesh, SceneLights sceneLights)
+    : m_impl(new Impl(std::move(mesh), std::move(sceneLights)))
 {
 }
 
@@ -80,16 +101,20 @@ void Engine::run() {
     m_impl->run();
 }
 
-void Engine::setPointLight(const PointLight& pointLight) {
-    m_impl->renderer.setPointLight(pointLight);
+void Engine::setSceneLights(const SceneLights& sceneLights) {
+    m_impl->renderer.setSceneLights(sceneLights);
 }
 
 void Engine::setCamera(const glm::vec3& position, const glm::vec3& front, const glm::vec3& up) {
     m_impl->renderer.setCamera(position, front, up);
 }
 
-void Engine::setFrameUpdateCallback(FrameUpdateCallback callback) {
-    m_impl->frameUpdateCallback = std::move(callback);
+void Engine::setFixedUpdateCallback(FixedUpdateCallback callback) {
+    m_impl->fixedUpdateCallback = std::move(callback);
+}
+
+void Engine::setVariableUpdateCallback(VariableUpdateCallback callback) {
+    m_impl->variableUpdateCallback = std::move(callback);
 }
 
 GLFWwindow* Engine::getWindowHandle() const {

@@ -34,22 +34,30 @@ void PhysicsEngine::setGravity(const glm::vec3& gravity) {
     world_.setGravity(gravity);
 }
 
-void PhysicsEngine::update(float deltaTime, int maxSubSteps) {
+float PhysicsEngine::update(float deltaTime, int maxSubSteps) {
     if (paused_ || deltaTime <= 0.0f) {
-        return;
+        return 0.0f;
     }
 
     if (fixedTimeStep_ > 0.0f) {
         // Fixed time stepping
         accumulator_ += deltaTime;
 
+        // Prevent Spiral of Death
+        if (accumulator_ > 0.25f) {
+            accumulator_ = 0.25f;
+        }
+
         while (accumulator_ >= fixedTimeStep_) {
             world_.step(fixedTimeStep_, maxSubSteps);
             accumulator_ -= fixedTimeStep_;
         }
+
+        return accumulator_ / fixedTimeStep_;
     } else {
         // Variable time stepping
         world_.step(deltaTime, maxSubSteps);
+        return 1.0f;
     }
 }
 

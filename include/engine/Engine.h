@@ -21,7 +21,7 @@ class PhysicsEngine;
 class Engine {
 public:
     /// Pass mesh data from disk (e.g. loadObjFile) or use makeUnitCubeMesh().
-    explicit Engine(MeshData mesh, PointLight pointLight = PointLight{});
+    explicit Engine(MeshData mesh, SceneLights sceneLights = SceneLights{});
     ~Engine();
 
     Engine(const Engine&) = delete;
@@ -34,12 +34,15 @@ public:
     PhysicsEngine& getPhysicsEngine();
     const PhysicsEngine& getPhysicsEngine() const;
     GLFWwindow* getWindowHandle() const;
-    void setPointLight(const PointLight& pointLight);
+    void setSceneLights(const SceneLights& sceneLights);
 
     void setCamera(const glm::vec3& position, const glm::vec3& front, const glm::vec3& up);
 
-    using FrameUpdateCallback = std::function<void(float)>;
-    void setFrameUpdateCallback(FrameUpdateCallback callback);
+    using FixedUpdateCallback = std::function<void(float)>;
+    using VariableUpdateCallback = std::function<void(float, float)>;
+
+    void setFixedUpdateCallback(FixedUpdateCallback callback);
+    void setVariableUpdateCallback(VariableUpdateCallback callback);
 
 private:
     class Impl;

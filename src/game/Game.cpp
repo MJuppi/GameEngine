@@ -52,12 +52,6 @@ void Game::run() {
     engine_->run();
 }
 
-void Game::updateGameplay(float deltaTime) {
-    if (playerController_) {
-        playerController_->update(deltaTime);
-    }
-}
-
 bool Game::loadLevel(Level& level) {
     std::cout << "Loading level: " << level.getName() << '\n';
     level.load(assetManager_);
@@ -67,14 +61,23 @@ bool Game::loadLevel(Level& level) {
         return false;
     }
 
-    engine_ = std::make_unique<Engine>(level.getMesh(), level.getPointLight());
+    engine_ = std::make_unique<Engine>(level.getMesh(), level.getSceneLights());
     for (auto& levelObject : level.getObjects()) {
         ObjectBuilder::attachPhysics(engine_->getPhysicsEngine(), levelObject);
     }
 
     playerController_ = std::make_unique<PlayerController>(*engine_);
-    engine_->setFrameUpdateCallback([this](float deltaTime) {
-        updateGameplay(deltaTime);
+
+    engine_->setFixedUpdateCallback([this](float deltaTime) {
+        if (playerController_) {
+            playerController_->fixedUpdate(deltaTime);
+        }
+    });
+
+    engine_->setVariableUpdateCallback([this](float deltaTime, float alpha) {
+        if (playerController_) {
+            playerController_->variableUpdate(deltaTime, alpha);
+        }
     });
 
     return true;

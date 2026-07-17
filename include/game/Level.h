@@ -20,8 +20,8 @@ public:
     MeshData buildCombinedMesh() const;
     const std::vector<PhysicsMeshObject>& getObjects() const { return objects_; }
     std::vector<PhysicsMeshObject>& getObjects() { return objects_; }
-    const PointLight& getPointLight() const { return pointLight_; }
-    PointLight& getPointLight() { return pointLight_; }
+    const SceneLights& getSceneLights() const { return sceneLights_; }
+    SceneLights& getSceneLights() { return sceneLights_; }
     bool isLoaded() const { return loaded_; }
 
     void addObject(PhysicsMeshObject object);
@@ -50,14 +50,16 @@ public:
         /// @param mat 
         /// @return 
         ObjectBuilderProxy& material(const Material& mat) { object.mesh.materials = {mat}; return *this; }
+        /// @brief Sets the physics properties of the object.
+        /// @param p
+        /// @return
+        ObjectBuilderProxy& props(const RigidBodyProps& p) { object.physicsProps = p; return *this; }
 
         /// @brief Sets the object type to visual (not physical).
         void asVisual() { object.type = ObjectType::Visual; level.addObject(std::move(object)); }
         /// @brief Sets the object type to static (immovable).
-        /// @param props 
-        void asStatic(const RigidBodyProps& props = {}) {
+        void asStatic() {
             object.type = ObjectType::Static;
-            object.physicsProps = props;
             // Default to static behavior if mass is not explicitly set to non-zero/dynamic
             if (object.physicsProps.mass == 1.0f && !object.physicsProps.isKinematic) {
                 object.physicsProps.mass = 0.0f;
@@ -66,12 +68,22 @@ public:
             }
             level.addObject(std::move(object));
         }
-        /// @brief Sets the object type to active (physically simulated).
+        /// @brief Sets the object type to static (immovable) with the given props.
         /// @param props 
-        void asActive(const RigidBodyProps& props = {1.0f}) {
-            object.type = ObjectType::Active;
+        void asStatic(const RigidBodyProps& props) {
             object.physicsProps = props;
+            asStatic();
+        }
+        /// @brief Sets the object type to active (physically simulated).
+        void asActive() {
+            object.type = ObjectType::Active;
             level.addObject(std::move(object));
+        }
+        /// @brief Sets the object type to active (physically simulated) with the given props.
+        /// @param props
+        void asActive(const RigidBodyProps& props) {
+            object.physicsProps = props;
+            asActive();
         }
     };
 
@@ -94,7 +106,7 @@ public:
 private:
     std::string name_;
     std::vector<PhysicsMeshObject> objects_;
-    PointLight pointLight_{};
+    SceneLights sceneLights_{};
     mutable MeshData combinedMesh_{};
     mutable bool combinedMeshDirty_ = true;
     bool loaded_ = false;

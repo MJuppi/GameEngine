@@ -4,6 +4,7 @@
 #include <glm/gtc/quaternion.hpp>
 #include <memory>
 #include <optional>
+#include <cstdint>
 #include "engine/mesh/MeshData.h"
 
 namespace ge {
@@ -19,6 +20,9 @@ struct RigidBodyProps {
     float angularDamping = 0.1f;
     bool isKinematic = false;
     bool useGravity = true;
+    bool isTrigger = false;
+    uint32_t collisionLayer = 0x1;
+    uint32_t collisionMask = 0xFFFFFFFF;
 };
 
 class RigidBody {
@@ -57,11 +61,14 @@ public:
     void updateInertiaTensor() const;
     void setMaterial(std::shared_ptr<Material> material) { material_ = std::move(material); }
 
+    [[nodiscard]] glm::mat4 getInterpolatedTransform(float alpha) const;
+
 private:
     std::unique_ptr<Collider> collider_;
     glm::mat4 transform_;
     glm::mat4 worldTransform_;
     glm::vec3 position_;
+    glm::vec3 prevPosition_;
     RigidBodyProps props_;
     glm::vec3 velocity_;
     glm::vec3 angularVelocity_;
@@ -69,6 +76,7 @@ private:
     glm::vec3 totalForce_;
     glm::vec3 totalTorque_;
     glm::quat rotation_;
+    glm::quat prevRotation_;
     std::shared_ptr<Material> material_;
     std::optional<MeshData> mesh_;
 
