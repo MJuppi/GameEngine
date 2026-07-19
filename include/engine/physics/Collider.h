@@ -8,6 +8,11 @@
 
 namespace ge {
 
+enum class ColliderType {
+    Box,
+    Sphere
+};
+
 struct Contact;
 
 class RigidBody;
@@ -37,16 +42,15 @@ struct ContactManifold {
 
 class Collider {
 public:
+    explicit Collider(ColliderType type) : type_(type) {}
     virtual ~Collider() = default;
 
-    virtual std::string getType() const = 0;
+    ColliderType getType() const { return type_; }
     virtual void getLocalBounds(glm::vec3& min, glm::vec3& max) const = 0;
-    virtual ContactManifold checkCollision(
-        const Collider& other,
-        const glm::mat4& transformA,
-        const glm::mat4& transformB
-    ) const = 0;
     virtual void getWorldBounds(glm::vec3& min, glm::vec3& max, const glm::mat4& transform) const = 0;
+
+private:
+    ColliderType type_;
 };
 
 } // namespace ge

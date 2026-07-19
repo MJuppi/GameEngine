@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include <utility>
+#include <glm/glm.hpp>
 
 namespace ge {
 
@@ -19,8 +20,8 @@ public:
 
 private:
     struct AABB {
-        float min[3];
-        float max[3];
+        glm::vec3 min;
+        glm::vec3 max;
     };
 
     static bool intersects(const AABB& a, const AABB& b);

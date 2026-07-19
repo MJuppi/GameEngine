@@ -40,6 +40,8 @@ public:
 
 private:
     void applyGravity();
+    void resolveContacts(std::vector<ContactManifold>& manifolds);
+    void warmStart(std::vector<ContactManifold>& manifolds);
 
     std::vector<std::unique_ptr<RigidBody>> bodies_;
     std::vector<ContactManifold> manifoldCache_;

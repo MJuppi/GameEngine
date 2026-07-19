@@ -53,9 +53,8 @@ PhysicsWorld::RaycastResult PhysicsWorld::raycast(const glm::vec3& origin, const
     glm::vec3 dir = glm::normalize(direction);
 
     for (const auto& body : bodies_) {
-        // Simple Ray-OBB intersection
         const auto& collider = body->getCollider();
-        if (collider.getType() == "Box") {
+        if (collider.getType() == ColliderType::Box) {
             const auto& box = static_cast<const BoxCollider&>(collider);
             glm::mat4 invTransform = glm::inverse(body->getWorldTransform());
             glm::vec3 localOrigin = glm::vec3(invTransform * glm::vec4(origin, 1.0f));
@@ -88,79 +87,67 @@ PhysicsWorld::RaycastResult PhysicsWorld::raycast(const glm::vec3& origin, const
     return bestResult;
 }
 
-void PhysicsWorld::step(float deltaTime, int /*maxSubSteps*/) {
-    if (deltaTime <= 0.0f) {
-        return;
-    }
-
-    applyGravity();
-
-    for (auto& body : bodies_) {
-        // Simple CCD for very fast objects (e.g., projectiles)
-        float speed = glm::length(body->getVelocity());
-        if (speed * deltaTime > 0.5f) { // Moving more than 0.5 units per frame
-             auto res = raycast(body->getPosition(), body->getVelocity(), speed * deltaTime);
-             if (res.hit && res.body != body.get()) {
-                 body->setPosition(res.point - glm::normalize(body->getVelocity()) * 0.01f);
-                 body->setVelocity(glm::vec3(0.0f)); // Stop or reflect
-             }
-        }
-
-        body->integrate(deltaTime);
-    }
-
-    // Broad Phase
-    auto potentialPairs = BroadPhase::findPairs(bodies_);
-
-    // Narrow Phase
-    std::vector<ContactManifold> manifolds;
-    CollisionDetection::detectCollisions(potentialPairs, manifolds);
-
-    // Warm Starting
+void PhysicsWorld::warmStart(std::vector<ContactManifold>& manifolds) {
     for (auto& manifold : manifolds) {
-        // Try to find matching manifold in cache
         for (const auto& cachedManifold : manifoldCache_) {
             if ((manifold.bodyA == cachedManifold.bodyA && manifold.bodyB == cachedManifold.bodyB) ||
                 (manifold.bodyA == cachedManifold.bodyB && manifold.bodyB == cachedManifold.bodyA)) {
 
-                // Match contacts by persistent ID
                 for (auto& contact : manifold.contacts) {
                     for (const auto& cachedContact : cachedManifold.contacts) {
                         if (contact.persistentId == cachedContact.persistentId) {
                             contact.normalImpulse = cachedContact.normalImpulse;
                             contact.tangentImpulse = cachedContact.tangentImpulse;
 
-                            // Apply warm starting impulse immediately
                             float invMassA = (contact.bodyA->getProps().isKinematic || contact.bodyA->getProps().mass <= 0.0f) ? 0.0f : 1.0f / contact.bodyA->getProps().mass;
                             float invMassB = (contact.bodyB->getProps().isKinematic || contact.bodyB->getProps().mass <= 0.0f) ? 0.0f : 1.0f / contact.bodyB->getProps().mass;
 
                             glm::vec3 rA = contact.point - contact.bodyA->getPosition();
                             glm::vec3 rB = contact.point - contact.bodyB->getPosition();
 
-                            // Normal
                             glm::vec3 impulseNormal = contact.normal * contact.normalImpulse;
                             contact.bodyA->setVelocity(contact.bodyA->getVelocity() - impulseNormal * invMassA);
                             contact.bodyA->setAngularVelocity(contact.bodyA->getAngularVelocity() - contact.bodyA->getInverseInertiaTensor() * glm::cross(rA, impulseNormal));
                             contact.bodyB->setVelocity(contact.bodyB->getVelocity() + impulseNormal * invMassB);
-                            contact.bodyB->setAngularVelocity(contact.bodyB->getAngularVelocity() + contact.bodyB->getInverseInertiaTensor() * glm::cross(rB, impulseNormal));
-
-                            // Tangent (simplified, should find tangent)
-                            // For true robust warm starting, we'd need to store the tangent vector too
-                            // but even normal-only warm starting is a huge improvement.
+                            contact.bodyB->setAngularVelocity(contact.bodyB->getAngularVelocity() - contact.bodyB->getInverseInertiaTensor() * glm::cross(rB, -impulseNormal));
                         }
                     }
                 }
             }
         }
     }
+}
 
-    // Resolve Collisions Iteratively
-    if (!manifolds.empty()) {
-        CollisionDetection::resolveCollisions(manifolds, solverIterations_);
+void PhysicsWorld::resolveContacts(std::vector<ContactManifold>& manifolds) {
+    if (manifolds.empty()) return;
+    CollisionDetection::resolveCollisions(manifolds, solverIterations_);
+}
+
+void PhysicsWorld::step(float deltaTime, int /*maxSubSteps*/) {
+    if (deltaTime <= 0.0f) return;
+
+    applyGravity();
+
+    for (auto& body : bodies_) {
+        float speed = glm::length(body->getVelocity());
+        if (speed * deltaTime > 0.5f) {
+             auto res = raycast(body->getPosition(), body->getVelocity(), speed * deltaTime);
+             if (res.hit && res.body != body.get()) {
+                 body->setPosition(res.point - glm::normalize(body->getVelocity()) * 0.01f);
+                 body->setVelocity(glm::vec3(0.0f));
+             }
+        }
+        body->integrate(deltaTime);
     }
 
-    // Update cache
-    manifoldCache_ = manifolds;
+    auto potentialPairs = BroadPhase::findPairs(bodies_);
+    std::vector<ContactManifold> manifolds;
+    CollisionDetection::detectCollisions(potentialPairs, manifolds);
+
+    warmStart(manifolds);
+    resolveContacts(manifolds);
+
+    manifoldCache_ = std::move(manifolds);
 }
 
 } // namespace ge

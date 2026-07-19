@@ -25,6 +25,20 @@ struct RigidBodyProps {
     uint32_t collisionMask = 0xFFFFFFFF;
 };
 
+struct RigidBodyState {
+    glm::vec3 position{0.0f};
+    glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 velocity{0.0f};
+    glm::vec3 angularVelocity{0.0f};
+
+    glm::vec3 prevPosition{0.0f};
+    glm::quat prevRotation{1.0f, 0.0f, 0.0f, 0.0f};
+
+    glm::vec3 acceleration{0.0f};
+    glm::vec3 totalForce{0.0f};
+    glm::vec3 totalTorque{0.0f};
+};
+
 class RigidBody {
 public:
     RigidBody(std::unique_ptr<Collider> collider,
@@ -33,16 +47,16 @@ public:
     ~RigidBody() = default;
 
     void setTransform(const glm::mat4& transform);
-    void setPosition(const glm::vec3& position);
-    void setVelocity(const glm::vec3& velocity);
-    void setAngularVelocity(const glm::vec3& angularVelocity);
-    void setProps(const RigidBodyProps& props);
+    void setPosition(const glm::vec3& position) { state_.position = state_.prevPosition = position; updateTransform(); }
+    void setVelocity(const glm::vec3& velocity) { state_.velocity = velocity; }
+    void setAngularVelocity(const glm::vec3& angularVelocity) { state_.angularVelocity = angularVelocity; }
+    void setProps(const RigidBodyProps& props) { props_ = props; inverseInertiaTensorDirty_ = true; }
 
     const Collider& getCollider() const { return *collider_; }
     const glm::mat4& getWorldTransform() const { return worldTransform_; }
-    const glm::vec3& getPosition() const { return position_; }
-    const glm::vec3& getVelocity() const { return velocity_; }
-    const glm::vec3& getAngularVelocity() const { return angularVelocity_; }
+    const glm::vec3& getPosition() const { return state_.position; }
+    const glm::vec3& getVelocity() const { return state_.velocity; }
+    const glm::vec3& getAngularVelocity() const { return state_.angularVelocity; }
     const RigidBodyProps& getProps() const { return props_; }
     const glm::mat3& getInverseInertiaTensor() const {
         updateInertiaTensor();
@@ -53,8 +67,8 @@ public:
     const std::optional<MeshData>& getMesh() const { return mesh_; }
     void setMesh(MeshData mesh) { mesh_ = std::move(mesh); }
 
-    void addForce(const glm::vec3& force);
-    void addTorque(const glm::vec3& torque);
+    void addForce(const glm::vec3& force) { state_.totalForce += force; }
+    void addTorque(const glm::vec3& torque) { state_.totalTorque += torque; }
     void integrate(float deltaTime);
 
     void updateTransform();
@@ -65,18 +79,12 @@ public:
 
 private:
     std::unique_ptr<Collider> collider_;
-    glm::mat4 transform_;
+    glm::mat4 baseTransform_; // Stores initial scale and local offset
     glm::mat4 worldTransform_;
-    glm::vec3 position_;
-    glm::vec3 prevPosition_;
+
     RigidBodyProps props_;
-    glm::vec3 velocity_;
-    glm::vec3 angularVelocity_;
-    glm::vec3 acceleration_;
-    glm::vec3 totalForce_;
-    glm::vec3 totalTorque_;
-    glm::quat rotation_;
-    glm::quat prevRotation_;
+    RigidBodyState state_;
+
     std::shared_ptr<Material> material_;
     std::optional<MeshData> mesh_;
 

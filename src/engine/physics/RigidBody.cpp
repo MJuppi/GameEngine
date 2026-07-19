@@ -12,72 +12,37 @@ RigidBody::RigidBody(std::unique_ptr<Collider> collider,
                      const glm::mat4& transform,
                      const RigidBodyProps& props)
     : collider_(std::move(collider)),
-      transform_(transform),
+      baseTransform_(transform),
       worldTransform_(transform),
-      position_(glm::vec3(transform[3])),
-      prevPosition_(glm::vec3(transform[3])),
       props_(props),
-      velocity_(0.0f),
-      angularVelocity_(0.0f),
-      acceleration_(0.0f),
-      totalForce_(0.0f),
-      totalTorque_(0.0f),
-      rotation_(glm::quat_cast(transform)),
-      prevRotation_(glm::quat_cast(transform)),
       inverseInertiaTensorDirty_(true)
 {
+    state_.position = glm::vec3(transform[3]);
+    state_.prevPosition = state_.position;
+    state_.rotation = glm::quat_cast(transform);
+    state_.prevRotation = state_.rotation;
     updateTransform();
 }
 
 void RigidBody::setTransform(const glm::mat4& transform) {
-    transform_ = transform;
-    position_ = glm::vec3(transform[3]);
-    prevPosition_ = position_;
-    rotation_ = glm::quat_cast(transform);
-    prevRotation_ = rotation_;
+    baseTransform_ = transform;
+    state_.position = glm::vec3(transform[3]);
+    state_.prevPosition = state_.position;
+    state_.rotation = glm::quat_cast(transform);
+    state_.prevRotation = state_.rotation;
     inverseInertiaTensorDirty_ = true;
     updateTransform();
-}
-
-void RigidBody::setPosition(const glm::vec3& position) {
-    position_ = position;
-    prevPosition_ = position;
-    transform_[3] = glm::vec4(position, 1.0f);
-    updateTransform();
-}
-
-void RigidBody::setVelocity(const glm::vec3& velocity) {
-    velocity_ = velocity;
-}
-
-void RigidBody::setAngularVelocity(const glm::vec3& angularVelocity) {
-    angularVelocity_ = angularVelocity;
-}
-
-void RigidBody::setProps(const RigidBodyProps& props) {
-    props_ = props;
-    inverseInertiaTensorDirty_ = true;
-}
-
-void RigidBody::addForce(const glm::vec3& force) {
-    totalForce_ += force;
-}
-
-void RigidBody::addTorque(const glm::vec3& torque) {
-    totalTorque_ += torque;
 }
 
 void RigidBody::updateTransform() {
-    // Build the world transform from position and rotation
-    worldTransform_ = glm::mat4_cast(rotation_);
-    worldTransform_[3] = glm::vec4(position_, 1.0f);
+    worldTransform_ = glm::mat4_cast(state_.rotation);
+    worldTransform_[3] = glm::vec4(state_.position, 1.0f);
 
-    // Apply scale if needed (extracted from the transform matrix)
-    if (transform_ != glm::mat4(1.0f)) {
+    if (baseTransform_ != glm::mat4(1.0f)) {
         glm::vec3 scale = glm::vec3(
-            glm::length(glm::vec3(transform_[0])),
-            glm::length(glm::vec3(transform_[1])),
-            glm::length(glm::vec3(transform_[2]))
+            glm::length(glm::vec3(baseTransform_[0])),
+            glm::length(glm::vec3(baseTransform_[1])),
+            glm::length(glm::vec3(baseTransform_[2]))
         );
         worldTransform_ = glm::scale(worldTransform_, scale);
     }
@@ -95,16 +60,13 @@ void RigidBody::updateInertiaTensor() const {
 
     glm::vec3 inertia(1.0f);
 
-    if (collider_->getType() == "Box") {
+    if (collider_->getType() == ColliderType::Box) {
         const auto& box = static_cast<const BoxCollider&>(*collider_);
         glm::vec3 h = box.getHalfExtents();
-        // I = 1/12 * m * (side^2 + side^2)
-        // side = 2 * halfExtent
-        // I = 1/12 * m * (4*h^2 + 4*h^2) = 1/3 * m * (h^2 + h^2)
         inertia.x = (1.0f / 3.0f) * mass * (h.y * h.y + h.z * h.z);
         inertia.y = (1.0f / 3.0f) * mass * (h.x * h.x + h.z * h.z);
         inertia.z = (1.0f / 3.0f) * mass * (h.x * h.x + h.y * h.y);
-    } else if (collider_->getType() == "Sphere") {
+    } else if (collider_->getType() == ColliderType::Sphere) {
         const auto& sphere = static_cast<const SphereCollider&>(*collider_);
         float r = sphere.getRadius();
         float val = (2.0f / 5.0f) * mass * r * r;
@@ -116,26 +78,23 @@ void RigidBody::updateInertiaTensor() const {
     inverseInertiaTensor_[1][1] = 1.0f / inertia.y;
     inverseInertiaTensor_[2][2] = 1.0f / inertia.z;
 
-    // Transform inertia tensor to world space: I_inv_world = R * I_inv_local * R^T
-    glm::mat3 rotation = glm::mat3_cast(rotation_);
+    glm::mat3 rotation = glm::mat3_cast(state_.rotation);
     inverseInertiaTensor_ = rotation * inverseInertiaTensor_ * glm::transpose(rotation);
-
     inverseInertiaTensorDirty_ = false;
 }
 
 glm::mat4 RigidBody::getInterpolatedTransform(float alpha) const {
-    glm::vec3 interpolatedPosition = glm::mix(prevPosition_, position_, alpha);
-    glm::quat interpolatedRotation = glm::slerp(prevRotation_, rotation_, alpha);
+    glm::vec3 interpolatedPosition = glm::mix(state_.prevPosition, state_.position, alpha);
+    glm::quat interpolatedRotation = glm::slerp(state_.prevRotation, state_.rotation, alpha);
 
     glm::mat4 interpolatedTransform = glm::mat4_cast(interpolatedRotation);
     interpolatedTransform[3] = glm::vec4(interpolatedPosition, 1.0f);
 
-    // Apply scale if needed
-    if (transform_ != glm::mat4(1.0f)) {
+    if (baseTransform_ != glm::mat4(1.0f)) {
         glm::vec3 scale = glm::vec3(
-            glm::length(glm::vec3(transform_[0])),
-            glm::length(glm::vec3(transform_[1])),
-            glm::length(glm::vec3(transform_[2]))
+            glm::length(glm::vec3(baseTransform_[0])),
+            glm::length(glm::vec3(baseTransform_[1])),
+            glm::length(glm::vec3(baseTransform_[2]))
         );
         interpolatedTransform = glm::scale(interpolatedTransform, scale);
     }
@@ -144,9 +103,9 @@ glm::mat4 RigidBody::getInterpolatedTransform(float alpha) const {
 }
 
 void RigidBody::resetForces() {
-    totalForce_ = glm::vec3(0.0f);
-    totalTorque_ = glm::vec3(0.0f);
-    acceleration_ = glm::vec3(0.0f);
+    state_.totalForce = glm::vec3(0.0f);
+    state_.totalTorque = glm::vec3(0.0f);
+    state_.acceleration = glm::vec3(0.0f);
 }
 
 void RigidBody::applyDamping(glm::vec3& velocity, float damping, float deltaTime) {
@@ -154,62 +113,41 @@ void RigidBody::applyDamping(glm::vec3& velocity, float damping, float deltaTime
 }
 
 void RigidBody::integrate(float deltaTime) {
-    if (props_.isKinematic) {
-        // Kinematic bodies are controlled externally
-        return;
-    }
+    if (props_.isKinematic) return;
 
-    // Save state for interpolation before updating
-    prevPosition_ = position_;
-    prevRotation_ = rotation_;
+    state_.prevPosition = state_.position;
+    state_.prevRotation = state_.rotation;
 
-    // Update inertia tensor if needed
     updateInertiaTensor();
 
-    // Calculate acceleration from total force
     if (props_.mass > 0.0f) {
-        acceleration_ = totalForce_ / props_.mass;
+        state_.acceleration = state_.totalForce / props_.mass;
     }
 
-    // Update velocity
-    velocity_ += acceleration_ * deltaTime;
+    state_.velocity += state_.acceleration * deltaTime;
+    applyDamping(state_.velocity, props_.linearDamping, deltaTime);
 
-    applyDamping(velocity_, props_.linearDamping, deltaTime);
+    if (glm::length2(state_.velocity) < 0.001f) state_.velocity = glm::vec3(0.0f);
 
-    // Sleep threshold for linear velocity
-    if (glm::length2(velocity_) < 0.001f) {
-        velocity_ = glm::vec3(0.0f);
-    }
+    state_.position += state_.velocity * deltaTime;
 
-    // Update position
-    position_ += velocity_ * deltaTime;
-
-    // Update angular velocity
     if (props_.mass > 0.0f) {
-        // angularAcceleration = inverseInertiaTensor * totalTorque;
-        glm::vec3 angularAcceleration = inverseInertiaTensor_ * totalTorque_;
-        angularVelocity_ += angularAcceleration * deltaTime;
+        glm::vec3 angularAcceleration = inverseInertiaTensor_ * state_.totalTorque;
+        state_.angularVelocity += angularAcceleration * deltaTime;
     }
 
-    applyDamping(angularVelocity_, props_.angularDamping, deltaTime);
+    applyDamping(state_.angularVelocity, props_.angularDamping, deltaTime);
 
-    // Sleep threshold for angular velocity
-    if (glm::length2(angularVelocity_) < 0.001f) {
-        angularVelocity_ = glm::vec3(0.0f);
-    }
+    if (glm::length2(state_.angularVelocity) < 0.001f) state_.angularVelocity = glm::vec3(0.0f);
 
-    // Update rotation (using quaternions)
-    if (glm::length2(angularVelocity_) > 0.001f) {
-        glm::quat angularVelocityQuat(0.0f, angularVelocity_);
+    if (glm::length2(state_.angularVelocity) > 0.001f) {
+        glm::quat angularVelocityQuat(0.0f, state_.angularVelocity);
         glm::quat rotationDelta = angularVelocityQuat * (deltaTime * 0.5f);
-        rotation_ = glm::normalize(rotation_ + rotationDelta * rotation_);
+        state_.rotation = glm::normalize(state_.rotation + rotationDelta * state_.rotation);
         inverseInertiaTensorDirty_ = true;
     }
 
-    // Update the world transform
     updateTransform();
-
-    // Reset forces for next frame
     resetForces();
 }
 
