@@ -20,8 +20,8 @@ public:
         const std::vector<PotentialPair>& pairs,
         std::vector<ContactManifold>& manifolds);
 
-    static void resolveCollisions(std::vector<ContactManifold>& manifolds, int iterations);
-    static void resolveManifold(ContactManifold& manifold);
+    static void resolveCollisions(std::vector<ContactManifold>& manifolds, int iterations, float deltaTime);
+    static void resolveManifold(ContactManifold& manifold, float deltaTime);
 };
 
 } // namespace ge

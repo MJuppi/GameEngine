@@ -118,9 +118,9 @@ void PhysicsWorld::warmStart(std::vector<ContactManifold>& manifolds) {
     }
 }
 
-void PhysicsWorld::resolveContacts(std::vector<ContactManifold>& manifolds) {
+void PhysicsWorld::resolveContacts(std::vector<ContactManifold>& manifolds, float deltaTime) {
     if (manifolds.empty()) return;
-    CollisionDetection::resolveCollisions(manifolds, solverIterations_);
+    CollisionDetection::resolveCollisions(manifolds, solverIterations_, deltaTime);
 }
 
 void PhysicsWorld::step(float deltaTime, int /*maxSubSteps*/) {
@@ -145,7 +145,7 @@ void PhysicsWorld::step(float deltaTime, int /*maxSubSteps*/) {
     CollisionDetection::detectCollisions(potentialPairs, manifolds);
 
     warmStart(manifolds);
-    resolveContacts(manifolds);
+    resolveContacts(manifolds, deltaTime);
 
     manifoldCache_ = std::move(manifolds);
 }

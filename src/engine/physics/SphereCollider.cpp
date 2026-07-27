@@ -1,7 +1,4 @@
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/norm.hpp>
 #include "engine/physics/SphereCollider.h"
-#include "engine/physics/BoxCollider.h"
 #include <algorithm>
 
 namespace ge {

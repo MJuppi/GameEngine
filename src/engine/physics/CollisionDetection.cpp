@@ -260,15 +260,15 @@ void CollisionDetection::detectCollisions(
     }
 }
 
-void CollisionDetection::resolveCollisions(std::vector<ContactManifold>& manifolds, int iterations) {
+void CollisionDetection::resolveCollisions(std::vector<ContactManifold>& manifolds, int iterations, float deltaTime) {
     for (int i = 0; i < iterations; ++i) {
         for (auto& manifold : manifolds) {
-            resolveManifold(manifold);
+            resolveManifold(manifold, deltaTime);
         }
     }
 }
 
-void CollisionDetection::resolveManifold(ContactManifold& manifold) {
+void CollisionDetection::resolveManifold(ContactManifold& manifold, float deltaTime) {
     for (auto& contact : manifold.contacts) {
         RigidBody* bodyA = contact.bodyA;
         RigidBody* bodyB = contact.bodyB;
@@ -293,10 +293,10 @@ void CollisionDetection::resolveManifold(ContactManifold& manifold) {
 
         const float velocityAlongNormal = glm::dot(relativeVelocity, contact.normal);
 
-        // Positional correction (Baumgarte)
+        // Positional correction (Baumgarte) - now delta-time aware
         const float biasFactor = 0.2f;
-        const float slack = 0.02f;
-        float bias = (biasFactor / 1.0f) * std::max(0.0f, contact.depth - slack);
+        const float slop = 0.01f; // Amount of allowed penetration
+        float bias = (biasFactor / deltaTime) * std::max(0.0f, contact.depth - slop);
 
         const glm::vec3 crossA = glm::cross(rA, contact.normal);
         const glm::vec3 crossB = glm::cross(rB, contact.normal);
