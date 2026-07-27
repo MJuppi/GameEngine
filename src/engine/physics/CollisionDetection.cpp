@@ -6,12 +6,34 @@
 #include "engine/physics/SphereCollider.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <glm/glm.hpp>
-#include <iostream>
 
 namespace ge {
 
 namespace {
+
+uint32_t hashCombine(uint32_t seed, uint32_t value) {
+    return seed ^ (value + 0x9e3779b9u + (seed << 6) + (seed >> 2));
+}
+
+uint32_t makeContactId(RigidBody* bodyA, RigidBody* bodyB, const glm::vec3& point) {
+    uint32_t hash = 0;
+    hash = hashCombine(hash, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(bodyA) >> 4));
+    hash = hashCombine(hash, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(bodyB) >> 4));
+    hash = hashCombine(hash, static_cast<uint32_t>(point.x * 100.0f));
+    hash = hashCombine(hash, static_cast<uint32_t>(point.y * 100.0f));
+    hash = hashCombine(hash, static_cast<uint32_t>(point.z * 100.0f));
+    return hash;
+}
+
+glm::vec3 extractScale(const glm::mat4& transform) {
+    return glm::vec3(
+        glm::length(glm::vec3(transform[0])),
+        glm::length(glm::vec3(transform[1])),
+        glm::length(glm::vec3(transform[2]))
+    );
+}
 
 struct OBB {
     glm::vec3 center;
@@ -164,16 +186,20 @@ ContactManifold intersectBoxBox(const BoxCollider& boxA, const glm::mat4& transf
 ContactManifold intersectSphereSphere(const SphereCollider& sphereA, const glm::mat4& transformA,
                                       const SphereCollider& sphereB, const glm::mat4& transformB) {
     ContactManifold result;
-    glm::vec3 centerA = glm::vec3(transformA[3]);
-    glm::vec3 centerB = glm::vec3(transformB[3]);
-    float distance = glm::distance(centerA, centerB);
-    float radiusSum = sphereA.getRadius() + sphereB.getRadius();
+    const glm::vec3 centerA = glm::vec3(transformA[3]);
+    const glm::vec3 centerB = glm::vec3(transformB[3]);
+    const glm::vec3 scaleA = extractScale(transformA);
+    const glm::vec3 scaleB = extractScale(transformB);
+    const float radiusA = sphereA.getRadius() * std::max({scaleA.x, scaleA.y, scaleA.z});
+    const float radiusB = sphereB.getRadius() * std::max({scaleB.x, scaleB.y, scaleB.z});
+    const float distance = glm::distance(centerA, centerB);
+    const float radiusSum = radiusA + radiusB;
     if (distance <= radiusSum) {
         result.isColliding = true;
         Contact contact;
         contact.depth = radiusSum - distance;
         contact.normal = (distance > 0.001f) ? glm::normalize(centerB - centerA) : glm::vec3(0, 1, 0);
-        contact.point = centerA + contact.normal * sphereA.getRadius();
+        contact.point = centerA + contact.normal * radiusA;
         result.contacts.push_back(contact);
         result.normal = contact.normal;
     }
@@ -183,10 +209,11 @@ ContactManifold intersectSphereSphere(const SphereCollider& sphereA, const glm::
 ContactManifold intersectBoxSphere(const BoxCollider& boxA, const glm::mat4& transformA,
                                    const SphereCollider& sphereB, const glm::mat4& transformB) {
     ContactManifold result;
-    glm::mat4 invTransformA = glm::inverse(transformA);
-    glm::vec3 localSphereCenter = glm::vec3(invTransformA * glm::vec4(glm::vec3(transformB[3]), 1.0f));
-    float sphereRadius = sphereB.getRadius();
-    glm::vec3 halfExtents = boxA.getHalfExtents();
+    const glm::mat4 invTransformA = glm::inverse(transformA);
+    const glm::vec3 localSphereCenter = glm::vec3(invTransformA * glm::vec4(glm::vec3(transformB[3]), 1.0f));
+    const glm::vec3 scaleB = extractScale(transformB);
+    const float sphereRadius = sphereB.getRadius() * std::max({scaleB.x, scaleB.y, scaleB.z});
+    const glm::vec3 halfExtents = boxA.getHalfExtents();
     glm::vec3 localClosestPoint = glm::clamp(localSphereCenter, -halfExtents, halfExtents);
     float distanceSq = glm::distance2(localSphereCenter, localClosestPoint);
     if (distanceSq <= sphereRadius * sphereRadius) {
@@ -254,6 +281,7 @@ void CollisionDetection::detectCollisions(
                 contact.bodyA = bodyA;
                 contact.bodyB = bodyB;
                 contact.normal = manifold.normal;
+                contact.persistentId = makeContactId(bodyA, bodyB, contact.point);
             }
             manifolds.push_back(std::move(manifold));
         }
@@ -351,6 +379,39 @@ void CollisionDetection::resolveManifold(ContactManifold& manifold, float deltaT
 
             bodyB->setVelocity(bodyB->getVelocity() + frictionImpulseVec * invMassB);
             bodyB->setAngularVelocity(bodyB->getAngularVelocity() + bodyB->getInverseInertiaTensor() * glm::cross(rB, frictionImpulseVec));
+        }
+    }
+}
+
+void CollisionDetection::correctPositions(std::vector<ContactManifold>& manifolds) {
+    constexpr float kPercent = 0.8f;
+    constexpr float kSlop = 0.01f;
+
+    for (auto& manifold : manifolds) {
+        for (auto& contact : manifold.contacts) {
+            RigidBody* bodyA = contact.bodyA;
+            RigidBody* bodyB = contact.bodyB;
+
+            if (bodyA->getProps().isTrigger || bodyB->getProps().isTrigger) {
+                continue;
+            }
+
+            const float invMassA = (bodyA->getProps().isKinematic || bodyA->getProps().mass <= 0.0f) ? 0.0f : 1.0f / bodyA->getProps().mass;
+            const float invMassB = (bodyB->getProps().isKinematic || bodyB->getProps().mass <= 0.0f) ? 0.0f : 1.0f / bodyB->getProps().mass;
+            const float totalInvMass = invMassA + invMassB;
+            if (totalInvMass <= 0.0f) {
+                continue;
+            }
+
+            const float correctionMag = std::max(contact.depth - kSlop, 0.0f) / totalInvMass * kPercent;
+            const glm::vec3 correction = contact.normal * correctionMag;
+
+            if (invMassA > 0.0f) {
+                bodyA->movePosition(-correction * invMassA);
+            }
+            if (invMassB > 0.0f) {
+                bodyB->movePosition(correction * invMassB);
+            }
         }
     }
 }

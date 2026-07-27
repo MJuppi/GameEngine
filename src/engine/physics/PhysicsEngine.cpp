@@ -39,26 +39,9 @@ float PhysicsEngine::update(float deltaTime, int maxSubSteps) {
         return 0.0f;
     }
 
-    if (fixedTimeStep_ > 0.0f) {
-        // Fixed time stepping
-        accumulator_ += deltaTime;
-
-        // Prevent Spiral of Death
-        if (accumulator_ > 0.25f) {
-            accumulator_ = 0.25f;
-        }
-
-        while (accumulator_ >= fixedTimeStep_) {
-            world_.step(fixedTimeStep_, maxSubSteps);
-            accumulator_ -= fixedTimeStep_;
-        }
-
-        return accumulator_ / fixedTimeStep_;
-    } else {
-        // Variable time stepping
-        world_.step(deltaTime, maxSubSteps);
-        return 1.0f;
-    }
+    const float stepSize = fixedTimeStep_ > 0.0f ? fixedTimeStep_ : deltaTime;
+    world_.step(stepSize, maxSubSteps);
+    return fixedTimeStep_ > 0.0f ? 0.0f : 1.0f;
 }
 
 void PhysicsEngine::clear() {

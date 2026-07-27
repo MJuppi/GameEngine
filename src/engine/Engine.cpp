@@ -51,10 +51,7 @@ public:
                     fixedUpdateCallback(fixedStep);
                 }
 
-                physicsEngine.update(fixedStep); // This internal update handles its own internal accumulator too,
-                                                 // but we want to call fixedUpdate logic here.
-                                                 // Actually, it's better if we let physicsEngine.update handle the loop
-                                                 // but we need to hook into each step.
+                physicsEngine.update(fixedStep, 4);
 
                 accumulator -= fixedStep;
             }

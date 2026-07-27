@@ -39,9 +39,11 @@ public:
     const std::vector<std::unique_ptr<RigidBody>>& getBodies() const { return bodies_; }
 
 private:
+    void stepInternal(float deltaTime);
     void applyGravity();
     void resolveContacts(std::vector<ContactManifold>& manifolds, float deltaTime);
     void warmStart(std::vector<ContactManifold>& manifolds);
+    void sweepCCD(float deltaTime);
 
     std::vector<std::unique_ptr<RigidBody>> bodies_;
     std::vector<ContactManifold> manifoldCache_;

@@ -71,15 +71,17 @@ RigidBody* ObjectBuilder::attachPhysics(PhysicsEngine& physicsEngine, PhysicsMes
         return nullptr;
     }
 
-    // Build the initial transform. For active objects, we also bake the half-extents as scale
-    // so that the renderer (which often uses a unit cube for dynamics) displays the correct size.
     glm::mat4 initialTransform = object.getWorldTransform();
-    if (object.type == ObjectType::Active && object.halfExtents != kAutoExtents) {
+    glm::vec3 colliderHalfExtents = object.halfExtents;
+
+    // Active bodies bake mesh size into the transform; the collider stays as a unit cube.
+    if (object.type == ObjectType::Active) {
         initialTransform = glm::scale(initialTransform, object.halfExtents);
+        colliderHalfExtents = glm::vec3(0.5f);
     }
 
     auto* body = physicsEngine.createBoxBody(
-        object.halfExtents,
+        colliderHalfExtents,
         initialTransform,
         object.physicsProps);
 

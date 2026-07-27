@@ -69,9 +69,12 @@ public:
 
     void addForce(const glm::vec3& force) { state_.totalForce += force; }
     void addTorque(const glm::vec3& torque) { state_.totalTorque += torque; }
-    void integrate(float deltaTime);
+    void integrateVelocity(float deltaTime);
+    void integratePosition(float deltaTime);
+    void movePosition(const glm::vec3& delta);
 
     void updateTransform();
+    [[nodiscard]] glm::vec3 getLocalScale() const;
     void updateInertiaTensor() const;
     void setMaterial(std::shared_ptr<Material> material) { material_ = std::move(material); }
 

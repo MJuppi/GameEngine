@@ -22,6 +22,7 @@ public:
 
     static void resolveCollisions(std::vector<ContactManifold>& manifolds, int iterations, float deltaTime);
     static void resolveManifold(ContactManifold& manifold, float deltaTime);
+    static void correctPositions(std::vector<ContactManifold>& manifolds);
 };
 
 } // namespace ge

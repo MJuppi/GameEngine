@@ -34,7 +34,7 @@ void SceneFactory::configureTestLevel(Level& level) {
 
     // Stacking test for stability
     for (int i = 0; i < 5; ++i) {
-        level.add("TestCube.obj").name("Stack_" + std::to_string(i))
+        level.add("test_cube").name("Stack_" + std::to_string(i))
              .at(0.0f, 2.0f + i * 2.1f, 0.0f).asActive();
     }
 
@@ -42,11 +42,11 @@ void SceneFactory::configureTestLevel(Level& level) {
     RigidBodyProps triggerProps;
     triggerProps.isTrigger = true;
     triggerProps.isKinematic = true;
-    level.add("TestCube.obj").name("GhostCube").at(5.0f, 2.0f, 0.0f)
+    level.add("test_cube").name("GhostCube").at(5.0f, 2.0f, 0.0f)
          .props(triggerProps).asActive();
 
     // Example of using the new material refactor
-    Material redMat = makeDefaultMaterial("RedCube");
+    Material redMat = makeDefaultMaterial("RedMaterial");
     redMat.diffuse = {1.0f, 0.0f, 0.0f};
     redMat.shininess = 64.0f;
     level.add("suomi").name("Suomi").at(2.0f, 6.0f, 0.0f).extents({5.0f, 5.0f, 5.0f}).asVisual();
