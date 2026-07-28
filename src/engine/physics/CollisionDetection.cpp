@@ -323,7 +323,7 @@ void CollisionDetection::resolveManifold(ContactManifold& manifold, float deltaT
 
         // Positional correction (Baumgarte) - now delta-time aware
         const float biasFactor = 0.3f;
-        const float slop = 0.01f; // Amount of allowed penetration
+        const float slop = 0.001f; // Amount of allowed penetration
         float bias = (biasFactor / deltaTime) * std::max(0.0f, contact.depth - slop);
 
         const glm::vec3 crossA = glm::cross(rA, contact.normal);
@@ -385,7 +385,7 @@ void CollisionDetection::resolveManifold(ContactManifold& manifold, float deltaT
 
 void CollisionDetection::correctPositions(std::vector<ContactManifold>& manifolds) {
     constexpr float kPercent = 0.95f;
-    constexpr float kSlop    = 0.005f;
+    constexpr float kSlop    = 0.001f;
 
     for (auto& manifold : manifolds) {
         for (auto& contact : manifold.contacts) {

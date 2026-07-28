@@ -54,6 +54,7 @@ public:
         /// @param p
         /// @return
         ObjectBuilderProxy& props(const RigidBodyProps& p) { object.physicsProps = p; return *this; }
+        ObjectBuilderProxy& mass(const float m) { object.physicsProps.mass = m; return *this; }
 
         /// @brief Sets the object type to visual (not physical).
         void asVisual() { object.type = ObjectType::Visual; level.addObject(std::move(object)); }

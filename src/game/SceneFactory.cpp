@@ -35,7 +35,7 @@ void SceneFactory::configureTestLevel(Level& level) {
     // Stacking test for stability
     for (int i = 0; i < 5; ++i) {
         level.add("test_cube").name("Stack_" + std::to_string(i))
-             .at(0.0f, 2.0f + i * 2.1f, 0.0f).asActive();
+             .at(0.0f, 2.0f + i * 2.1f, 0.0f).mass(0.1f).asActive();
     }
 
     // Trigger test: A ghost cube that doesn't block

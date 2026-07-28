@@ -49,6 +49,7 @@ public:
     void setTransform(const glm::mat4& transform);
     void setPosition(const glm::vec3& position) { state_.position = state_.prevPosition = position; updateTransform(); }
     void setVelocity(const glm::vec3& velocity) { state_.velocity = velocity; }
+    void setMass(const float mass) { props_.mass = mass; }
     void setAngularVelocity(const glm::vec3& angularVelocity) { state_.angularVelocity = angularVelocity; }
     void setProps(const RigidBodyProps& props) { props_ = props; inverseInertiaTensorDirty_ = true; }
 
