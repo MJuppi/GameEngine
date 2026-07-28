@@ -322,7 +322,7 @@ void CollisionDetection::resolveManifold(ContactManifold& manifold, float deltaT
         const float velocityAlongNormal = glm::dot(relativeVelocity, contact.normal);
 
         // Positional correction (Baumgarte) - now delta-time aware
-        const float biasFactor = 0.2f;
+        const float biasFactor = 0.3f;
         const float slop = 0.01f; // Amount of allowed penetration
         float bias = (biasFactor / deltaTime) * std::max(0.0f, contact.depth - slop);
 
@@ -384,34 +384,32 @@ void CollisionDetection::resolveManifold(ContactManifold& manifold, float deltaT
 }
 
 void CollisionDetection::correctPositions(std::vector<ContactManifold>& manifolds) {
-    constexpr float kPercent = 0.8f;
-    constexpr float kSlop = 0.01f;
+    constexpr float kPercent = 0.95f;
+    constexpr float kSlop    = 0.005f;
 
     for (auto& manifold : manifolds) {
         for (auto& contact : manifold.contacts) {
             RigidBody* bodyA = contact.bodyA;
             RigidBody* bodyB = contact.bodyB;
 
-            if (bodyA->getProps().isTrigger || bodyB->getProps().isTrigger) {
+            if (bodyA->getProps().isTrigger || bodyB->getProps().isTrigger)
                 continue;
-            }
 
-            const float invMassA = (bodyA->getProps().isKinematic || bodyA->getProps().mass <= 0.0f) ? 0.0f : 1.0f / bodyA->getProps().mass;
-            const float invMassB = (bodyB->getProps().isKinematic || bodyB->getProps().mass <= 0.0f) ? 0.0f : 1.0f / bodyB->getProps().mass;
-            const float totalInvMass = invMassA + invMassB;
-            if (totalInvMass <= 0.0f) {
+            float invMassA = (bodyA->getProps().isKinematic || bodyA->getProps().mass <= 0.0f)
+                                 ? 0.0f : 1.0f / bodyA->getProps().mass;
+            float invMassB = (bodyB->getProps().isKinematic || bodyB->getProps().mass <= 0.0f)
+                                 ? 0.0f : 1.0f / bodyB->getProps().mass;
+            float totalInv = invMassA + invMassB;
+            if (totalInv <= 0.0f)
                 continue;
-            }
 
-            const float correctionMag = std::max(contact.depth - kSlop, 0.0f) / totalInvMass * kPercent;
-            const glm::vec3 correction = contact.normal * correctionMag;
+            float correctionMag = std::max(contact.depth - kSlop, 0.0f) / totalInv * kPercent;
+            glm::vec3 correction = contact.normal * correctionMag;
 
-            if (invMassA > 0.0f) {
+            if (invMassA > 0.0f)
                 bodyA->movePosition(-correction * invMassA);
-            }
-            if (invMassB > 0.0f) {
-                bodyB->movePosition(correction * invMassB);
-            }
+            if (invMassB > 0.0f)
+                bodyB->movePosition( correction * invMassB);
         }
     }
 }

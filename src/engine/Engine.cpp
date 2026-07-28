@@ -30,13 +30,14 @@ public:
         renderer.setSceneLights(sceneLights);
 
         physicsEngine.setGravity({0.0f, -9.81f, 0.0f});
-        physicsEngine.setFixedTimeStep(1.0f / 60.0f);
+        physicsEngine.setFixedTimeStep(1.0f / 120.0f);
         physicsEngine.setSolverIterations(8);
+        physicsEngine.update(1.0f / 120.0f, 0.0f); // Initialize physics world
         frameTimer.reset();
     }
 
     void run() {
-        const float fixedStep = 1.0f / 60.0f;
+        const float fixedStep = 1.0f / 120.0f;
         float accumulator = 0.0f;
 
         while (!window.shouldClose()) {

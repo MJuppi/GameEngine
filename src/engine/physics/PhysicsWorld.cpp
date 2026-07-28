@@ -237,28 +237,45 @@ void PhysicsWorld::resolveContacts(std::vector<ContactManifold>& manifolds, floa
 }
 
 void PhysicsWorld::sweepCCD(float deltaTime) {
-    constexpr float kMinSweepDistance = 0.05f;
-    constexpr float kSkinWidth = 0.01f;
+    constexpr float kSkinWidth = 0.02f;
+    constexpr float kMinSpeed  = 0.5f;          // only bother with reasonably fast bodies
 
     for (auto& body : bodies_) {
-        if (body->getProps().isKinematic || body->getProps().mass <= 0.0f) {
+        if (body->getProps().isKinematic || body->getProps().mass <= 0.0f)
             continue;
+
+        glm::vec3 velocity = body->getVelocity();
+        float speed = glm::length(velocity);
+        if (speed < kMinSpeed)
+            continue;
+
+        // Approximate the body with a sphere for the sweep (works well enough for boxes too)
+        float radius = 0.5f; // default
+        if (body->getCollider().getType() == ColliderType::Sphere) {
+            const auto& s = static_cast<const SphereCollider&>(body->getCollider());
+            radius = s.getRadius() * std::max({body->getLocalScale().x,
+                                               body->getLocalScale().y,
+                                               body->getLocalScale().z});
+        } else if (body->getCollider().getType() == ColliderType::Box) {
+            const auto& b = static_cast<const BoxCollider&>(body->getCollider());
+            glm::vec3 h = b.getHalfExtents() * body->getLocalScale();
+            radius = glm::length(h);            // conservative
         }
 
-        const glm::vec3 velocity = body->getVelocity();
-        const float speed = glm::length(velocity);
-        const float sweepDistance = speed * deltaTime;
-        if (sweepDistance < kMinSweepDistance) {
-            continue;
-        }
+        glm::vec3 dir = velocity / speed;
+        float maxDist = speed * deltaTime + radius;   // include own radius
 
-        const auto result = raycast(body->getPosition(), velocity, sweepDistance);
-        if (result.hit && result.body != body.get()) {
-            body->setPosition(result.point - result.normal * kSkinWidth);
-            const float normalSpeed = glm::dot(velocity, result.normal);
-            if (normalSpeed < 0.0f) {
-                body->setVelocity(velocity - result.normal * normalSpeed);
-            }
+        // Cast from a point slightly in front of the center
+        auto result = raycast(body->getPosition(), dir, maxDist);
+        if (result.hit && result.body != body.get() && result.fraction < 1.0f) {
+            // Move to just before the surface
+            float safeDist = std::max(0.0f, result.fraction * maxDist - radius - kSkinWidth);
+            body->setPosition(body->getPosition() + dir * safeDist);
+
+            // Kill penetrating velocity component
+            float vn = glm::dot(velocity, result.normal);
+            if (vn < 0.0f)
+                body->setVelocity(velocity - result.normal * vn);
         }
     }
 }
