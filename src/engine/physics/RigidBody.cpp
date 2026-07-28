@@ -8,7 +8,6 @@
 #include <algorithm>
 
 namespace ge {
-namespace {
 
 glm::vec3 extractScale(const glm::mat4& transform) {
     return glm::vec3(
@@ -26,8 +25,6 @@ glm::quat extractRotation(const glm::mat4& transform) {
     rotationMatrix[2] = glm::vec3(transform[2]) / scale.z;
     return glm::quat_cast(rotationMatrix);
 }
-
-} // namespace
 
 RigidBody::RigidBody(std::unique_ptr<Collider> collider,
                      const glm::mat4& transform,
@@ -63,13 +60,12 @@ glm::vec3 RigidBody::getLocalScale() const {
 }
 
 void RigidBody::updateTransform() {
+    // Prefer scale * rotation * translation order for consistency with most engines
     worldTransform_ = glm::mat4_cast(state_.rotation);
-    worldTransform_[3] = glm::vec4(state_.position, 1.0f);
-
     const glm::vec3 scale = getLocalScale();
-    if (scale != glm::vec3(1.0f)) {
+    if (scale != glm::vec3(1.0f))
         worldTransform_ = glm::scale(worldTransform_, scale);
-    }
+    worldTransform_[3] = glm::vec4(state_.position, 1.0f);
 }
 
 void RigidBody::updateInertiaTensor() const {
@@ -130,7 +126,10 @@ void RigidBody::resetForces() {
 }
 
 void RigidBody::applyDamping(glm::vec3& velocity, float damping, float deltaTime) {
-    velocity *= glm::pow(1.0f - damping, deltaTime);
+    // Frame-rate independent exponential decay.
+    // Higher damping values now have a much more noticeable effect.
+    if (damping <= 0.0f) return;
+    velocity *= std::exp(-damping * deltaTime);
 }
 
 void RigidBody::integrateVelocity(float deltaTime) {
@@ -146,8 +145,11 @@ void RigidBody::integrateVelocity(float deltaTime) {
     }
 
     state_.velocity += state_.acceleration * deltaTime;
+    if (glm::length2(state_.velocity) < 0.0001f) {
+        state_.velocity = glm::vec3(0.0f);
+    }
     applyDamping(state_.velocity, props_.linearDamping, deltaTime);
-
+    
     if (glm::length2(state_.velocity) < 0.001f) state_.velocity = glm::vec3(0.0f);
 
     if (props_.mass > 0.0f) {
@@ -155,13 +157,13 @@ void RigidBody::integrateVelocity(float deltaTime) {
         state_.angularVelocity += angularAcceleration * deltaTime;
     }
 
+    if (glm::length2(state_.angularVelocity) < 0.0001f) {
+        state_.angularVelocity = glm::vec3(0.0f);
+    }
     applyDamping(state_.angularVelocity, props_.angularDamping, deltaTime);
-
-    if (glm::length2(state_.angularVelocity) < 0.001f) state_.angularVelocity = glm::vec3(0.0f);
-
-    if (glm::length2(state_.angularVelocity) > 0.001f) {
+    if (glm::length2(state_.angularVelocity) > 0.0001f) {
         const glm::quat angularVelocityQuat(0.0f, state_.angularVelocity);
-        const glm::quat rotationDelta = state_.rotation * angularVelocityQuat * (deltaTime * 0.5f);
+        const glm::quat rotationDelta = state_.rotation * angularVelocityQuat * (deltaTime * props_.angularDamping);
         state_.rotation = glm::normalize(state_.rotation + rotationDelta);
         inverseInertiaTensorDirty_ = true;
     }

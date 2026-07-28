@@ -14,10 +14,10 @@ struct Material;
 
 struct RigidBodyProps {
     float mass = 1.0f;
-    float restitution = 0.5f;
+    float restitution = 0.9f;
     float friction = 0.5f;
-    float linearDamping = 0.1f;
-    float angularDamping = 0.1f;
+    float linearDamping = 0.5f;
+    float angularDamping = 0.5f;
     bool isKinematic = false;
     bool useGravity = true;
     bool isTrigger = false;

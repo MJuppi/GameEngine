@@ -35,7 +35,7 @@ void SceneFactory::configureTestLevel(Level& level) {
     // Stacking test for stability
     for (int i = 0; i < 5; ++i) {
         level.add("test_cube").name("Stack_" + std::to_string(i))
-             .at(0.0f, 2.0f + i * 2.1f, 0.0f).mass(0.1f).asActive();
+             .at(0.0f, 2.0f + i * 1.5f, 0.0f).mass(1.0f).asActive();
     }
 
     // Trigger test: A ghost cube that doesn't block
@@ -52,7 +52,7 @@ void SceneFactory::configureTestLevel(Level& level) {
     level.add("suomi").name("Suomi").at(2.0f, 6.0f, 0.0f).extents({5.0f, 5.0f, 5.0f}).asVisual();
 
     // Add static ground
-    level.add("").name("Ground").at(0.0f, -2.0f, 0.0f).extents({50.0f, 0.5f, 50.0f}).asStatic();
+    level.add("").name("Ground").at(0.0f, -4.0f, 0.0f).extents({50.0f, 2.0f, 50.0f}).asStatic();
 }
 
 RigidBodyProps SceneFactory::makeDynamicBoxProps(float mass, float friction, float restitution) {
@@ -90,7 +90,7 @@ RigidBody* SceneFactory::spawnProjectile(Engine& engine, const glm::vec3& spawnP
     }
 
     const glm::mat4 spawnTransform = glm::translate(glm::mat4(1.0f), spawnPosition);
-    auto* projectile = engine.getPhysicsEngine().createBoxBody(halfExtents * 0.1f, spawnTransform, makeProjectileProps());
+    RigidBody* projectile = engine.getPhysicsEngine().createSphereBody(1.0f, spawnTransform, makeProjectileProps());
 
     if (projectile) {
         projectile->setVelocity(fireDirection * 15.0f + velocityOffset);

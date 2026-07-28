@@ -11,9 +11,8 @@
 #include <limits>
 
 namespace ge {
-namespace {
 
-glm::vec3 extractScale(const glm::mat4& transform) {
+glm::vec3 extractWorldScale(const glm::mat4& transform) {
     return glm::vec3(
         glm::length(glm::vec3(transform[0])),
         glm::length(glm::vec3(transform[1])),
@@ -95,7 +94,7 @@ bool raycastSphere(const SphereCollider& sphere,
                    float& outDistance,
                    glm::vec3& outNormal) {
     const glm::vec3 center = glm::vec3(transform[3]);
-    const glm::vec3 scale = extractScale(transform);
+    const glm::vec3 scale = extractWorldScale(transform);
     const float radius = sphere.getRadius() * std::max({scale.x, scale.y, scale.z});
 
     const glm::vec3 oc = origin - center;
@@ -121,8 +120,6 @@ bool raycastSphere(const SphereCollider& sphere,
     outNormal = glm::normalize(hitPoint - center);
     return true;
 }
-
-} // namespace
 
 PhysicsWorld::PhysicsWorld() = default;
 
