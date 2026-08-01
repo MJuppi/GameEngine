@@ -133,34 +133,30 @@ void RigidBody::applyDamping(glm::vec3& velocity, float damping, float deltaTime
 }
 
 void RigidBody::applyCombinedDamping(float deltaTime) {
-    // 1. Normal independent exponential damping
+    // Standard exponential damping
     state_.velocity        *= std::exp(-props_.linearDamping  * deltaTime);
     state_.angularVelocity *= std::exp(-props_.angularDamping * deltaTime);
 
-    // 2. Combined “mostly spinning in place” term
     const float linSpeed2 = glm::length2(state_.velocity);
     const float angSpeed2 = glm::length2(state_.angularVelocity);
 
-    // Thresholds – tune these
-    constexpr float kAlmostRestLinear  = 0.05f;   // m/s
-    constexpr float kSpinInPlaceAng    = 0.5f;    // rad/s
-    constexpr float kExtraAngularKill  = 3.0f;    // extra damping strength
-
+    // Kill pure spinning-in-place harder
+    constexpr float kAlmostRestLinear = 0.08f;
+    constexpr float kSpinThreshold    = 0.3f;
     if (linSpeed2 < kAlmostRestLinear * kAlmostRestLinear &&
-        angSpeed2 > kSpinInPlaceAng * kSpinInPlaceAng) {
-        // Object is barely translating but still spinning → kill spin harder
-        state_.angularVelocity *= std::exp(-kExtraAngularKill * deltaTime);
+        angSpeed2 > kSpinThreshold * kSpinThreshold) {
+        state_.angularVelocity *= std::exp(-4.0f * deltaTime);
     }
 
-    // 3. Global low-energy clamp (sleep-like behaviour)
-    // Approximate kinetic energy without needing full inertia tensor every frame
-    const float approxKE = 0.5f * props_.mass * linSpeed2
-                         + 0.5f * angSpeed2;          // rough, good enough
+    // Better sleep condition (use a higher threshold)
+    // Real angular KE ≈ ½ ω · I ω, but a simple magnitude check is enough
+    constexpr float kSleepLinear  = 0.02f;
+    constexpr float kSleepAngular = 0.15f;   // rad/s
 
-    constexpr float kSleepEnergy = 0.002f;
-    if (approxKE < kSleepEnergy) {
-        state_.velocity        *= 0.5f;
-        state_.angularVelocity *= 0.5f;
+    if (linSpeed2 < kSleepLinear * kSleepLinear &&
+        angSpeed2 < kSleepAngular * kSleepAngular) {
+        state_.velocity        = glm::vec3(0.0f);
+        state_.angularVelocity = glm::vec3(0.0f);
     }
 }
 

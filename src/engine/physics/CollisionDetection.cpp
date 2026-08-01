@@ -357,22 +357,27 @@ void CollisionDetection::resolveManifold(ContactManifold& manifold, float deltaT
         const glm::vec3 vB = bodyB->getVelocity() + glm::cross(bodyB->getAngularVelocity(), rB);
         const glm::vec3 relativeVelocity = vB - vA;
 
-        const float velocityAlongNormal = glm::dot(relativeVelocity, contact.normal);
-
         // Positional correction (Baumgarte) - now delta-time aware
-        const float biasFactor = 0.3f;
-        const float slop = 0.001f; // Amount of allowed penetration
-        float bias = (biasFactor / deltaTime) * std::max(0.0f, contact.depth - slop);
-
-        const glm::vec3 crossA = glm::cross(rA, contact.normal);
-        const glm::vec3 crossB = glm::cross(rB, contact.normal);
-        float angularTermA = glm::dot(crossA, bodyA->getInverseInertiaTensor() * crossA);
-        float angularTermB = glm::dot(crossB, bodyB->getInverseInertiaTensor() * crossB);
+        const float angularTermA = glm::dot(glm::cross(rA, contact.normal), bodyA->getInverseInertiaTensor() * glm::cross(rA, contact.normal));
+        const float angularTermB = glm::dot(glm::cross(rB, contact.normal), bodyB->getInverseInertiaTensor() * glm::cross(rB, contact.normal));
 
         float massNormal = 1.0f / (totalInvMass + angularTermA + angularTermB);
 
         // Sequential Impulse: calculate delta impulse and accumulate
-        float j = (-(1.0f + std::min(propsA.restitution, propsB.restitution)) * velocityAlongNormal + bias) * massNormal;
+        const float velocityAlongNormal = glm::dot(relativeVelocity, contact.normal);
+
+        // Only bounce if closing speed is significant
+        constexpr float kRestitutionThreshold = 0.5f; // m/s
+        float e = std::min(propsA.restitution, propsB.restitution);
+        if (std::abs(velocityAlongNormal) < kRestitutionThreshold) {
+            e = 0.0f;
+        }
+
+        const float biasFactor = 0.2f;
+        const float slop = 0.005f;
+        float bias = (biasFactor / deltaTime) * std::max(0.0f, contact.depth - slop);
+
+        float j = (-(1.0f + e) * velocityAlongNormal + bias) * massNormal;
 
         float oldNormalImpulse = contact.normalImpulse;
         contact.normalImpulse = std::max(oldNormalImpulse + j, 0.0f);

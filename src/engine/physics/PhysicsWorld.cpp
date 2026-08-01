@@ -280,15 +280,13 @@ void PhysicsWorld::sweepCCD(float deltaTime) {
 void PhysicsWorld::stepInternal(float deltaTime) {
     applyGravity();
 
-    for (auto& body : bodies_) {
+    for (auto& body : bodies_)
         body->integrateVelocity(deltaTime);
-    }
 
     sweepCCD(deltaTime);
 
-    for (auto& body : bodies_) {
+    for (auto& body : bodies_)
         body->integratePosition(deltaTime);
-    }
 
     const auto potentialPairs = BroadPhase::findPairs(bodies_);
     std::vector<ContactManifold> manifolds;
@@ -297,6 +295,13 @@ void PhysicsWorld::stepInternal(float deltaTime) {
     warmStart(manifolds);
     resolveContacts(manifolds, deltaTime);
     CollisionDetection::correctPositions(manifolds);
+
+    // Light post-solve damping so residual roll dies
+    for (auto& body : bodies_) {
+        if (body->getProps().isKinematic || body->getProps().mass <= 0.0f)
+            continue;
+        body->setAngularVelocity(body->getAngularVelocity() * std::exp(-1.5f * deltaTime));
+    }
 
     manifoldCache_ = std::move(manifolds);
 }
