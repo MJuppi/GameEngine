@@ -16,8 +16,8 @@ struct RigidBodyProps {
     float mass = 1.0f;
     float restitution = 0.9f;
     float friction = 0.5f;
-    float linearDamping = 0.5f;
-    float angularDamping = 0.5f;
+    float linearDamping  = 0.15f;
+    float angularDamping = 0.6f;
     bool isKinematic = false;
     bool useGravity = true;
     bool isTrigger = false;
@@ -96,6 +96,7 @@ private:
     mutable bool inverseInertiaTensorDirty_;
 
     void applyDamping(glm::vec3& velocity, float damping, float deltaTime);
+    void applyCombinedDamping(float deltaTime);
     void resetForces();
 };
 

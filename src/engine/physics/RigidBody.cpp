@@ -132,6 +132,38 @@ void RigidBody::applyDamping(glm::vec3& velocity, float damping, float deltaTime
     velocity *= std::exp(-damping * deltaTime);
 }
 
+void RigidBody::applyCombinedDamping(float deltaTime) {
+    // 1. Normal independent exponential damping
+    state_.velocity        *= std::exp(-props_.linearDamping  * deltaTime);
+    state_.angularVelocity *= std::exp(-props_.angularDamping * deltaTime);
+
+    // 2. Combined “mostly spinning in place” term
+    const float linSpeed2 = glm::length2(state_.velocity);
+    const float angSpeed2 = glm::length2(state_.angularVelocity);
+
+    // Thresholds – tune these
+    constexpr float kAlmostRestLinear  = 0.05f;   // m/s
+    constexpr float kSpinInPlaceAng    = 0.5f;    // rad/s
+    constexpr float kExtraAngularKill  = 3.0f;    // extra damping strength
+
+    if (linSpeed2 < kAlmostRestLinear * kAlmostRestLinear &&
+        angSpeed2 > kSpinInPlaceAng * kSpinInPlaceAng) {
+        // Object is barely translating but still spinning → kill spin harder
+        state_.angularVelocity *= std::exp(-kExtraAngularKill * deltaTime);
+    }
+
+    // 3. Global low-energy clamp (sleep-like behaviour)
+    // Approximate kinetic energy without needing full inertia tensor every frame
+    const float approxKE = 0.5f * props_.mass * linSpeed2
+                         + 0.5f * angSpeed2;          // rough, good enough
+
+    constexpr float kSleepEnergy = 0.002f;
+    if (approxKE < kSleepEnergy) {
+        state_.velocity        *= 0.5f;
+        state_.angularVelocity *= 0.5f;
+    }
+}
+
 void RigidBody::integrateVelocity(float deltaTime) {
     if (props_.isKinematic) return;
 
@@ -140,31 +172,34 @@ void RigidBody::integrateVelocity(float deltaTime) {
 
     updateInertiaTensor();
 
+    // --- Forces → acceleration → velocity ---
     if (props_.mass > 0.0f) {
         state_.acceleration = state_.totalForce / props_.mass;
+        state_.velocity += state_.acceleration * deltaTime;
     }
 
-    state_.velocity += state_.acceleration * deltaTime;
-    if (glm::length2(state_.velocity) < 0.0001f) {
+    // --- Combined damping ---
+    applyCombinedDamping(deltaTime);
+
+    // Zero tiny residuals
+    if (glm::length2(state_.velocity) < 1e-4f)
         state_.velocity = glm::vec3(0.0f);
-    }
-    applyDamping(state_.velocity, props_.linearDamping, deltaTime);
-    
-    if (glm::length2(state_.velocity) < 0.001f) state_.velocity = glm::vec3(0.0f);
+    if (glm::length2(state_.angularVelocity) < 1e-4f)
+        state_.angularVelocity = glm::vec3(0.0f);
 
+    // --- Angular integration (quaternion) ---
     if (props_.mass > 0.0f) {
         const glm::vec3 angularAcceleration = inverseInertiaTensor_ * state_.totalTorque;
         state_.angularVelocity += angularAcceleration * deltaTime;
     }
 
-    if (glm::length2(state_.angularVelocity) < 0.0001f) {
-        state_.angularVelocity = glm::vec3(0.0f);
-    }
-    applyDamping(state_.angularVelocity, props_.angularDamping, deltaTime);
-    if (glm::length2(state_.angularVelocity) > 0.0001f) {
-        const glm::quat angularVelocityQuat(0.0f, state_.angularVelocity);
-        const glm::quat rotationDelta = state_.rotation * angularVelocityQuat * (deltaTime * props_.angularDamping);
-        state_.rotation = glm::normalize(state_.rotation + rotationDelta);
+    // Re-apply a bit of angular damping after torque (optional but helps)
+    //state_.angularVelocity *= std::exp(-props_.angularDamping * deltaTime * 0.5f);
+
+    if (glm::length2(state_.angularVelocity) > 1e-4f) {
+        const glm::quat omega(0.0f, state_.angularVelocity);
+        const glm::quat delta = state_.rotation * omega * (deltaTime * 0.5f);
+        state_.rotation = glm::normalize(state_.rotation + delta);
         inverseInertiaTensorDirty_ = true;
     }
 
