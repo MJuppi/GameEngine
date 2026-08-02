@@ -423,6 +423,29 @@ void CollisionDetection::resolveManifold(ContactManifold& manifold, float deltaT
             bodyB->setVelocity(bodyB->getVelocity() + frictionImpulseVec * invMassB);
             bodyB->setAngularVelocity(bodyB->getAngularVelocity() + bodyB->getInverseInertiaTensor() * glm::cross(rB, frictionImpulseVec));
         }
+
+        // Torsional spin friction: reduce relative angular velocity about the contact normal.
+        // This helps stop cubes from spinning in place when they are supported by a contact patch.
+        const float rollingFriction = std::min(propsA.rollingFriction, propsB.rollingFriction);
+        if (rollingFriction > 0.0f) {
+            const float wA = glm::dot(bodyA->getAngularVelocity(), contact.normal);
+            const float wB = glm::dot(bodyB->getAngularVelocity(), contact.normal);
+            const float relSpin = wB - wA;
+
+            const float invInertiaA = glm::dot(contact.normal, bodyA->getInverseInertiaTensor() * contact.normal);
+            const float invInertiaB = glm::dot(contact.normal, bodyB->getInverseInertiaTensor() * contact.normal);
+            const float spinMass = invInertiaA + invInertiaB;
+
+            if (spinMass > 0.0f) {
+                float js = -relSpin / spinMass;
+                const float maxSpinImpulse = contact.normalImpulse * rollingFriction;
+                js = glm::clamp(js, -maxSpinImpulse, maxSpinImpulse);
+
+                const glm::vec3 spinImpulse = contact.normal * js;
+                bodyA->setAngularVelocity(bodyA->getAngularVelocity() - bodyA->getInverseInertiaTensor() * spinImpulse);
+                bodyB->setAngularVelocity(bodyB->getAngularVelocity() + bodyB->getInverseInertiaTensor() * spinImpulse);
+            }
+        }
     }
 }
 

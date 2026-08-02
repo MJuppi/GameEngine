@@ -74,8 +74,17 @@ RigidBody* ObjectBuilder::attachPhysics(PhysicsEngine& physicsEngine, PhysicsMes
     glm::mat4 initialTransform = object.getWorldTransform();
     glm::vec3 colliderHalfExtents = object.halfExtents;
 
-    // Active bodies bake mesh size into the transform; the collider stays as a unit cube.
     if (object.type == ObjectType::Active) {
+        // Compute a local center-of-mass offset from the active mesh bounds.
+        // This allows tipping behavior to use the actual object COM rather than the shape origin.
+        if (!object.mesh.vertices.empty()) {
+            auto bounds = computeMeshBounds(object.mesh);
+            object.physicsProps.centerOfMassOffset = bounds.getCenter();
+        } else {
+            object.physicsProps.centerOfMassOffset = glm::vec3(0.0f);
+        }
+
+        // Active bodies bake mesh size into the transform; the collider stays as a unit cube.
         initialTransform = glm::scale(initialTransform, object.halfExtents);
         colliderHalfExtents = glm::vec3(0.5f);
     }
@@ -86,6 +95,7 @@ RigidBody* ObjectBuilder::attachPhysics(PhysicsEngine& physicsEngine, PhysicsMes
         object.physicsProps);
 
     if (body) {
+        body->setName(object.name);
         std::cout << "[Physics] Attached body to '" << object.name << "' at ("
                   << object.spawnLocation.x << ", " << object.spawnLocation.y << ", " << object.spawnLocation.z
                   << ") extents=(" << object.halfExtents.x << ", " << object.halfExtents.y << ", " << object.halfExtents.z << ")\n";

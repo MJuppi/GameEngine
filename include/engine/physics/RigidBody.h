@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <cstdint>
+#include <string>
 #include "engine/mesh/MeshData.h"
 
 namespace ge {
@@ -16,6 +17,8 @@ struct RigidBodyProps {
     float mass = 1.0f;
     float restitution = 0.2f;
     float friction = 0.7f;
+    float rollingFriction = 0.12f;
+    glm::vec3 centerOfMassOffset{0.0f};
     float linearDamping  = 0.15f;
     float angularDamping = 0.8f;
     bool isKinematic = false;
@@ -52,12 +55,15 @@ public:
     void setMass(const float mass) { props_.mass = mass; }
     void setAngularVelocity(const glm::vec3& angularVelocity) { state_.angularVelocity = angularVelocity; }
     void setProps(const RigidBodyProps& props) { props_ = props; inverseInertiaTensorDirty_ = true; }
+    void setName(std::string name) { debugName_ = std::move(name); }
+    const std::string& getName() const { return debugName_; }
 
     const Collider& getCollider() const { return *collider_; }
     const glm::mat4& getWorldTransform() const { return worldTransform_; }
     const glm::vec3& getPosition() const { return state_.position; }
     const glm::vec3& getVelocity() const { return state_.velocity; }
     const glm::vec3& getAngularVelocity() const { return state_.angularVelocity; }
+    const glm::vec3 getCenterOfMassWorld() const { return state_.position + state_.rotation * props_.centerOfMassOffset; }
     const RigidBodyProps& getProps() const { return props_; }
     const glm::mat3& getInverseInertiaTensor() const {
         updateInertiaTensor();
@@ -91,6 +97,7 @@ private:
 
     std::shared_ptr<Material> material_;
     std::optional<MeshData> mesh_;
+    std::string debugName_;
 
     mutable glm::mat3 inverseInertiaTensor_;
     mutable bool inverseInertiaTensorDirty_;

@@ -39,7 +39,7 @@ void SceneFactory::configureTestLevel(Level& level) {
 
     // Stacking test for stability
     for (int i = 0; i < 5; ++i) {
-        level.add("").name("Stack_" + std::to_string(i))
+        level.add("test_cube").name("Stack_" + std::to_string(i))
              .at(0.0f, 2.0f + i * 1.5f, 0.0f).extents({1.0f, 1.0f, 1.0f}).mass(1.0f).asActive();
     }
 
@@ -47,7 +47,7 @@ void SceneFactory::configureTestLevel(Level& level) {
     RigidBodyProps triggerProps;
     triggerProps.isTrigger = true;
     triggerProps.isKinematic = true;
-    level.add("").name("GhostCube").at(5.0f, 2.0f, 0.0f)
+    level.add("test_cube").name("GhostCube").at(5.0f, 2.0f, 0.0f)
          .props(triggerProps).asActive();
 
     // Example of using the new material refactor
@@ -78,12 +78,50 @@ void SceneFactory::setupUI(Engine& engine) {
     });
 
     engine.getUIManager().addElement(fpsLabel);
+
+    // Debug label for the first stacked cube named "Stack_0"
+    auto cubeDebugLabel = std::make_shared<Label>();
+    cubeDebugLabel->setPosition({0.02f, 0.05f});
+    cubeDebugLabel->setSize({0.8f, 0.08f});
+    cubeDebugLabel->setColor({0.0f, 1.0f, 1.0f, 1.0f});
+    cubeDebugLabel->setFontSize(1.2f);
+    cubeDebugLabel->setText("Stack_0: searching...");
+
+    cubeDebugLabel->setOnUpdate([&engine](Label& label, float /*deltaTime*/) {
+        const auto& bodies = engine.getPhysicsEngine().getWorld().getBodies();
+        const RigidBody* target = nullptr;
+        for (const auto& body : bodies) {
+            if (body->getName() == "Stack_0") {
+                target = body.get();
+                break;
+            }
+        }
+
+        if (!target) {
+            label.setText("Stack_0: not found");
+            return;
+        }
+
+        const glm::vec3 pos = target->getPosition();
+        const glm::vec3 vel = target->getVelocity();
+        const glm::vec3 ang = target->getAngularVelocity();
+
+        std::ostringstream ss;
+        ss << "Stack_0";
+        ss << "\npos=" << std::fixed << std::setprecision(2)
+           << pos.x << "," << pos.y << "," << pos.z;
+        ss << "\nvel=" << vel.x << "," << vel.y << "," << vel.z;
+        ss << "\nang=" << ang.x << "," << ang.y << "," << ang.z;
+        label.setText(ss.str());
+    });
+    engine.getUIManager().addElement(cubeDebugLabel);
 }
 
 RigidBodyProps SceneFactory::makeDynamicBoxProps(float mass, float friction, float restitution) {
     RigidBodyProps props;
     props.mass = mass;
     props.friction = friction;
+    props.rollingFriction = 0.18f;
     props.restitution = restitution;
     props.linearDamping = 0.05f;
     props.angularDamping = 0.1f;

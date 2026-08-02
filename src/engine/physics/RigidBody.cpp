@@ -35,18 +35,18 @@ RigidBody::RigidBody(std::unique_ptr<Collider> collider,
       props_(props),
       inverseInertiaTensorDirty_(true)
 {
-    state_.position = glm::vec3(transform[3]);
-    state_.prevPosition = state_.position;
     state_.rotation = extractRotation(transform);
+    state_.position = glm::vec3(transform[3]) + state_.rotation * props_.centerOfMassOffset;
+    state_.prevPosition = state_.position;
     state_.prevRotation = state_.rotation;
     updateTransform();
 }
 
 void RigidBody::setTransform(const glm::mat4& transform) {
     baseTransform_ = transform;
-    state_.position = glm::vec3(transform[3]);
-    state_.prevPosition = state_.position;
     state_.rotation = extractRotation(transform);
+    state_.position = glm::vec3(transform[3]) + state_.rotation * props_.centerOfMassOffset;
+    state_.prevPosition = state_.position;
     state_.prevRotation = state_.rotation;
     inverseInertiaTensorDirty_ = true;
     updateTransform();
@@ -60,12 +60,16 @@ glm::vec3 RigidBody::getLocalScale() const {
 }
 
 void RigidBody::updateTransform() {
-    // Prefer scale * rotation * translation order for consistency with most engines
+    // Prefer scale * rotation * translation order for consistency with most engines.
+    // If the center of mass is offset from the shape origin, the collider transform
+    // must be translated so the shape's world transform places the COM at state_.position.
     worldTransform_ = glm::mat4_cast(state_.rotation);
     const glm::vec3 scale = getLocalScale();
     if (scale != glm::vec3(1.0f))
         worldTransform_ = glm::scale(worldTransform_, scale);
-    worldTransform_[3] = glm::vec4(state_.position, 1.0f);
+
+    const glm::vec3 shapeOrigin = state_.position - state_.rotation * props_.centerOfMassOffset;
+    worldTransform_[3] = glm::vec4(shapeOrigin, 1.0f);
 }
 
 void RigidBody::updateInertiaTensor() const {
@@ -148,15 +152,19 @@ void RigidBody::applyCombinedDamping(float deltaTime) {
         state_.angularVelocity *= std::exp(-4.0f * deltaTime);
     }
 
-    // Better sleep condition (use a higher threshold)
+    // Better sleep condition (use a slightly higher threshold)
     // Real angular KE ≈ ½ ω · I ω, but a simple magnitude check is enough
-    constexpr float kSleepLinear  = 0.02f;
-    constexpr float kSleepAngular = 0.15f;   // rad/s
+    constexpr float kSleepLinear  = 0.05f;
+    constexpr float kSleepAngular = 0.20f;   // rad/s
 
     if (linSpeed2 < kSleepLinear * kSleepLinear &&
         angSpeed2 < kSleepAngular * kSleepAngular) {
         state_.velocity        = glm::vec3(0.0f);
         state_.angularVelocity = glm::vec3(0.0f);
+    } else if (linSpeed2 < (kSleepLinear * 3.0f) * (kSleepLinear * 3.0f) &&
+               angSpeed2 < 0.5f * 0.5f) {
+        // Apply extra damping for very slow spin when the body is nearly at rest.
+        state_.angularVelocity *= std::exp(-8.0f * deltaTime);
     }
 }
 
@@ -205,7 +213,15 @@ void RigidBody::integrateVelocity(float deltaTime) {
 void RigidBody::integratePosition(float deltaTime) {
     if (props_.isKinematic) return;
 
+    const float prevComY = state_.position.y;
     state_.position += state_.velocity * deltaTime;
+
+    const float comRise = state_.position.y - prevComY;
+    if (comRise > 0.01f && glm::length2(state_.angularVelocity) > 1e-6f) {
+        const float dampingFactor = glm::clamp(comRise * 30.0f, 0.0f, 1.5f);
+        state_.angularVelocity *= std::exp(-dampingFactor * deltaTime);
+    }
+
     updateTransform();
 }
 
