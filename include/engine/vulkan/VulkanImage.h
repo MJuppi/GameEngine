@@ -40,17 +40,19 @@ public:
         uint32_t height);
 
     void createView(VulkanDevice& device, VkFormat format, VkImageAspectFlags aspectFlags);
-    void createSampler(VulkanDevice& device);
+    void createSampler(VulkanDevice& device, bool nearestClamp = false);
 
     [[nodiscard]] VkImage handle() const { return m_image; }
     [[nodiscard]] VkImageView view() const { return m_view; }
     [[nodiscard]] VkSampler sampler() const { return m_sampler; }
 
+    // If 'nearestClamp' is true the created sampler will use nearest filtering and clamp-to-edge addressing.
     static VulkanImage fromTextureData(
         VulkanDevice& device,
         VkCommandPool commandPool,
         VkQueue queue,
-        const TextureData& data);
+        const TextureData& data,
+        bool nearestClamp = false);
 
 private:
     VkImage m_image = VK_NULL_HANDLE;

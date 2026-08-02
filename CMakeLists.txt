@@ -109,6 +109,7 @@ set(ENGINE_SOURCES
     src/engine/scene/MaterialSystem.cpp
     src/engine/scene/ShaderEffect.cpp
     src/engine/ui/UIManager.cpp
+    src/engine/ui/BitmapFont.cpp
     src/engine/Engine.cpp
     src/engine/Window.cpp
     src/engine/FrameTimer.cpp
@@ -128,7 +129,9 @@ set(ENGINE_SOURCES
     src/engine/physics/SphereCollider.cpp
 )
 
-add_library(game_engine_lib STATIC ${ENGINE_SOURCES})
+add_library(game_engine_lib STATIC ${ENGINE_SOURCES}
+    include/engine/ui/BitmapFont.h
+    include/engine/vulkan/PushConstants.h)
 add_dependencies(game_engine_lib CompileShaders)
 
 if (NOT DEFINED Vulkan_INCLUDE_DIRS)

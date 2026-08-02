@@ -110,22 +110,34 @@ void VulkanImage::createView(VulkanDevice& device, VkFormat f, VkImageAspectFlag
     vkCreateImageView(device.logical(), &info, nullptr, &m_view);
 }
 
-void VulkanImage::createSampler(VulkanDevice& device) {
+void VulkanImage::createSampler(VulkanDevice& device, bool nearestClamp) {
     VkSamplerCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    info.magFilter = VK_FILTER_LINEAR;
-    info.minFilter = VK_FILTER_LINEAR;
-    info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    info.anisotropyEnable = VK_TRUE;
-    info.maxAnisotropy = device.properties().limits.maxSamplerAnisotropy;
-    info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    if (nearestClamp) {
+        info.magFilter = VK_FILTER_NEAREST;
+        info.minFilter = VK_FILTER_NEAREST;
+        info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        info.anisotropyEnable = VK_FALSE;
+        info.maxAnisotropy = 1.0f;
+        info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    } else {
+        info.magFilter = VK_FILTER_LINEAR;
+        info.minFilter = VK_FILTER_LINEAR;
+        info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        info.anisotropyEnable = VK_TRUE;
+        info.maxAnisotropy = device.properties().limits.maxSamplerAnisotropy;
+        info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    }
     vkCreateSampler(device.logical(), &info, nullptr, &m_sampler);
 }
 
-VulkanImage VulkanImage::fromTextureData(VulkanDevice& device, VkCommandPool pool, VkQueue queue, const TextureData& data) {
+VulkanImage VulkanImage::fromTextureData(VulkanDevice& device, VkCommandPool pool, VkQueue queue, const TextureData& data, bool nearestClamp) {
     VulkanBuffer staging; staging.create(device, data.pixels.size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     VulkanBuffer::write(device, staging.handle(), staging.memory(), data.pixels.data(), data.pixels.size());
 
@@ -137,7 +149,9 @@ VulkanImage VulkanImage::fromTextureData(VulkanDevice& device, VkCommandPool poo
     img.transitionLayout(device, pool, queue, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     staging.destroy(device);
     img.createView(device, format, VK_IMAGE_ASPECT_COLOR_BIT);
-    img.createSampler(device);
+    // Prefer nearest clamp for single-channel bitmap fonts or when requested.
+    bool preferNearest = nearestClamp || (data.channels == 1);
+    img.createSampler(device, preferNearest);
     return img;
 }
 

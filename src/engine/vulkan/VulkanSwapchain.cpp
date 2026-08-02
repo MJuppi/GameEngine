@@ -46,8 +46,14 @@ void VulkanSwapchain::createSwapchain(GLFWwindow* window) {
 
     auto format = formats[0];
     for (auto& f : formats) if (f.format == VK_FORMAT_B8G8R8A8_SRGB && f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) format = f;
+    // Prefer IMMEDIATE to allow uncapped framerate (if supported), otherwise use MAILBOX, then FIFO.
     auto mode = VK_PRESENT_MODE_FIFO_KHR;
-    for (auto& m : modes) if (m == VK_PRESENT_MODE_MAILBOX_KHR) mode = m;
+    for (auto& m : modes) {
+        if (m == VK_PRESENT_MODE_IMMEDIATE_KHR) { mode = m; break; }
+    }
+    if (mode == VK_PRESENT_MODE_FIFO_KHR) {
+        for (auto& m : modes) if (m == VK_PRESENT_MODE_MAILBOX_KHR) { mode = m; break; }
+    }
 
     if (caps.currentExtent.width != 0xFFFFFFFF) m_extent = caps.currentExtent;
     else {

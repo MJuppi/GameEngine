@@ -29,6 +29,8 @@
 #endif
 
 #include "engine/ui/Label.h"
+#include "engine/ui/BitmapFont.h"
+#include "engine/vulkan/PushConstants.h"
 
 namespace ge {
 
@@ -122,17 +124,6 @@ void VulkanRenderer::initVulkan() {
     createCommandBuffers();
     createSyncObjects();
     std::cout << "[VulkanRenderer] initVulkan completed." << std::endl;
-}
-
-void VulkanRenderer::createCommandPool() {
-    VkCommandPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    poolInfo.queueFamilyIndex = m_device->queueFamilies().graphics.value();
-
-    if (vkCreateCommandPool(m_device->logical(), &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create command pool");
-    }
 }
 
 void VulkanRenderer::createMeshBuffers() {
@@ -254,10 +245,28 @@ void VulkanRenderer::createDescriptorSets() {
             VkDescriptorImageInfo imageInfo{ m_texture.sampler(), m_texture.view(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
 
             std::array<VkWriteDescriptorSet, 3> writes{};
-            writes[0] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_descriptorSets[i], 0, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &sceneInfo, nullptr };
-            writes[1] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_descriptorSets[i], 1, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &materialInfo, nullptr };
-            writes[2] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_descriptorSets[i], 2, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &imageInfo, nullptr, nullptr };
-            vkUpdateDescriptorSets(m_device->logical(), 3, writes.data(), 0, nullptr);
+            writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[0].dstSet = m_descriptorSets[i];
+            writes[0].dstBinding = 0;
+            writes[0].descriptorCount = 1;
+            writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writes[0].pBufferInfo = &sceneInfo;
+
+            writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[1].dstSet = m_descriptorSets[i];
+            writes[1].dstBinding = 1;
+            writes[1].descriptorCount = 1;
+            writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writes[1].pBufferInfo = &materialInfo;
+
+            writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[2].dstSet = m_descriptorSets[i];
+            writes[2].dstBinding = 2;
+            writes[2].descriptorCount = 1;
+            writes[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writes[2].pImageInfo = &imageInfo;
+
+            vkUpdateDescriptorSets(m_device->logical(), static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
         }
 
         // UI set (uses font texture)
@@ -267,11 +276,40 @@ void VulkanRenderer::createDescriptorSets() {
             VkDescriptorImageInfo imageInfo{ m_fontTexture.sampler(), m_fontTexture.view(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
 
             std::array<VkWriteDescriptorSet, 3> writes{};
-            writes[0] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_uiDescriptorSets[i], 0, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &sceneInfo, nullptr };
-            writes[1] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_uiDescriptorSets[i], 1, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &materialInfo, nullptr };
-            writes[2] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_uiDescriptorSets[i], 2, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &imageInfo, nullptr, nullptr };
-            vkUpdateDescriptorSets(m_device->logical(), 3, writes.data(), 0, nullptr);
+            writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[0].dstSet = m_uiDescriptorSets[i];
+            writes[0].dstBinding = 0;
+            writes[0].descriptorCount = 1;
+            writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writes[0].pBufferInfo = &sceneInfo;
+
+            writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[1].dstSet = m_uiDescriptorSets[i];
+            writes[1].dstBinding = 1;
+            writes[1].descriptorCount = 1;
+            writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writes[1].pBufferInfo = &materialInfo;
+
+            writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[2].dstSet = m_uiDescriptorSets[i];
+            writes[2].dstBinding = 2;
+            writes[2].descriptorCount = 1;
+            writes[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writes[2].pImageInfo = &imageInfo;
+
+            vkUpdateDescriptorSets(m_device->logical(), static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
         }
+    }
+}
+
+void VulkanRenderer::createCommandPool() {
+    VkCommandPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    poolInfo.queueFamilyIndex = m_device->queueFamilies().graphics.value();
+
+    if (vkCreateCommandPool(m_device->logical(), &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create command pool");
     }
 }
 
@@ -496,8 +534,8 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer cb, uint32_t idx) {
         vkCmdBindVertexBuffers(cb, 0, 1, vbs, offsets);
         vkCmdBindIndexBuffer(cb, m_indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
 
-        struct { glm::mat4 m; glm::mat4 n; } push { m_modelMatrix, glm::transpose(glm::inverse(m_modelMatrix)) };
-        vkCmdPushConstants(cb, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push), &push);
+        ge::ScenePushConstants push { m_modelMatrix, glm::transpose(glm::inverse(m_modelMatrix)) };
+        vkCmdPushConstants(cb, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
         vkCmdDrawIndexed(cb, m_indexCount, 1, 0, 0, 0);
     }
 
@@ -545,8 +583,8 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer cb, uint32_t idx) {
         vkCmdBindVertexBuffers(cb, 0, 1, vbs, offsets);
         vkCmdBindIndexBuffer(cb, buf.ib->handle(), 0, VK_INDEX_TYPE_UINT32);
 
-        struct { glm::mat4 m; glm::mat4 n; } push { obj.transform, glm::transpose(glm::inverse(obj.transform)) };
-        vkCmdPushConstants(cb, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push), &push);
+        ge::ScenePushConstants push { obj.transform, glm::transpose(glm::inverse(obj.transform)) };
+        vkCmdPushConstants(cb, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
         vkCmdDrawIndexed(cb, buf.indexCount, 1, 0, 0, 0);
     }
 
@@ -705,43 +743,24 @@ void VulkanRenderer::renderUI(VkCommandBuffer cb) {
     vkCmdBindVertexBuffers(cb, 0, 1, vbs, offsets);
     vkCmdBindIndexBuffer(cb, m_uiQuadIB->handle(), 0, VK_INDEX_TYPE_UINT32);
 
-    struct UIPushConstants {
-        glm::vec2 uiPosition;
-        glm::vec2 uiSize;
-        glm::vec4 uiColor;
-        glm::vec4 uiUVRect;
-        int hasTexture;
-    };
+    // UIPushConstants defined in include/engine/vulkan/PushConstants.h
 
     auto elements = m_uiManager->getVisibleElements();
     for (auto& element : elements) {
         if (auto label = std::dynamic_pointer_cast<Label>(element)) {
-            const std::string& text = label->getText();
-            float xOffset = 0.0f;
-            float charWidth = 0.02f * label->getFontSize();
-            float charHeight = charWidth * 2.0f;
-
-            for (char c : text) {
-                if (c < 32 || c > 126) continue;
-                int charIdx = c - 32;
-                float umin = (charIdx % 16) / 16.0f;
-                float vmin = (charIdx / 16) / 16.0f; // 16 because 128/8=16
-                float umax = umin + 1.0f / 16.0f;
-                float vmax = vmin + 1.0f / 16.0f;
-
-                UIPushConstants pcs{};
-                pcs.uiPosition = label->getPosition() + glm::vec2(xOffset, 0.0f);
-                pcs.uiSize = glm::vec2(charWidth, charHeight);
+            label->forEachGlyph([&](const glm::vec2& glyphPos, const glm::vec2& glyphSize, const glm::vec4& uv) {
+                ge::UIPushConstants pcs{};
+                pcs.uiPosition = glyphPos;
+                pcs.uiSize = glyphSize;
                 pcs.uiColor = label->getColor();
-                pcs.uiUVRect = glm::vec4(umin, vmin, umax, vmax);
+                pcs.uiUVRect = uv;
                 pcs.hasTexture = 1;
 
                 vkCmdPushConstants(cb, pipeline.layout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pcs), &pcs);
                 vkCmdDrawIndexed(cb, m_uiQuadIndexCount, 1, 0, 0, 0);
-                xOffset += charWidth * 0.8f;
-            }
+            });
         } else {
-            UIPushConstants pcs{};
+            ge::UIPushConstants pcs{};
             pcs.uiPosition = element->getPosition();
             pcs.uiSize = element->getSize();
             pcs.uiColor = element->getColor();
