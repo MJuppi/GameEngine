@@ -1,6 +1,8 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <GLFW/glfw3.h>
+#include <iostream>
 
 namespace ge {
 
@@ -25,7 +27,15 @@ public:
      * @brief Handles input events.
      * @return true if the event was consumed, false otherwise.
      */
-    virtual bool handleInput(double xpos, double ypos, int button, int action, int mods) { return false; }
+    virtual bool handleInput(double xpos, double ypos, int button, int action, int mods) {
+        // Default behavior: log right-clicks for quick debugging and reuse parameters.
+        // Return false by default to indicate the event was not consumed.
+        if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {
+            std::cout << "[UI] Right-click at (" << xpos << ", " << ypos << ") on element " << this << std::endl;
+        }
+        (void)mods; // keep compiler quiet if not used elsewhere
+        return false;
+    }
 
     void setPosition(const glm::vec2& pos) { m_position = pos; }
     void setSize(const glm::vec2& size) { m_size = size; }
