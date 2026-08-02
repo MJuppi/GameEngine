@@ -32,6 +32,8 @@ class VulkanSwapchain;
 class VulkanPipeline;
 class VulkanBuffer;
 class MaterialSystem;
+class UIManager;
+class ShaderEffect;
 
 struct RenderObject {
     glm::mat4 transform;
@@ -82,6 +84,8 @@ public:
 
     MaterialSystem& getMaterialSystem() { return *m_materialSystem; }
 
+    void setUIManager(UIManager* manager) { m_uiManager = manager; }
+
 private:
     void initVulkan();
     void createCommandPool();
@@ -95,7 +99,10 @@ private:
     void createTextureImage();
     void createDescriptorPool();
     void createDescriptorSets();
+    void createUIBuffers();
+    void createFontTexture();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void renderUI(VkCommandBuffer cb);
 
     struct MeshBuffers {
         std::unique_ptr<VulkanBuffer> vb;
@@ -134,6 +141,7 @@ private:
 
     VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
     std::vector<VkDescriptorSet> m_descriptorSets;
+    std::vector<VkDescriptorSet> m_uiDescriptorSets;
 
     // Per in-flight frame: acquire + fence. Per swapchain image: present semaphore.
     std::vector<VkSemaphore> m_imageAvailableSemaphores;
@@ -156,6 +164,13 @@ private:
     std::map<const MeshData*, MeshBuffers> m_dynamicMeshCache;
     MeshData m_boxMesh{};
     std::unique_ptr<MaterialSystem> m_materialSystem;
+
+    std::unique_ptr<ShaderEffect> m_uiEffect;
+    std::unique_ptr<VulkanBuffer> m_uiQuadVB;
+    std::unique_ptr<VulkanBuffer> m_uiQuadIB;
+    uint32_t m_uiQuadIndexCount = 0;
+    VulkanImage m_fontTexture;
+    UIManager* m_uiManager = nullptr;
 };
 
 } // namespace ge

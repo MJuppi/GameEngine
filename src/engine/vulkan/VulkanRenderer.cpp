@@ -21,23 +21,16 @@
 
 #include "engine/asset/TextureLoader.h"
 #include "engine/asset/AssetLoader.h"
+#include "engine/scene/ShaderEffect.h"
+#include "engine/ui/UIManager.h"
 
 #ifndef SHADER_DIR
 #define SHADER_DIR "shaders"
 #endif
 
+#include "engine/ui/Label.h"
+
 namespace ge {
-
-namespace {
-
-void framebufferResizeCallback(GLFWwindow* window, int /*width*/, int /*height*/) {
-    auto* renderer = reinterpret_cast<VulkanRenderer*>(glfwGetWindowUserPointer(window));
-    if (renderer) {
-        renderer->onFramebufferResize();
-    }
-}
-
-} // namespace
 
 VulkanRenderer::VulkanRenderer(Window& window, MeshData mesh)
     : m_window(window)
@@ -46,8 +39,6 @@ VulkanRenderer::VulkanRenderer(Window& window, MeshData mesh)
     , m_boxMesh(makeUnitCubeMesh())
 {
     flipMeshWinding(m_boxMesh);
-    glfwSetWindowUserPointer(m_window.handle(), this);
-    glfwSetFramebufferSizeCallback(m_window.handle(), framebufferResizeCallback);
     initVulkan();
 }
 
@@ -64,6 +55,10 @@ VulkanRenderer::~VulkanRenderer() {
 
     if (m_indexBuffer) m_indexBuffer->destroy(*m_device);
     if (m_vertexBuffer) m_vertexBuffer->destroy(*m_device);
+
+    if (m_uiQuadVB) m_uiQuadVB->destroy(*m_device);
+    if (m_uiQuadIB) m_uiQuadIB->destroy(*m_device);
+    m_fontTexture.destroy(*m_device);
 
     for (auto& ub : m_sceneBuffers) {
         if (ub) ub->destroy(*m_device);
@@ -110,8 +105,20 @@ void VulkanRenderer::initVulkan() {
     createSceneBuffers();
     createMaterialBuffer();
     createTextureImage();
+    createFontTexture();
     createDescriptorPool();
     createDescriptorSets();
+    createUIBuffers();
+
+    ShaderEffect::Config uiConfig;
+    std::string shaderDir = SHADER_DIR;
+    uiConfig.vertexShaderPath = shaderDir + "/ui.vert.spv";
+    uiConfig.fragmentShaderPath = shaderDir + "/ui.frag.spv";
+    uiConfig.depthTest = false;
+    uiConfig.depthWrite = false;
+    uiConfig.transparent = true;
+    m_uiEffect = std::make_unique<ShaderEffect>(*m_device, *m_swapchain, uiConfig);
+
     createCommandBuffers();
     createSyncObjects();
     std::cout << "[VulkanRenderer] initVulkan completed." << std::endl;
@@ -204,15 +211,15 @@ void VulkanRenderer::createTextureImage() {
 
 void VulkanRenderer::createDescriptorPool() {
     std::array<VkDescriptorPoolSize, 3> poolSizes{};
-    poolSizes[0] = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, static_cast<uint32_t>(kMaxFramesInFlight) };
-    poolSizes[1] = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, static_cast<uint32_t>(kMaxFramesInFlight) };
-    poolSizes[2] = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, static_cast<uint32_t>(kMaxFramesInFlight) };
+    poolSizes[0] = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, static_cast<uint32_t>(kMaxFramesInFlight) * 2 };
+    poolSizes[1] = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, static_cast<uint32_t>(kMaxFramesInFlight) * 2 };
+    poolSizes[2] = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, static_cast<uint32_t>(kMaxFramesInFlight) * 2 };
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = 3;
     poolInfo.pPoolSizes = poolSizes.data();
-    poolInfo.maxSets = static_cast<uint32_t>(kMaxFramesInFlight);
+    poolInfo.maxSets = static_cast<uint32_t>(kMaxFramesInFlight) * 2;
 
     if (vkCreateDescriptorPool(m_device->logical(), &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create descriptor pool");
@@ -234,16 +241,37 @@ void VulkanRenderer::createDescriptorSets() {
         throw std::runtime_error("Failed to allocate descriptor sets");
     }
 
-    for (int i = 0; i < kMaxFramesInFlight; ++i) {
-        VkDescriptorBufferInfo sceneInfo{ m_sceneBuffers[i]->handle(), 0, sizeof(SceneUbo) };
-        VkDescriptorBufferInfo materialInfo{ m_materialBuffer->handle(), 0, sizeof(MaterialBufferObject) };
-        VkDescriptorImageInfo imageInfo{ m_texture.sampler(), m_texture.view(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    m_uiDescriptorSets.resize(kMaxFramesInFlight);
+    if (vkAllocateDescriptorSets(m_device->logical(), &allocInfo, m_uiDescriptorSets.data()) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to allocate UI descriptor sets");
+    }
 
-        std::array<VkWriteDescriptorSet, 3> writes{};
-        writes[0] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_descriptorSets[i], 0, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &sceneInfo, nullptr };
-        writes[1] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_descriptorSets[i], 1, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &materialInfo, nullptr };
-        writes[2] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_descriptorSets[i], 2, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &imageInfo, nullptr, nullptr };
-        vkUpdateDescriptorSets(m_device->logical(), 3, writes.data(), 0, nullptr);
+    for (int i = 0; i < kMaxFramesInFlight; ++i) {
+        // Main set
+        {
+            VkDescriptorBufferInfo sceneInfo{ m_sceneBuffers[i]->handle(), 0, sizeof(SceneUbo) };
+            VkDescriptorBufferInfo materialInfo{ m_materialBuffer->handle(), 0, sizeof(MaterialBufferObject) };
+            VkDescriptorImageInfo imageInfo{ m_texture.sampler(), m_texture.view(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+
+            std::array<VkWriteDescriptorSet, 3> writes{};
+            writes[0] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_descriptorSets[i], 0, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &sceneInfo, nullptr };
+            writes[1] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_descriptorSets[i], 1, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &materialInfo, nullptr };
+            writes[2] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_descriptorSets[i], 2, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &imageInfo, nullptr, nullptr };
+            vkUpdateDescriptorSets(m_device->logical(), 3, writes.data(), 0, nullptr);
+        }
+
+        // UI set (uses font texture)
+        {
+            VkDescriptorBufferInfo sceneInfo{ m_sceneBuffers[i]->handle(), 0, sizeof(SceneUbo) };
+            VkDescriptorBufferInfo materialInfo{ m_materialBuffer->handle(), 0, sizeof(MaterialBufferObject) };
+            VkDescriptorImageInfo imageInfo{ m_fontTexture.sampler(), m_fontTexture.view(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+
+            std::array<VkWriteDescriptorSet, 3> writes{};
+            writes[0] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_uiDescriptorSets[i], 0, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &sceneInfo, nullptr };
+            writes[1] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_uiDescriptorSets[i], 1, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &materialInfo, nullptr };
+            writes[2] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, m_uiDescriptorSets[i], 2, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &imageInfo, nullptr, nullptr };
+            vkUpdateDescriptorSets(m_device->logical(), 3, writes.data(), 0, nullptr);
+        }
     }
 }
 
@@ -397,6 +425,42 @@ void VulkanRenderer::addDynamicObject(const glm::mat4& transform, std::shared_pt
     m_dynamicObjects.push_back({transform, material, mesh});
 }
 
+void VulkanRenderer::createUIBuffers() {
+    std::vector<Vertex> vertices = {
+        {{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}, 0},
+        {{1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}, 0},
+        {{1.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, 0},
+        {{0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}, 0}
+    };
+    std::vector<uint32_t> indices = { 0, 1, 2, 2, 3, 0 };
+    m_uiQuadIndexCount = static_cast<uint32_t>(indices.size());
+
+    VkDeviceSize vertexSize = sizeof(Vertex) * vertices.size();
+    VkDeviceSize indexSize = sizeof(uint32_t) * indices.size();
+
+    VulkanBuffer stagingVertex;
+    stagingVertex.create(*m_device, vertexSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    VulkanBuffer::write(*m_device, stagingVertex.handle(), stagingVertex.memory(), vertices.data(), vertexSize);
+
+    m_uiQuadVB = std::make_unique<VulkanBuffer>();
+    m_uiQuadVB->create(*m_device, vertexSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    VulkanBuffer::copyBuffer(*m_device, m_commandPool, m_device->graphicsQueue(), stagingVertex.handle(), m_uiQuadVB->handle(), vertexSize);
+    stagingVertex.destroy(*m_device);
+
+    VulkanBuffer stagingIndex;
+    stagingIndex.create(*m_device, indexSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    VulkanBuffer::write(*m_device, stagingIndex.handle(), stagingIndex.memory(), indices.data(), indexSize);
+
+    m_uiQuadIB = std::make_unique<VulkanBuffer>();
+    m_uiQuadIB->create(*m_device, indexSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    VulkanBuffer::copyBuffer(*m_device, m_commandPool, m_device->graphicsQueue(), stagingIndex.handle(), m_uiQuadIB->handle(), indexSize);
+    stagingIndex.destroy(*m_device);
+}
+
 void VulkanRenderer::recordCommandBuffer(VkCommandBuffer cb, uint32_t idx) {
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -486,9 +550,207 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer cb, uint32_t idx) {
         vkCmdDrawIndexed(cb, buf.indexCount, 1, 0, 0, 0);
     }
 
+    renderUI(cb);
+
     vkCmdEndRenderPass(cb);
     if (vkEndCommandBuffer(cb) != VK_SUCCESS) {
         throw std::runtime_error("Failed to record command buffer");
+    }
+}
+
+void VulkanRenderer::createFontTexture() {
+    // A simple 8x8 font bitmap for 95 ASCII characters (32-126)
+    // We'll store it in a 128x128 texture (16x8 grid of 8x8 characters)
+    const int texSize = 128;
+    std::vector<uint8_t> pixels(texSize * texSize, 0);
+
+    // Simple 8x8 pixel patterns for a few characters to demonstrate (or a basic font)
+    // For a real engine, we'd load a .fnt or .ttf, but for a "top right FPS counter"
+    // we can generate a very simple one.
+    auto drawChar = [&](char c, int gridX, int gridY) {
+        // Very basic 5x7-ish font data in 8x8 cells
+        static const uint8_t fontData[95][8] = {
+            {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00}, // space
+            {0x04,0x04,0x04,0x04,0x00,0x00,0x04,0x00}, // !
+            {0x0A,0x0A,0x00,0x00,0x00,0x00,0x00,0x00}, // "
+            {0x0A,0x0A,0x1F,0x0A,0x1F,0x0A,0x0A,0x00}, // #
+            {0x04,0x0F,0x14,0x0E,0x05,0x1E,0x04,0x00}, // $
+            {0x18,0x19,0x02,0x04,0x08,0x13,0x03,0x00}, // %
+            {0x0C,0x12,0x12,0x0C,0x15,0x12,0x0D,0x00}, // &
+            {0x0C,0x04,0x08,0x00,0x00,0x00,0x00,0x00}, // '
+            {0x02,0x04,0x08,0x08,0x08,0x04,0x02,0x00}, // (
+            {0x08,0x04,0x02,0x02,0x02,0x04,0x08,0x00}, // )
+            {0x00,0x04,0x15,0x0E,0x15,0x04,0x00,0x00}, // *
+            {0x00,0x04,0x04,0x1F,0x04,0x04,0x00,0x00}, // +
+            {0x00,0x00,0x00,0x00,0x00,0x0C,0x04,0x08}, // ,
+            {0x00,0x00,0x00,0x1F,0x00,0x00,0x00,0x00}, // -
+            {0x00,0x00,0x00,0x00,0x00,0x0C,0x0C,0x00}, // .
+            {0x00,0x01,0x02,0x04,0x08,0x10,0x00,0x00}, // /
+            {0x0E,0x11,0x13,0x15,0x19,0x11,0x0E,0x00}, // 0
+            {0x04,0x0C,0x04,0x04,0x04,0x04,0x0E,0x00}, // 1
+            {0x0E,0x11,0x01,0x02,0x04,0x08,0x1F,0x00}, // 2
+            {0x1F,0x02,0x04,0x02,0x01,0x11,0x0E,0x00}, // 3
+            {0x02,0x06,0x0A,0x12,0x1F,0x02,0x02,0x00}, // 4
+            {0x1F,0x10,0x1E,0x01,0x01,0x11,0x0E,0x00}, // 5
+            {0x06,0x08,0x10,0x1E,0x11,0x11,0x0E,0x00}, // 6
+            {0x1F,0x01,0x02,0x04,0x08,0x08,0x08,0x00}, // 7
+            {0x0E,0x11,0x11,0x0E,0x11,0x11,0x0E,0x00}, // 8
+            {0x0E,0x11,0x11,0x0F,0x01,0x02,0x0C,0x00}, // 9
+            {0x00,0x0C,0x0C,0x00,0x0C,0x0C,0x00,0x00}, // :
+            {0x00,0x0C,0x0C,0x00,0x0C,0x04,0x08,0x00}, // ;
+            {0x02,0x04,0x08,0x10,0x08,0x04,0x02,0x00}, // <
+            {0x00,0x00,0x1F,0x00,0x1F,0x00,0x00,0x00}, // =
+            {0x08,0x04,0x02,0x01,0x02,0x04,0x08,0x00}, // >
+            {0x0E,0x11,0x01,0x02,0x04,0x00,0x04,0x00}, // ?
+            {0x0E,0x11,0x17,0x15,0x17,0x10,0x0E,0x00}, // @
+            {0x04,0x0A,0x11,0x11,0x1F,0x11,0x11,0x00}, // A
+            {0x1E,0x11,0x11,0x1E,0x11,0x11,0x1E,0x00}, // B
+            {0x0E,0x11,0x10,0x10,0x10,0x11,0x0E,0x00}, // C
+            {0x1C,0x12,0x11,0x11,0x11,0x12,0x1C,0x00}, // D
+            {0x1F,0x10,0x10,0x1E,0x10,0x10,0x1F,0x00}, // E
+            {0x1F,0x10,0x10,0x1E,0x10,0x10,0x10,0x00}, // F
+            {0x0E,0x11,0x10,0x17,0x11,0x11,0x0F,0x00}, // G
+            {0x11,0x11,0x11,0x1F,0x11,0x11,0x11,0x00}, // H
+            {0x0E,0x04,0x04,0x04,0x04,0x04,0x0E,0x00}, // I
+            {0x07,0x02,0x02,0x02,0x02,0x12,0x0C,0x00}, // J
+            {0x11,0x12,0x14,0x18,0x14,0x12,0x11,0x00}, // K
+            {0x10,0x10,0x10,0x10,0x10,0x10,0x1F,0x00}, // L
+            {0x11,0x1B,0x15,0x15,0x11,0x11,0x11,0x00}, // M
+            {0x11,0x11,0x19,0x15,0x13,0x11,0x11,0x00}, // N
+            {0x0E,0x11,0x11,0x11,0x11,0x11,0x0E,0x00}, // O
+            {0x1E,0x11,0x11,0x1E,0x10,0x10,0x10,0x00}, // P
+            {0x0E,0x11,0x11,0x11,0x15,0x12,0x0D,0x00}, // Q
+            {0x1E,0x11,0x11,0x1E,0x14,0x12,0x11,0x00}, // R
+            {0x0E,0x11,0x10,0x0E,0x01,0x11,0x0E,0x00}, // S
+            {0x1F,0x04,0x04,0x04,0x04,0x04,0x04,0x00}, // T
+            {0x11,0x11,0x11,0x11,0x11,0x11,0x0E,0x00}, // U
+            {0x11,0x11,0x11,0x11,0x11,0x0A,0x04,0x00}, // V
+            {0x11,0x11,0x11,0x15,0x15,0x1B,0x11,0x00}, // W
+            {0x11,0x11,0x0A,0x04,0x0A,0x11,0x11,0x00}, // X
+            {0x11,0x11,0x0A,0x04,0x04,0x04,0x04,0x00}, // Y
+            {0x1F,0x01,0x02,0x04,0x08,0x10,0x1F,0x00}, // Z
+            {0x0E,0x08,0x08,0x08,0x08,0x08,0x0E,0x00}, // [
+            {0x00,0x10,0x08,0x04,0x02,0x01,0x00,0x00}, //
+            {0x0E,0x02,0x02,0x02,0x02,0x02,0x0E,0x00}, // ]
+            {0x04,0x0A,0x11,0x00,0x00,0x00,0x00,0x00}, // ^
+            {0x00,0x00,0x00,0x00,0x00,0x00,0x1F,0x00}, // _
+            {0x08,0x04,0x02,0x00,0x00,0x00,0x00,0x00}, // `
+            {0x00,0x00,0x0E,0x01,0x0F,0x11,0x0F,0x00}, // a
+            {0x10,0x10,0x1E,0x11,0x11,0x11,0x1E,0x00}, // b
+            {0x00,0x00,0x0E,0x10,0x10,0x11,0x0E,0x00}, // c
+            {0x01,0x01,0x0F,0x11,0x11,0x11,0x0F,0x00}, // d
+            {0x00,0x00,0x0E,0x11,0x1F,0x10,0x0E,0x00}, // e
+            {0x06,0x09,0x08,0x1C,0x08,0x08,0x08,0x00}, // f
+            {0x00,0x0F,0x11,0x11,0x0F,0x01,0x0E,0x00}, // g
+            {0x10,0x10,0x16,0x19,0x11,0x11,0x11,0x00}, // h
+            {0x04,0x00,0x0C,0x04,0x04,0x04,0x0E,0x00}, // i
+            {0x02,0x00,0x06,0x02,0x02,0x12,0x0C,0x00}, // j
+            {0x10,0x10,0x12,0x14,0x18,0x14,0x12,0x00}, // k
+            {0x0C,0x04,0x04,0x04,0x04,0x04,0x0E,0x00}, // l
+            {0x00,0x00,0x1A,0x15,0x15,0x11,0x11,0x00}, // m
+            {0x00,0x00,0x16,0x19,0x11,0x11,0x11,0x00}, // n
+            {0x00,0x00,0x0E,0x11,0x11,0x11,0x0E,0x00}, // o
+            {0x00,0x00,0x1E,0x11,0x11,0x1E,0x10,0x10}, // p
+            {0x00,0x00,0x0F,0x11,0x11,0x0F,0x01,0x01}, // q
+            {0x00,0x00,0x16,0x19,0x10,0x10,0x10,0x00}, // r
+            {0x00,0x00,0x0F,0x10,0x0E,0x01,0x1E,0x00}, // s
+            {0x08,0x08,0x1C,0x08,0x08,0x09,0x06,0x00}, // t
+            {0x00,0x00,0x11,0x11,0x11,0x13,0x0D,0x00}, // u
+            {0x00,0x00,0x11,0x11,0x11,0x0A,0x04,0x00}, // v
+            {0x00,0x00,0x11,0x11,0x15,0x15,0x0A,0x00}, // w
+            {0x00,0x00,0x11,0x0A,0x04,0x0A,0x11,0x00}, // x
+            {0x00,0x00,0x11,0x11,0x0F,0x01,0x0E,0x00}, // y
+            {0x00,0x00,0x1F,0x02,0x04,0x08,0x1F,0x00}, // z
+            {0x06,0x08,0x08,0x10,0x08,0x08,0x06,0x00}, // {
+            {0x04,0x04,0x04,0x04,0x04,0x04,0x04,0x00}, // |
+            {0x0C,0x02,0x02,0x01,0x02,0x02,0x0C,0x00}, // }
+            {0x08,0x15,0x02,0x00,0x00,0x00,0x00,0x00}, // ~
+        };
+
+        const uint8_t* charData = fontData[c - 32];
+        int startX = gridX * 8;
+        int startY = gridY * 8;
+        for (int y = 0; y < 8; ++y) {
+            for (int x = 0; x < 8; ++x) {
+                if (charData[y] & (1 << (4 - x))) {
+                    pixels[(startY + y) * texSize + (startX + x)] = 255;
+                }
+            }
+        }
+    };
+
+    for (int i = 0; i < 95; ++i) {
+        drawChar(static_cast<char>(32 + i), i % 16, i / 16);
+    }
+
+    TextureData data;
+    data.width = texSize;
+    data.height = texSize;
+    data.channels = 1;
+    data.pixels = pixels;
+
+    m_fontTexture = VulkanImage::fromTextureData(*m_device, m_commandPool, m_device->graphicsQueue(), data);
+}
+
+void VulkanRenderer::renderUI(VkCommandBuffer cb) {
+    if (!m_uiManager || !m_uiEffect) return;
+
+    auto& pipeline = m_uiEffect->getPipeline();
+    vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle());
+
+    vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout(), 0, 1, &m_uiDescriptorSets[m_currentFrame], 0, nullptr);
+
+    VkBuffer vbs[] = { m_uiQuadVB->handle() };
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdBindVertexBuffers(cb, 0, 1, vbs, offsets);
+    vkCmdBindIndexBuffer(cb, m_uiQuadIB->handle(), 0, VK_INDEX_TYPE_UINT32);
+
+    struct UIPushConstants {
+        glm::vec2 uiPosition;
+        glm::vec2 uiSize;
+        glm::vec4 uiColor;
+        glm::vec4 uiUVRect;
+        int hasTexture;
+    };
+
+    auto elements = m_uiManager->getVisibleElements();
+    for (auto& element : elements) {
+        if (auto label = std::dynamic_pointer_cast<Label>(element)) {
+            const std::string& text = label->getText();
+            float xOffset = 0.0f;
+            float charWidth = 0.02f * label->getFontSize();
+            float charHeight = charWidth * 2.0f;
+
+            for (char c : text) {
+                if (c < 32 || c > 126) continue;
+                int charIdx = c - 32;
+                float umin = (charIdx % 16) / 16.0f;
+                float vmin = (charIdx / 16) / 16.0f; // 16 because 128/8=16
+                float umax = umin + 1.0f / 16.0f;
+                float vmax = vmin + 1.0f / 16.0f;
+
+                UIPushConstants pcs{};
+                pcs.uiPosition = label->getPosition() + glm::vec2(xOffset, 0.0f);
+                pcs.uiSize = glm::vec2(charWidth, charHeight);
+                pcs.uiColor = label->getColor();
+                pcs.uiUVRect = glm::vec4(umin, vmin, umax, vmax);
+                pcs.hasTexture = 1;
+
+                vkCmdPushConstants(cb, pipeline.layout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pcs), &pcs);
+                vkCmdDrawIndexed(cb, m_uiQuadIndexCount, 1, 0, 0, 0);
+                xOffset += charWidth * 0.8f;
+            }
+        } else {
+            UIPushConstants pcs{};
+            pcs.uiPosition = element->getPosition();
+            pcs.uiSize = element->getSize();
+            pcs.uiColor = element->getColor();
+            pcs.uiUVRect = glm::vec4(0, 0, 1, 1);
+            pcs.hasTexture = 0;
+
+            vkCmdPushConstants(cb, pipeline.layout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pcs), &pcs);
+            vkCmdDrawIndexed(cb, m_uiQuadIndexCount, 1, 0, 0, 0);
+        }
     }
 }
 

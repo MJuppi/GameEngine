@@ -20,6 +20,16 @@ float FrameTimer::beginFrame() {
     }
 
     m_lastFrameTime = now;
+
+    // Update FPS
+    m_fpsAccumulator += m_deltaTime;
+    m_fpsFrameCount++;
+    if (m_fpsAccumulator >= 1.0f) {
+        m_fps = static_cast<float>(m_fpsFrameCount) / m_fpsAccumulator;
+        m_fpsAccumulator = 0.0f;
+        m_fpsFrameCount = 0;
+    }
+
     return m_deltaTime;
 }
 

@@ -108,6 +108,7 @@ set(ENGINE_SOURCES
     src/engine/scene/ObjectBuilder.cpp
     src/engine/scene/MaterialSystem.cpp
     src/engine/scene/ShaderEffect.cpp
+    src/engine/ui/UIManager.cpp
     src/engine/Engine.cpp
     src/engine/Window.cpp
     src/engine/FrameTimer.cpp

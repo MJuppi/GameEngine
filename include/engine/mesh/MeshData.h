@@ -25,6 +25,7 @@ struct MeshBounds {
 [[nodiscard]] MeshData makeUnitCubeMesh();
 [[nodiscard]] MeshData makeSkyboxMesh(uint32_t materialIndex = 0, float size = 50.0f);
 [[nodiscard]] MeshData makeGroundPlaneMesh(uint32_t materialIndex = 0, float size = 20.0f, float y = -1.0f);
+[[nodiscard]] MeshData makeQuadMesh(uint32_t materialIndex = 0);
 
 void centerMesh(MeshData& mesh);
 void orientMeshYUpToZUp(MeshData& mesh);

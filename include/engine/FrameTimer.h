@@ -12,6 +12,7 @@ public:
     float beginFrame();
 
     [[nodiscard]] float deltaTime() const noexcept { return m_deltaTime; }
+    [[nodiscard]] float getFPS() const noexcept { return m_fps; }
 
 private:
     using Clock = std::chrono::high_resolution_clock;
@@ -20,6 +21,9 @@ private:
     TimePoint m_lastFrameTime{};
     bool m_isFirstFrame = true;
     float m_deltaTime = 0.0f;
+    float m_fps = 0.0f;
+    float m_fpsAccumulator = 0.0f;
+    int m_fpsFrameCount = 0;
 };
 
 } // namespace ge

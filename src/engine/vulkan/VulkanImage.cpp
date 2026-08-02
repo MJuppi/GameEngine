@@ -128,12 +128,15 @@ void VulkanImage::createSampler(VulkanDevice& device) {
 VulkanImage VulkanImage::fromTextureData(VulkanDevice& device, VkCommandPool pool, VkQueue queue, const TextureData& data) {
     VulkanBuffer staging; staging.create(device, data.pixels.size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     VulkanBuffer::write(device, staging.handle(), staging.memory(), data.pixels.data(), data.pixels.size());
-    VulkanImage img; img.create(device, data.width, data.height, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    VkFormat format = (data.channels == 4) ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8_UNORM;
+
+    VulkanImage img; img.create(device, data.width, data.height, format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     img.transitionLayout(device, pool, queue, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     img.copyFromBuffer(device, pool, queue, staging.handle(), data.width, data.height);
     img.transitionLayout(device, pool, queue, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     staging.destroy(device);
-    img.createView(device, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+    img.createView(device, format, VK_IMAGE_ASPECT_COLOR_BIT);
     img.createSampler(device);
     return img;
 }

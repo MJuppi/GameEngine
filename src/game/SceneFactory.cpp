@@ -1,8 +1,13 @@
 #include "game/SceneFactory.h"
 #include "engine/Engine.h"
 #include "engine/physics/PhysicsEngine.h"
+#include "engine/ui/UIManager.h"
+#include "engine/ui/Label.h"
+#include "engine/FrameTimer.h"
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <iomanip>
+#include <sstream>
 
 namespace ge {
 
@@ -53,6 +58,26 @@ void SceneFactory::configureTestLevel(Level& level) {
 
     // Add static ground
     level.add("").name("Ground").at(0.0f, -4.0f, 0.0f).extents({50.0f, 2.0f, 50.0f}).asStatic();
+}
+
+void SceneFactory::setupUI(Engine& engine) {
+    auto fpsLabel = std::make_shared<Label>();
+    fpsLabel->setPosition({0.85f, 0.05f});
+    fpsLabel->setSize({0.1f, 0.03f});
+    fpsLabel->setColor({1.0f, 1.0f, 0.0f, 1.0f}); // Yellow
+    fpsLabel->setFontSize(1.5f);
+    fpsLabel->setText("FPS: 0");
+
+    // Capture engine by reference if it lives long enough (it does, it's the main engine)
+    // Or better, capture the FrameTimer if possible.
+    // Engine has no direct getter for FrameTimer, but we can capture engine reference.
+    fpsLabel->setOnUpdate([&engine](Label& label, float /*deltaTime*/) {
+        std::stringstream ss;
+        ss << "FPS: " << std::fixed << std::setprecision(1) << engine.getFPS();
+        label.setText(ss.str());
+    });
+
+    engine.getUIManager().addElement(fpsLabel);
 }
 
 RigidBodyProps SceneFactory::makeDynamicBoxProps(float mass, float friction, float restitution) {

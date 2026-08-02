@@ -5,6 +5,7 @@
 
 #include "engine/Window.h"
 #include "engine/vulkan/VulkanRenderer.h"
+#include "engine/ui/UIManager.h"
 
 #include <GLFW/glfw3.h>
 #include <iostream>
@@ -20,6 +21,7 @@ public:
     Window window{kWidth, kHeight, kTitle};
     VulkanRenderer renderer;
     PhysicsEngine physicsEngine;
+    UIManager uiManager;
     FrameTimer frameTimer;
     FixedUpdateCallback fixedUpdateCallback;
     VariableUpdateCallback variableUpdateCallback;
@@ -28,6 +30,23 @@ public:
         : renderer(window, std::move(mesh))
     {
         renderer.setSceneLights(sceneLights);
+        renderer.setUIManager(&uiManager);
+
+        glfwSetWindowUserPointer(window.handle(), this);
+        glfwSetFramebufferSizeCallback(window.handle(), [](GLFWwindow* w, int /*width*/, int /*height*/) {
+            auto* impl = reinterpret_cast<Impl*>(glfwGetWindowUserPointer(w));
+            impl->renderer.onFramebufferResize();
+        });
+
+        glfwSetMouseButtonCallback(window.handle(), [](GLFWwindow* w, int button, int action, int /*mods*/) {
+            auto* impl = reinterpret_cast<Impl*>(glfwGetWindowUserPointer(w));
+            double x, y;
+            glfwGetCursorPos(w, &x, &y);
+            int width, height;
+            glfwGetWindowSize(w, &width, &height);
+            // Pass normalized coordinates to UIManager
+            impl->uiManager.processInput(x / width, y / height, button, action);
+        });
 
         physicsEngine.setGravity({0.0f, -9.81f, 0.0f});
         physicsEngine.setFixedTimeStep(1.0f / 60.0f);
@@ -79,6 +98,8 @@ public:
 
 public:
     PhysicsEngine& getPhysicsEngine() { return physicsEngine; }
+    UIManager& getUIManager() { return uiManager; }
+    float getFPS() const { return frameTimer.getFPS(); }
 
 private:
     void handleWindowInput() {
@@ -124,6 +145,14 @@ PhysicsEngine& Engine::getPhysicsEngine() {
 
 const PhysicsEngine& Engine::getPhysicsEngine() const {
     return m_impl->getPhysicsEngine();
+}
+
+UIManager& Engine::getUIManager() {
+    return m_impl->getUIManager();
+}
+
+float Engine::getFPS() const {
+    return m_impl->getFPS();
 }
 
 } // namespace ge

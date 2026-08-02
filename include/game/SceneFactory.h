@@ -13,6 +13,7 @@ class SceneFactory {
 public:
     static void configureTestLevel(Level& level);
     static void setupTestPhysics(Engine& engine);
+    static void setupUI(Engine& engine);
 
     static RigidBodyProps makeDynamicBoxProps(float mass = 1.0f,
                                               float friction = 0.3f,

@@ -156,7 +156,7 @@ void VulkanPipeline::createGraphicsPipeline(VulkanSwapchain& swapchain) {
     depthStencil.depthWriteEnable = m_config.depthWrite;
     depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
 
-    VkPushConstantRange pushRange{ VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4) * 2 };
+    VkPushConstantRange pushRange{ VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::mat4) * 2 };
 
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;

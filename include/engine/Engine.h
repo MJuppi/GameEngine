@@ -17,6 +17,7 @@ struct GLFWwindow;
 namespace ge {
 
 class PhysicsEngine;
+class UIManager;
 
 class Engine {
 public:
@@ -33,6 +34,13 @@ public:
     /// Get the physics engine
     PhysicsEngine& getPhysicsEngine();
     const PhysicsEngine& getPhysicsEngine() const;
+
+    /// Get the UI manager
+    UIManager& getUIManager();
+
+    /// Get current FPS
+    float getFPS() const;
+
     GLFWwindow* getWindowHandle() const;
     void setSceneLights(const SceneLights& sceneLights);
 

@@ -1,7 +1,9 @@
 #include "game/Game.h"
 #include "game/LevelBuilder.h"
 #include "game/PlayerController.h"
+#include "game/SceneFactory.h"
 #include "engine/Engine.h"
+#include "engine/ui/UIManager.h"
 #include "engine/mesh/MeshData.h"
 #include "engine/physics/PhysicsEngine.h"
 #include "engine/scene/ObjectBuilder.h"
@@ -68,6 +70,8 @@ bool Game::loadLevel(Level& level) {
 
     playerController_ = std::make_unique<PlayerController>(*engine_);
 
+    SceneFactory::setupUI(*engine_);
+
     engine_->setFixedUpdateCallback([this](float deltaTime) {
         if (playerController_) {
             playerController_->fixedUpdate(deltaTime);
@@ -75,6 +79,7 @@ bool Game::loadLevel(Level& level) {
     });
 
     engine_->setVariableUpdateCallback([this](float deltaTime, float alpha) {
+        engine_->getUIManager().update(deltaTime);
         if (playerController_) {
             playerController_->variableUpdate(deltaTime, alpha);
         }

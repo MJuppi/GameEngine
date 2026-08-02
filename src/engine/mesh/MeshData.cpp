@@ -85,6 +85,20 @@ MeshData makeGroundPlaneMesh(uint32_t materialIndex, float size, float y) {
     return mesh;
 }
 
+MeshData makeQuadMesh(uint32_t materialIndex) {
+    MeshData mesh;
+    mesh.materials = {makeDefaultMaterial()};
+    // Quad in XY plane, from (0,0) to (1,1)
+    mesh.vertices = {
+        makeV(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, materialIndex),
+        makeV(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, materialIndex),
+        makeV(1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, materialIndex),
+        makeV(0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, materialIndex)
+    };
+    mesh.indices = {0, 1, 2, 2, 3, 0};
+    return mesh;
+}
+
 void centerMesh(MeshData& mesh) {
     if (mesh.vertices.empty()) return;
     glm::vec3 minV{std::numeric_limits<float>::max()}, maxV{std::numeric_limits<float>::lowest()};
