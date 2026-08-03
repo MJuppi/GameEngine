@@ -366,8 +366,8 @@ void CollisionDetection::resolveManifold(ContactManifold& manifold, float deltaT
         // Sequential Impulse: calculate delta impulse and accumulate
         const float velocityAlongNormal = glm::dot(relativeVelocity, contact.normal);
 
-        // Only bounce if closing speed is significant
-        constexpr float kRestitutionThreshold = 0.5f; // m/s
+        // Only bounce if closing speed is significant (lowered threshold for realism)
+        constexpr float kRestitutionThreshold = 0.2f; // m/s
         float e = std::min(propsA.restitution, propsB.restitution);
         if (std::abs(velocityAlongNormal) < kRestitutionThreshold) {
             e = 0.0f;
@@ -408,11 +408,23 @@ void CollisionDetection::resolveManifold(ContactManifold& manifold, float deltaT
             float massTangent = 1.0f / (totalInvMass + angularTermATan + angularTermBTan);
             float jt = -glm::dot(relVel_f, tangent) * massTangent;
 
-            const float friction = std::min(propsA.friction, propsB.friction);
-            float maxFriction = contact.normalImpulse * friction;
+            // Use static vs dynamic friction: prefer static if tangential impulse stays within limit
+            const float staticF = std::min(propsA.staticFriction, propsB.staticFriction);
+            const float dynamicF = std::min(propsA.friction, propsB.friction);
+            float maxStatic = contact.normalImpulse * staticF;
+            float maxDynamic = contact.normalImpulse * dynamicF;
 
             float oldTangentImpulse = contact.tangentImpulse;
-            contact.tangentImpulse = std::clamp(oldTangentImpulse + jt, -maxFriction, maxFriction);
+            float newTangent = oldTangentImpulse + jt;
+
+            if (std::abs(newTangent) <= maxStatic) {
+                // static friction holds
+                contact.tangentImpulse = newTangent;
+            } else {
+                // sliding: limit using dynamic friction
+                contact.tangentImpulse = glm::clamp(newTangent, -maxDynamic, maxDynamic);
+            }
+
             jt = contact.tangentImpulse - oldTangentImpulse;
 
             glm::vec3 frictionImpulseVec = tangent * jt;

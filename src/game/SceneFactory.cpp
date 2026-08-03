@@ -120,11 +120,12 @@ void SceneFactory::setupUI(Engine& engine) {
 RigidBodyProps SceneFactory::makeDynamicBoxProps(float mass, float friction, float restitution) {
     RigidBodyProps props;
     props.mass = mass;
-    props.friction = friction;
-    props.rollingFriction = 0.18f;
+    props.friction = friction; // dynamic friction
+    props.staticFriction = std::min(1.0f, friction + 0.2f);
+    props.rollingFriction = 0.5f;
     props.restitution = restitution;
-    props.linearDamping = 0.05f;
-    props.angularDamping = 0.1f;
+    props.linearDamping = 0.5f;
+    props.angularDamping = 0.8f;
     return props;
 }
 
@@ -153,7 +154,7 @@ RigidBody* SceneFactory::spawnProjectile(Engine& engine, const glm::vec3& spawnP
     }
 
     const glm::mat4 spawnTransform = glm::translate(glm::mat4(1.0f), spawnPosition);
-    RigidBody* projectile = engine.getPhysicsEngine().createSphereBody(1.0f, spawnTransform, makeProjectileProps());
+    RigidBody* projectile = engine.getPhysicsEngine().createBoxBody(halfExtents, spawnTransform, makeProjectileProps());
 
     if (projectile) {
         projectile->setVelocity(fireDirection * 15.0f + velocityOffset);

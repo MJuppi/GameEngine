@@ -16,10 +16,14 @@ struct Material;
 struct RigidBodyProps {
     float mass = 1.0f;
     float restitution = 0.2f;
-    float friction = 0.7f;
+        // Dynamic (kinetic) friction coefficient
+        float friction = 0.7f;
+        // Static friction coefficient (usually >= dynamic friction)
+        float staticFriction = 0.9f;
     float rollingFriction = 0.12f;
     glm::vec3 centerOfMassOffset{0.0f};
-    float linearDamping  = 0.15f;
+        // Local offset of center of mass in object local space
+        float linearDamping  = 0.15f;
     float angularDamping = 0.8f;
     bool isKinematic = false;
     bool useGravity = true;
