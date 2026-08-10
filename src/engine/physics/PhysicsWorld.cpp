@@ -1,14 +1,13 @@
 #include "engine/physics/PhysicsWorld.h"
 
-#include "engine/physics/BroadPhase.h"
 #include "engine/physics/BoxCollider.h"
-#include "engine/physics/CollisionDetection.h"
 #include "engine/physics/RigidBody.h"
 #include "engine/physics/SphereCollider.h"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 namespace ge {
 namespace {
@@ -122,6 +121,161 @@ bool raycastSphere(const SphereCollider& sphere,
     outNormal = glm::normalize(hitPoint - center);
     return true;
 }
+
+bool canCollidePair(const RigidBody& bodyA, const RigidBody& bodyB) {
+    const bool bodyADynamic = !bodyA.getProps().isKinematic && bodyA.getProps().mass > 0.0f;
+    const bool bodyBDynamic = !bodyB.getProps().isKinematic && bodyB.getProps().mass > 0.0f;
+    return (bodyADynamic || bodyBDynamic) && !bodyA.getProps().isTrigger && !bodyB.getProps().isTrigger;
+}
+
+float getInverseMass(const RigidBody& body) {
+    if (body.getProps().isKinematic || body.getProps().mass <= 0.0f) {
+        return 0.0f;
+    }
+    return 1.0f / body.getProps().mass;
+}
+
+ContactManifold makeBoxBoxManifold(RigidBody& bodyA, RigidBody& bodyB) {
+    ContactManifold manifold;
+    manifold.bodyA = &bodyA;
+    manifold.bodyB = &bodyB;
+
+    const auto& boxA = static_cast<const BoxCollider&>(bodyA.getCollider());
+    const auto& boxB = static_cast<const BoxCollider&>(bodyB.getCollider());
+    const glm::vec3 centerA = bodyA.getPosition();
+    const glm::vec3 centerB = bodyB.getPosition();
+    const glm::vec3 halfA = boxA.getHalfExtents();
+    const glm::vec3 halfB = boxB.getHalfExtents();
+
+    const glm::vec3 delta = centerB - centerA;
+    const glm::vec3 overlap = glm::vec3(
+        halfA.x + halfB.x - std::abs(delta.x),
+        halfA.y + halfB.y - std::abs(delta.y),
+        halfA.z + halfB.z - std::abs(delta.z));
+
+    if (overlap.x < 0.0f || overlap.y < 0.0f || overlap.z < 0.0f) {
+        return manifold;
+    }
+
+    float penetration = std::numeric_limits<float>::max();
+    glm::vec3 normal(0.0f);
+
+    if (overlap.x < penetration) {
+        penetration = overlap.x;
+        normal = delta.x >= 0.0f ? glm::vec3(-1.0f, 0.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
+    }
+    if (overlap.y < penetration) {
+        penetration = overlap.y;
+        normal = delta.y >= 0.0f ? glm::vec3(0.0f, -1.0f, 0.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+    }
+    if (overlap.z < penetration) {
+        penetration = overlap.z;
+        normal = delta.z >= 0.0f ? glm::vec3(0.0f, 0.0f, -1.0f) : glm::vec3(0.0f, 0.0f, 1.0f);
+    }
+
+    Contact contact;
+    contact.bodyA = &bodyA;
+    contact.bodyB = &bodyB;
+    contact.normal = normal;
+    contact.depth = penetration;
+    contact.point = centerA + (delta * 0.5f);
+    manifold.contacts.push_back(contact);
+    manifold.isColliding = true;
+    manifold.normal = normal;
+    return manifold;
+}
+
+ContactManifold makeSphereBoxManifold(RigidBody& bodyA, RigidBody& bodyB) {
+    ContactManifold manifold;
+    manifold.bodyA = &bodyA;
+    manifold.bodyB = &bodyB;
+
+    const glm::vec3 centerA = bodyA.getPosition();
+    const glm::vec3 centerB = bodyB.getPosition();
+    const glm::vec3 delta = centerB - centerA;
+    const auto& sphere = static_cast<const SphereCollider&>(bodyA.getCollider());
+    const auto& box = static_cast<const BoxCollider&>(bodyB.getCollider());
+    const float radius = sphere.getRadius();
+    const glm::vec3 half = box.getHalfExtents();
+
+    const glm::vec3 clamped = glm::clamp(delta, -half, half);
+    const glm::vec3 closestPoint = centerA + clamped;
+    const glm::vec3 diff = centerB - closestPoint;
+    const float distSq = glm::dot(diff, diff);
+    if (distSq > radius * radius) {
+        return manifold;
+    }
+
+    glm::vec3 normal = glm::dot(diff, diff) > 1e-6f ? glm::normalize(diff) : glm::vec3(0.0f, 1.0f, 0.0f);
+    const float penetration = radius - std::sqrt(std::max(0.0f, distSq));
+
+    Contact contact;
+    contact.bodyA = &bodyA;
+    contact.bodyB = &bodyB;
+    contact.normal = normal;
+    contact.depth = penetration;
+    contact.point = closestPoint;
+    manifold.contacts.push_back(contact);
+    manifold.isColliding = true;
+    manifold.normal = normal;
+    return manifold;
+}
+
+ContactManifold makeSphereSphereManifold(RigidBody& bodyA, RigidBody& bodyB) {
+    ContactManifold manifold;
+    manifold.bodyA = &bodyA;
+    manifold.bodyB = &bodyB;
+
+    const auto& sphereA = static_cast<const SphereCollider&>(bodyA.getCollider());
+    const auto& sphereB = static_cast<const SphereCollider&>(bodyB.getCollider());
+    const glm::vec3 delta = bodyB.getPosition() - bodyA.getPosition();
+    const float distance = glm::length(delta);
+    const float minDistance = sphereA.getRadius() + sphereB.getRadius();
+    if (distance >= minDistance) {
+        return manifold;
+    }
+
+    glm::vec3 normal = distance > 1e-6f ? delta / distance : glm::vec3(0.0f, 1.0f, 0.0f);
+    const float penetration = minDistance - distance;
+
+    Contact contact;
+    contact.bodyA = &bodyA;
+    contact.bodyB = &bodyB;
+    contact.normal = normal;
+    contact.depth = penetration;
+    contact.point = bodyA.getPosition() + normal * sphereA.getRadius();
+    manifold.contacts.push_back(contact);
+    manifold.isColliding = true;
+    manifold.normal = normal;
+    return manifold;
+}
+
+ContactManifold buildManifold(RigidBody& bodyA, RigidBody& bodyB) {
+    const auto typeA = bodyA.getCollider().getType();
+    const auto typeB = bodyB.getCollider().getType();
+
+    if (bodyA.getProps().isTrigger || bodyB.getProps().isTrigger) {
+        return {};
+    }
+
+    if (typeA == ColliderType::Box && typeB == ColliderType::Box) {
+        return makeBoxBoxManifold(bodyA, bodyB);
+    }
+    if (typeA == ColliderType::Sphere && typeB == ColliderType::Box) {
+        return makeSphereBoxManifold(bodyA, bodyB);
+    }
+    if (typeA == ColliderType::Box && typeB == ColliderType::Sphere) {
+        auto manifold = makeSphereBoxManifold(bodyB, bodyA);
+        if (manifold.isColliding) {
+            manifold.normal = -manifold.normal;
+        }
+        return manifold;
+    }
+    if (typeA == ColliderType::Sphere && typeB == ColliderType::Sphere) {
+        return makeSphereSphereManifold(bodyA, bodyB);
+    }
+    return {};
+}
 } // namespace
 
 PhysicsWorld::PhysicsWorld() = default;
@@ -203,8 +357,61 @@ void PhysicsWorld::warmStart(std::vector<ContactManifold>& manifolds) {
 }
 
 void PhysicsWorld::resolveContacts(std::vector<ContactManifold>& manifolds, float deltaTime) {
-    if (!manifolds.empty()) {
-        CollisionDetection::resolveCollisions(manifolds, solverIterations_, deltaTime);
+    (void)deltaTime;
+    for (auto& manifold : manifolds) {
+        if (!manifold.isColliding || manifold.contacts.empty()) {
+            continue;
+        }
+
+        for (auto& contact : manifold.contacts) {
+            auto* bodyA = contact.bodyA;
+            auto* bodyB = contact.bodyB;
+            if (!bodyA || !bodyB) {
+                continue;
+            }
+
+            const glm::vec3 normal = glm::normalize(contact.normal);
+            if (glm::dot(normal, normal) <= 1e-6f) {
+                continue;
+            }
+
+            const float invMassA = getInverseMass(*bodyA);
+            const float invMassB = getInverseMass(*bodyB);
+            const float invMassSum = invMassA + invMassB;
+            if (invMassSum <= 1e-6f) {
+                continue;
+            }
+
+            const glm::vec3 relativeVelocity = bodyA->getVelocity() - bodyB->getVelocity();
+            const float velocityAlongNormal = glm::dot(relativeVelocity, normal);
+            if (velocityAlongNormal > 0.0f) {
+                continue;
+            }
+
+            const float restitution = std::min(bodyA->getProps().restitution, bodyB->getProps().restitution);
+            const float impulseMagnitude = -(1.0f + restitution) * velocityAlongNormal / invMassSum;
+            const glm::vec3 impulse = normal * impulseMagnitude;
+
+            glm::vec3 velocityA = bodyA->getVelocity();
+            glm::vec3 velocityB = bodyB->getVelocity();
+            if (invMassA > 0.0f) {
+                velocityA += impulse * invMassA;
+            }
+            if (invMassB > 0.0f) {
+                velocityB -= impulse * invMassB;
+            }
+            bodyA->setVelocity(velocityA);
+            bodyB->setVelocity(velocityB);
+
+            const float penetration = std::max(0.0f, contact.depth + 0.01f);
+            const glm::vec3 correction = normal * (penetration / std::max(invMassSum, 1e-6f)) * 0.75f;
+            if (invMassA > 0.0f) {
+                bodyA->movePosition(correction);
+            }
+            if (invMassB > 0.0f) {
+                bodyB->movePosition(-correction);
+            }
+        }
     }
 }
 
@@ -219,12 +426,21 @@ void PhysicsWorld::stepInternal(float deltaTime) {
         body->integrateVelocity(deltaTime);
     }
 
-    const auto potentialPairs = BroadPhase::findPairs(bodies_);
     std::vector<ContactManifold> manifolds;
-    CollisionDetection::detectCollisions(potentialPairs, manifolds);
+    for (auto it = bodies_.begin(); it != bodies_.end(); ++it) {
+        for (auto jt = std::next(it); jt != bodies_.end(); ++jt) {
+            if (!canCollidePair(**it, **jt)) {
+                continue;
+            }
+
+            auto manifold = buildManifold(**it, **jt);
+            if (manifold.isColliding) {
+                manifolds.push_back(std::move(manifold));
+            }
+        }
+    }
 
     resolveContacts(manifolds, deltaTime);
-    CollisionDetection::correctPositions(manifolds);
 
     for (auto& body : bodies_) {
         body->integratePosition(deltaTime);

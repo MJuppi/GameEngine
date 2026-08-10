@@ -6,7 +6,7 @@
 
 namespace ge {
 
-PhysicsEngine::PhysicsEngine() = default;
+PhysicsEngine::PhysicsEngine() : fixedTimeStep_(1.0f / 60.0f) {}
 PhysicsEngine::~PhysicsEngine() = default;
 
 RigidBody* PhysicsEngine::createBoxBody(const glm::vec3& halfExtents,
