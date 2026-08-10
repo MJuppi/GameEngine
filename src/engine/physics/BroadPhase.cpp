@@ -1,13 +1,15 @@
 #include "engine/physics/BroadPhase.h"
-#include "engine/physics/RigidBody.h"
 #include "engine/physics/Collider.h"
+#include "engine/physics/RigidBody.h"
 
 namespace ge {
 
 std::vector<PotentialPair> BroadPhase::findPairs(const std::vector<std::unique_ptr<RigidBody>>& bodies) {
     std::vector<PotentialPair> pairs;
     const size_t count = bodies.size();
-    if (count < 2) return pairs;
+    if (count < 2) {
+        return pairs;
+    }
 
     std::vector<AABB> aabbs(count);
     for (size_t i = 0; i < count; ++i) {
@@ -19,8 +21,8 @@ std::vector<PotentialPair> BroadPhase::findPairs(const std::vector<std::unique_p
             const auto& propsA = bodies[i]->getProps();
             const auto& propsB = bodies[j]->getProps();
 
-            if (!(propsA.collisionMask & propsB.collisionLayer) ||
-                !(propsB.collisionMask & propsA.collisionLayer)) {
+            if ((propsA.collisionMask & propsB.collisionLayer) == 0 ||
+                (propsB.collisionMask & propsA.collisionLayer) == 0) {
                 continue;
             }
 

@@ -1,13 +1,12 @@
 #include "engine/physics/PhysicsEngine.h"
+#include "engine/physics/BoxCollider.h"
 #include "engine/physics/PhysicsWorld.h"
 #include "engine/physics/RigidBody.h"
-#include "engine/physics/BoxCollider.h"
 #include "engine/physics/SphereCollider.h"
 
 namespace ge {
 
 PhysicsEngine::PhysicsEngine() = default;
-
 PhysicsEngine::~PhysicsEngine() = default;
 
 RigidBody* PhysicsEngine::createBoxBody(const glm::vec3& halfExtents,
@@ -19,8 +18,8 @@ RigidBody* PhysicsEngine::createBoxBody(const glm::vec3& halfExtents,
 }
 
 RigidBody* PhysicsEngine::createSphereBody(float radius,
-                                         const glm::mat4& transform,
-                                         const RigidBodyProps& props) {
+                                           const glm::mat4& transform,
+                                           const RigidBodyProps& props) {
     auto collider = std::make_unique<SphereCollider>(radius);
     auto body = std::make_unique<RigidBody>(std::move(collider), transform, props);
     return world_.addBody(std::move(body));

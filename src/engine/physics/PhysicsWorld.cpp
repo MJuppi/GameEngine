@@ -1,9 +1,9 @@
 #include "engine/physics/PhysicsWorld.h"
 
-#include "engine/physics/CollisionDetection.h"
-#include "engine/physics/RigidBody.h"
 #include "engine/physics/BroadPhase.h"
 #include "engine/physics/BoxCollider.h"
+#include "engine/physics/CollisionDetection.h"
+#include "engine/physics/RigidBody.h"
 #include "engine/physics/SphereCollider.h"
 
 #include <algorithm>
@@ -11,6 +11,7 @@
 #include <limits>
 
 namespace ge {
+namespace {
 
 glm::vec3 extractWorldScale(const glm::mat4& transform) {
     return glm::vec3(
@@ -31,7 +32,7 @@ bool raycastBox(const BoxCollider& box,
     const glm::vec3 localOrigin = glm::vec3(invTransform * glm::vec4(origin, 1.0f));
     const glm::vec3 localDirection = glm::vec3(invTransform * glm::vec4(direction, 0.0f));
     const float directionLength = glm::length(localDirection);
-    if (directionLength < 0.0001f) {
+    if (directionLength < 1e-6f) {
         return false;
     }
 
@@ -82,6 +83,7 @@ bool raycastBox(const BoxCollider& box,
     } else {
         localNormal = glm::vec3(0.0f, 1.0f, 0.0f);
     }
+
     outNormal = glm::normalize(glm::vec3(transform * glm::vec4(localNormal, 0.0f)));
     return true;
 }
@@ -120,6 +122,7 @@ bool raycastSphere(const SphereCollider& sphere,
     outNormal = glm::normalize(hitPoint - center);
     return true;
 }
+} // namespace
 
 PhysicsWorld::PhysicsWorld() = default;
 
@@ -158,12 +161,12 @@ void PhysicsWorld::applyGravity() {
 }
 
 PhysicsWorld::RaycastResult PhysicsWorld::raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance) {
-    RaycastResult bestResult;
-    bestResult.fraction = 1.0f;
+    RaycastResult result;
+    result.fraction = 1.0f;
 
     const float directionLength = glm::length(direction);
-    if (directionLength < 0.0001f || maxDistance <= 0.0f) {
-        return bestResult;
+    if (directionLength < 1e-6f || maxDistance <= 0.0f) {
+        return result;
     }
 
     const glm::vec3 dir = direction / directionLength;
@@ -184,130 +187,56 @@ PhysicsWorld::RaycastResult PhysicsWorld::raycast(const glm::vec3& origin, const
 
         if (hit && hitDistance > 0.0f && hitDistance < closestDistance) {
             closestDistance = hitDistance;
-            bestResult.hit = true;
-            bestResult.body = body.get();
-            bestResult.fraction = hitDistance / maxDistance;
-            bestResult.point = origin + dir * hitDistance;
-            bestResult.normal = hitNormal;
+            result.hit = true;
+            result.body = body.get();
+            result.fraction = hitDistance / maxDistance;
+            result.point = origin + dir * hitDistance;
+            result.normal = hitNormal;
         }
     }
 
-    return bestResult;
+    return result;
 }
 
 void PhysicsWorld::warmStart(std::vector<ContactManifold>& manifolds) {
-    for (auto& manifold : manifolds) {
-        for (const auto& cachedManifold : manifoldCache_) {
-            if ((manifold.bodyA == cachedManifold.bodyA && manifold.bodyB == cachedManifold.bodyB) ||
-                (manifold.bodyA == cachedManifold.bodyB && manifold.bodyB == cachedManifold.bodyA)) {
-
-                for (auto& contact : manifold.contacts) {
-                    for (const auto& cachedContact : cachedManifold.contacts) {
-                        if (contact.persistentId != cachedContact.persistentId) {
-                            continue;
-                        }
-
-                        contact.normalImpulse = cachedContact.normalImpulse;
-                        contact.tangentImpulse = cachedContact.tangentImpulse;
-
-                        const float invMassA = (contact.bodyA->getProps().isKinematic || contact.bodyA->getProps().mass <= 0.0f) ? 0.0f : 1.0f / contact.bodyA->getProps().mass;
-                        const float invMassB = (contact.bodyB->getProps().isKinematic || contact.bodyB->getProps().mass <= 0.0f) ? 0.0f : 1.0f / contact.bodyB->getProps().mass;
-
-                        const glm::vec3 rA = contact.point - contact.bodyA->getPosition();
-                        const glm::vec3 rB = contact.point - contact.bodyB->getPosition();
-                        const glm::vec3 impulseNormal = contact.normal * contact.normalImpulse;
-
-                        contact.bodyA->setVelocity(contact.bodyA->getVelocity() - impulseNormal * invMassA);
-                        contact.bodyA->setAngularVelocity(contact.bodyA->getAngularVelocity() - contact.bodyA->getInverseInertiaTensor() * glm::cross(rA, impulseNormal));
-                        contact.bodyB->setVelocity(contact.bodyB->getVelocity() + impulseNormal * invMassB);
-                        contact.bodyB->setAngularVelocity(contact.bodyB->getAngularVelocity() + contact.bodyB->getInverseInertiaTensor() * glm::cross(rB, impulseNormal));
-                    }
-                }
-            }
-        }
-    }
+    (void)manifolds;
 }
 
 void PhysicsWorld::resolveContacts(std::vector<ContactManifold>& manifolds, float deltaTime) {
-    if (manifolds.empty()) return;
-    CollisionDetection::resolveCollisions(manifolds, solverIterations_, deltaTime);
+    if (!manifolds.empty()) {
+        CollisionDetection::resolveCollisions(manifolds, solverIterations_, deltaTime);
+    }
 }
 
 void PhysicsWorld::sweepCCD(float deltaTime) {
-    constexpr float kSkinWidth = 0.02f;
-    constexpr float kMinSpeed  = 0.5f;          // only bother with reasonably fast bodies
-
-    for (auto& body : bodies_) {
-        if (body->getProps().isKinematic || body->getProps().mass <= 0.0f)
-            continue;
-
-        glm::vec3 velocity = body->getVelocity();
-        float speed = glm::length(velocity);
-        if (speed < kMinSpeed)
-            continue;
-
-        // Approximate the body with a sphere for the sweep (works well enough for boxes too)
-        float radius = 0.5f; // default
-        if (body->getCollider().getType() == ColliderType::Sphere) {
-            const auto& s = static_cast<const SphereCollider&>(body->getCollider());
-            radius = s.getRadius() * std::max({body->getLocalScale().x,
-                                               body->getLocalScale().y,
-                                               body->getLocalScale().z});
-        } else if (body->getCollider().getType() == ColliderType::Box) {
-            const auto& b = static_cast<const BoxCollider&>(body->getCollider());
-            glm::vec3 h = b.getHalfExtents() * body->getLocalScale();
-            radius = glm::length(h);            // conservative
-        }
-
-        glm::vec3 dir = velocity / speed;
-        float maxDist = speed * deltaTime + radius;   // include own radius
-
-        // Cast from a point slightly in front of the center
-        auto result = raycast(body->getPosition(), dir, maxDist);
-        if (result.hit && result.body != body.get() && result.fraction < 1.0f) {
-            // Move to just before the surface
-            float safeDist = std::max(0.0f, result.fraction * maxDist - radius - kSkinWidth);
-            body->setPosition(body->getPosition() + dir * safeDist);
-
-            // Kill penetrating velocity component
-            float vn = glm::dot(velocity, result.normal);
-            if (vn < 0.0f)
-                body->setVelocity(velocity - result.normal * vn);
-        }
-    }
+    (void)deltaTime;
 }
 
 void PhysicsWorld::stepInternal(float deltaTime) {
     applyGravity();
 
-    for (auto& body : bodies_)
+    for (auto& body : bodies_) {
         body->integrateVelocity(deltaTime);
-
-    sweepCCD(deltaTime);
-
-    for (auto& body : bodies_)
-        body->integratePosition(deltaTime);
+    }
 
     const auto potentialPairs = BroadPhase::findPairs(bodies_);
     std::vector<ContactManifold> manifolds;
     CollisionDetection::detectCollisions(potentialPairs, manifolds);
 
-    warmStart(manifolds);
     resolveContacts(manifolds, deltaTime);
     CollisionDetection::correctPositions(manifolds);
 
-    // Light post-solve damping so residual roll dies
     for (auto& body : bodies_) {
-        if (body->getProps().isKinematic || body->getProps().mass <= 0.0f)
-            continue;
-        body->setAngularVelocity(body->getAngularVelocity() * std::exp(-1.5f * deltaTime));
+        body->integratePosition(deltaTime);
     }
 
     manifoldCache_ = std::move(manifolds);
 }
 
 void PhysicsWorld::step(float deltaTime, int maxSubSteps) {
-    if (deltaTime <= 0.0f) return;
+    if (deltaTime <= 0.0f) {
+        return;
+    }
 
     const int subSteps = std::max(1, maxSubSteps);
     const float subDeltaTime = deltaTime / static_cast<float>(subSteps);
