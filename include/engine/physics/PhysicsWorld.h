@@ -1,11 +1,14 @@
 #pragma once
 
 #include <memory>
+#include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 #include <glm/glm.hpp>
 
 #include "engine/physics/Collider.h"
+#include "engine/physics/cannon/World.h"
 
 namespace ge {
 
@@ -33,20 +36,31 @@ public:
 
     RaycastResult raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance);
 
-    void setSolverIterations(int iterations) { solverIterations_ = iterations; }
-    int getSolverIterations() const { return solverIterations_; }
+    void setSolverIterations(int iterations);
+    int getSolverIterations() const;
 
     const std::vector<std::unique_ptr<RigidBody>>& getBodies() const { return bodies_; }
 
 private:
-    void stepInternal(float deltaTime);
-    void applyGravity();
-    void resolveContacts(std::vector<ContactManifold>& manifolds, float deltaTime);
-    void warmStart(std::vector<ContactManifold>& manifolds);
-    void sweepCCD(float deltaTime);
+    struct CannonBinding {
+        RigidBody* rigidBody = nullptr;
+        std::unique_ptr<cannon::Body> cannonBody;
+    };
+
+    cannon::Body* createCannonBodyFromRigidBody(const RigidBody& rigidBody);
+    void syncRigidToCannon(const RigidBody& rigidBody, cannon::Body& cannonBody);
+    void syncCannonToRigid(const cannon::Body& cannonBody, RigidBody& rigidBody);
+    static cannon::Vec3 toCannon(const glm::vec3& value);
+    static glm::vec3 toGlm(const cannon::Vec3& value);
 
     std::vector<std::unique_ptr<RigidBody>> bodies_;
-    std::vector<ContactManifold> manifoldCache_;
+    std::vector<CannonBinding> cannonBindings_;
+    std::unordered_map<uint32_t, RigidBody*> idToRigid_;
+    std::unordered_map<uint32_t, cannon::Body*> idToCannon_;
+    std::unordered_map<RigidBody*, cannon::Body*> rigidToCannon_;
+    std::unordered_map<RigidBody*, uint32_t> rigidToId_;
+    uint32_t nextBodyId_ = 1;
+    cannon::World cannonWorld_;
 
     glm::vec3 gravity_{0.0f, -9.81f, 0.0f};
     int solverIterations_ = 8;

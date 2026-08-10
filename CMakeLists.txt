@@ -121,8 +121,6 @@ set(ENGINE_SOURCES
     src/engine/vulkan/VulkanImage.cpp
     src/engine/vulkan/VulkanRenderer.cpp
     src/engine/physics/BoxCollider.cpp
-    src/engine/physics/BroadPhase.cpp
-    src/engine/physics/CollisionDetection.cpp
     src/engine/physics/PhysicsEngine.cpp
     src/engine/physics/PhysicsWorld.cpp
     src/engine/physics/RigidBody.cpp
@@ -131,7 +129,17 @@ set(ENGINE_SOURCES
 
 add_library(game_engine_lib STATIC ${ENGINE_SOURCES}
     include/engine/ui/BitmapFont.h
-    include/engine/vulkan/PushConstants.h)
+    include/engine/vulkan/PushConstants.h
+    src/engine/physics/cannon/Vec3.cpp
+    src/engine/physics/cannon/Mat3.cpp
+    src/engine/physics/cannon/Quaternion.cpp
+    src/engine/physics/cannon/AABB.cpp
+    src/engine/physics/cannon/Material.cpp
+    src/engine/physics/cannon/Body.cpp
+    src/engine/physics/cannon/Equation.cpp
+    src/engine/physics/cannon/Narrowphase.cpp
+    src/engine/physics/cannon/Solver.cpp
+    src/engine/physics/cannon/World.cpp)
 add_dependencies(game_engine_lib CompileShaders)
 
 if (NOT DEFINED Vulkan_INCLUDE_DIRS)
