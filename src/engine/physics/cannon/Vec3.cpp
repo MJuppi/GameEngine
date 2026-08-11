@@ -25,6 +25,10 @@ Vec3& Vec3::copy(const Vec3& other) {
     return *this;
 }
 
+Vec3 Vec3::clone() const {
+    return Vec3(x, y, z);
+}
+
 float Vec3::dot(const Vec3& other) const {
     return x * other.x + y * other.y + z * other.z;
 }
@@ -55,6 +59,13 @@ Vec3& Vec3::scale(float scalar) {
     x *= scalar;
     y *= scalar;
     z *= scalar;
+    return *this;
+}
+
+Vec3& Vec3::negate() {
+    x = -x;
+    y = -y;
+    z = -z;
     return *this;
 }
 
@@ -90,6 +101,27 @@ Vec3& Vec3::add(const Vec3& other) {
 
 Vec3& Vec3::sub(const Vec3& other) {
     return vsub(other);
+}
+
+void Vec3::tangents(Vec3& t1, Vec3& t2) const {
+    const Vec3& n = *this;
+    if (std::abs(n.x) < std::abs(n.y)) {
+        if (std::abs(n.x) < std::abs(n.z)) {
+            t1.set(0.0f, -n.z, n.y);
+        } else {
+            t1.set(-n.y, n.x, 0.0f);
+        }
+    } else {
+        if (std::abs(n.y) < std::abs(n.z)) {
+            t1.set(n.z, 0.0f, -n.x);
+        } else {
+            t1.set(-n.y, n.x, 0.0f);
+        }
+    }
+
+    t1.normalize();
+    t2 = n.cross(t1);
+    t2.normalize();
 }
 
 } // namespace cannon

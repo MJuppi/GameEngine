@@ -5,11 +5,16 @@
 namespace ge {
 namespace cannon {
 
-Solver::Solver() : iterations(10), tolerance(1e-7f) {}
+Solver::Solver() : iterations(10), tolerance(1e-7f), useWarmstarting(true) {}
 
 int Solver::solve(float dt, World& world) {
+    return solve(dt, world, world.bodies);
+}
+
+int Solver::solve(float dt, World& world, const std::vector<Body*>& bodies) {
     (void)dt;
     (void)world;
+    (void)bodies;
     return 0;
 }
 
@@ -29,12 +34,17 @@ GSSolver::GSSolver() {
 }
 
 int GSSolver::solve(float dt, World& world) {
+    return solve(dt, world, world.bodies);
+}
+
+int GSSolver::solve(float dt, World& world, const std::vector<Body*>& bodies) {
+    (void)world;
     const int Neq = static_cast<int>(equations.size());
     if (Neq == 0) {
         return 0;
     }
 
-    for (Body* body : world.bodies) {
+    for (Body* body : bodies) {
         body->updateSolveMassProperties();
         body->vlambda.setZero();
         body->wlambda.setZero();
@@ -44,9 +54,20 @@ int GSSolver::solve(float dt, World& world) {
     std::vector<float> Bs(Neq);
     std::vector<float> lambda(Neq, 0.0f);
 
+    if (useWarmstarting) {
+        for (int i = 0; i < Neq; ++i) {
+            Equation* c = equations[i];
+            const float initialLambda = c->multiplier * dt;
+            lambda[i] = initialLambda;
+            if (initialLambda != 0.0f) {
+                c->addToWlambda(initialLambda);
+            }
+        }
+    }
+
     for (int i = 0; i < Neq; ++i) {
         Equation* c = equations[i];
-        Bs[i] = c->computeB(1.0f, 1.0f, dt);
+        Bs[i] = c->computeB(c->a, c->b, dt);
         invCs[i] = 1.0f / c->computeC();
     }
 
@@ -80,9 +101,14 @@ int GSSolver::solve(float dt, World& world) {
         ++iter;
     }
 
-    for (Body* body : world.bodies) {
+    for (Body* body : bodies) {
         body->velocity.addScaledVector(1.0f, body->vlambda);
         body->angularVelocity.addScaledVector(1.0f, body->wlambda);
+    }
+
+    const float invDt = (dt > 0.0f) ? (1.0f / dt) : 0.0f;
+    for (int i = 0; i < Neq; ++i) {
+        equations[i]->multiplier = lambda[i] * invDt;
     }
 
     return iter;

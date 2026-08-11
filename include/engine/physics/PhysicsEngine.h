@@ -17,11 +17,49 @@ public:
     RigidBody* createBoxBody(const glm::vec3& halfExtents,
                              const glm::mat4& transform,
                              const RigidBodyProps& props);
+    RigidBody* createActiveBoxBody(const glm::vec3& visualHalfExtents,
+                                  const glm::mat4& transform,
+                                  const RigidBodyProps& props);
     RigidBody* createSphereBody(float radius,
                                const glm::mat4& transform,
                                const RigidBodyProps& props);
 
     void destroyBody(RigidBody* body);
+    cannon::PointToPointConstraint* addPointToPointConstraint(RigidBody* bodyA,
+                                                               const glm::vec3& pivotA,
+                                                               RigidBody* bodyB,
+                                                               const glm::vec3& pivotB,
+                                                               float maxForce = 1e6f,
+                                                               bool collideConnected = true);
+    cannon::DistanceConstraint* addDistanceConstraint(RigidBody* bodyA,
+                                                      RigidBody* bodyB,
+                                                      float distance,
+                                                      float maxForce = 1e6f,
+                                                      bool collideConnected = true);
+    cannon::LockConstraint* addLockConstraint(RigidBody* bodyA,
+                                              RigidBody* bodyB,
+                                              float maxForce = 1e6f,
+                                              bool collideConnected = true);
+    cannon::HingeConstraint* addHingeConstraint(RigidBody* bodyA,
+                                                RigidBody* bodyB,
+                                                const glm::vec3& pivotA,
+                                                const glm::vec3& pivotB,
+                                                const glm::vec3& axisA,
+                                                const glm::vec3& axisB,
+                                                float maxForce = 1e6f,
+                                                bool collideConnected = true);
+    cannon::ConeTwistConstraint* addConeTwistConstraint(RigidBody* bodyA,
+                                                         RigidBody* bodyB,
+                                                         const glm::vec3& pivotA,
+                                                         const glm::vec3& pivotB,
+                                                         const glm::vec3& axisA,
+                                                         const glm::vec3& axisB,
+                                                         float angle = 0.0f,
+                                                         float twistAngle = 0.0f,
+                                                         float maxForce = 1e6f,
+                                                         bool collideConnected = true);
+    void removeConstraint(cannon::Constraint* constraint);
+    void clearConstraints();
     void setGravity(const glm::vec3& gravity);
     void setFixedTimeStep(float step) { fixedTimeStep_ = step; }
     float getFixedTimeStep() const { return fixedTimeStep_; }

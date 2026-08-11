@@ -6,6 +6,7 @@
 #include "engine/ui/UIManager.h"
 #include "engine/mesh/MeshData.h"
 #include "engine/physics/PhysicsEngine.h"
+#include "engine/physics/RigidBody.h"
 #include "engine/scene/ObjectBuilder.h"
 #include <iostream>
 #include <glm/glm.hpp>
@@ -68,6 +69,28 @@ bool Game::loadLevel(Level& level) {
         ObjectBuilder::attachPhysics(engine_->getPhysicsEngine(), levelObject);
     }
 
+    if (level.getName() == "PairOrderingParity") {
+        SceneFactory::setupPairOrderingPhysics(*engine_);
+    } else {
+        engine_->getPhysicsEngine().getWorld().setContactManifoldCallback(
+            [](const ContactManifold& manifold) {
+                const std::string bodyNameA = (manifold.bodyA && !manifold.bodyA->getName().empty())
+                    ? manifold.bodyA->getName()
+                    : std::string("BodyA");
+                const std::string bodyNameB = (manifold.bodyB && !manifold.bodyB->getName().empty())
+                    ? manifold.bodyB->getName()
+                    : std::string("BodyB");
+
+                std::cout << "[manifold] " << bodyNameA << " <-> " << bodyNameB
+                          << " contacts=" << manifold.contacts.size()
+                          << " normal=(" << manifold.normal.x << ", " << manifold.normal.y << ", " << manifold.normal.z << ")\n";
+            });
+    }
+
+    if (level.getName() == "ConstraintParity") {
+        SceneFactory::setupConstraintParityPhysics(*engine_);
+    }
+
     playerController_ = std::make_unique<PlayerController>(*engine_);
 
     SceneFactory::setupUI(*engine_);
@@ -123,7 +146,11 @@ void Game::shutdown() {
 
 void Game::initializeLevels() {
     LevelBuilder::registerDefaultLevels(levelManager_);
-    levelManager_.setCurrentLevel("TestCube");
+    if (!levelManager_.setCurrentLevel("PairOrderingParity")) {
+        if (!levelManager_.setCurrentLevel("ConstraintParity")) {
+            levelManager_.setCurrentLevel("TestCube");
+        }
+    }
 }
 
 } // namespace ge

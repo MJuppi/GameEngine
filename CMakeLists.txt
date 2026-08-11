@@ -136,6 +136,7 @@ add_library(game_engine_lib STATIC ${ENGINE_SOURCES}
     src/engine/physics/cannon/AABB.cpp
     src/engine/physics/cannon/Material.cpp
     src/engine/physics/cannon/Body.cpp
+    src/engine/physics/cannon/Constraint.cpp
     src/engine/physics/cannon/Equation.cpp
     src/engine/physics/cannon/Narrowphase.cpp
     src/engine/physics/cannon/Solver.cpp

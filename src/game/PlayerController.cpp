@@ -122,7 +122,7 @@ void PlayerController::fireProjectile() {
     const glm::vec3 spawnPosition = cameraPosition_ + cameraFront_ * 1.0f; // Spawn 1 unit in front of the camera
     const glm::vec3 fireDirection = cameraFront_; // Fire in the direction the camera is facing
 
-    auto* projectile = SceneFactory::spawnProjectile(engine_, spawnPosition, fireDirection, {0.0f, 1.0f, 0.0f}, {0.1f, 0.1f, 0.1f});
+    auto* projectile = SceneFactory::spawnProjectile(engine_, spawnPosition, fireDirection, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f});
     if (projectile) {
         spawnedProjectiles_.push_back(projectile);
         ++boxesShot_;

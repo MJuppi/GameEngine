@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <limits>
+#include <unordered_set>
 #include <utility>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -18,6 +20,41 @@ namespace {
 bool differs(const glm::vec3& a, const glm::vec3& b, float eps = 1e-6f) {
     const glm::vec3 d = a - b;
     return glm::dot(d, d) > eps * eps;
+}
+
+uint64_t makeBodyPairKey(uint32_t bodyIdA, uint32_t bodyIdB) {
+    const uint32_t lo = std::min(bodyIdA, bodyIdB);
+    const uint32_t hi = std::max(bodyIdA, bodyIdB);
+    return (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
+}
+
+int64_t quantizeComponent(float value) {
+    return static_cast<int64_t>(std::llround(value * 10000.0f));
+}
+
+uint64_t hashContactSignature(uint32_t bodyIdA,
+                              uint32_t bodyIdB,
+                              const glm::vec3& point,
+                              const glm::vec3& normal) {
+    uint64_t hash = makeBodyPairKey(bodyIdA, bodyIdB);
+    const int64_t px = quantizeComponent(point.x);
+    const int64_t py = quantizeComponent(point.y);
+    const int64_t pz = quantizeComponent(point.z);
+    const int64_t nx = quantizeComponent(normal.x);
+    const int64_t ny = quantizeComponent(normal.y);
+    const int64_t nz = quantizeComponent(normal.z);
+
+    auto mix = [&hash](int64_t value) {
+        hash ^= static_cast<uint64_t>(value) + 0x9e3779b97f4a7c15ull + (hash << 6) + (hash >> 2);
+    };
+
+    mix(px);
+    mix(py);
+    mix(pz);
+    mix(nx);
+    mix(ny);
+    mix(nz);
+    return hash;
 }
 
 glm::vec3 extractWorldScale(const glm::mat4& transform) {
@@ -246,6 +283,23 @@ void PhysicsWorld::removeBody(RigidBody* body) {
     }
 
     auto cannonIt = rigidToCannon_.find(body);
+    cannon::Body* removedCannonBody = nullptr;
+    if (cannonIt != rigidToCannon_.end()) {
+        removedCannonBody = cannonIt->second;
+    }
+
+    if (removedCannonBody) {
+        for (size_t i = 0; i < constraints_.size();) {
+            cannon::Constraint* c = constraints_[i].get();
+            if (c && (c->bodyA == removedCannonBody || c->bodyB == removedCannonBody)) {
+                cannonWorld_.removeConstraint(c);
+                constraints_.erase(constraints_.begin() + i);
+                continue;
+            }
+            ++i;
+        }
+    }
+
     if (cannonIt != rigidToCannon_.end()) {
         cannonWorld_.removeBody(cannonIt->second);
         rigidToCannon_.erase(cannonIt);
@@ -267,6 +321,8 @@ void PhysicsWorld::removeBody(RigidBody* body) {
 }
 
 void PhysicsWorld::clearBodies() {
+    clearConstraints();
+
     for (const auto& binding : cannonBindings_) {
         cannonWorld_.removeBody(binding.cannonBody.get());
     }
@@ -278,6 +334,245 @@ void PhysicsWorld::clearBodies() {
     bodies_.clear();
 }
 
+cannon::PointToPointConstraint* PhysicsWorld::addPointToPointConstraint(RigidBody* bodyA,
+                                                                        const glm::vec3& pivotA,
+                                                                        RigidBody* bodyB,
+                                                                        const glm::vec3& pivotB,
+                                                                        float maxForce,
+                                                                        bool collideConnected) {
+    if (!bodyA || !bodyB) {
+        return nullptr;
+    }
+
+    auto itA = rigidToCannon_.find(bodyA);
+    auto itB = rigidToCannon_.find(bodyB);
+    if (itA == rigidToCannon_.end() || itB == rigidToCannon_.end()) {
+        return nullptr;
+    }
+
+    auto constraint = std::make_unique<cannon::PointToPointConstraint>(
+        itA->second,
+        toCannon(pivotA),
+        itB->second,
+        toCannon(pivotB),
+        maxForce,
+        collideConnected);
+
+    auto* raw = constraint.get();
+    constraints_.push_back(std::move(constraint));
+    cannonWorld_.addConstraint(raw);
+    return raw;
+}
+
+cannon::DistanceConstraint* PhysicsWorld::addDistanceConstraint(RigidBody* bodyA,
+                                                                RigidBody* bodyB,
+                                                                float distance,
+                                                                float maxForce,
+                                                                bool collideConnected) {
+    if (!bodyA || !bodyB || distance < 0.0f) {
+        return nullptr;
+    }
+
+    auto itA = rigidToCannon_.find(bodyA);
+    auto itB = rigidToCannon_.find(bodyB);
+    if (itA == rigidToCannon_.end() || itB == rigidToCannon_.end()) {
+        return nullptr;
+    }
+
+    auto constraint = std::make_unique<cannon::DistanceConstraint>(
+        itA->second,
+        itB->second,
+        distance,
+        maxForce,
+        collideConnected);
+
+    auto* raw = constraint.get();
+    constraints_.push_back(std::move(constraint));
+    cannonWorld_.addConstraint(raw);
+    return raw;
+}
+
+cannon::LockConstraint* PhysicsWorld::addLockConstraint(RigidBody* bodyA,
+                                                        RigidBody* bodyB,
+                                                        float maxForce,
+                                                        bool collideConnected) {
+    if (!bodyA || !bodyB) {
+        return nullptr;
+    }
+
+    auto itA = rigidToCannon_.find(bodyA);
+    auto itB = rigidToCannon_.find(bodyB);
+    if (itA == rigidToCannon_.end() || itB == rigidToCannon_.end()) {
+        return nullptr;
+    }
+
+    auto constraint = std::make_unique<cannon::LockConstraint>(
+        itA->second,
+        itB->second,
+        maxForce,
+        collideConnected);
+
+    auto* raw = constraint.get();
+    constraints_.push_back(std::move(constraint));
+    cannonWorld_.addConstraint(raw);
+    return raw;
+}
+
+cannon::HingeConstraint* PhysicsWorld::addHingeConstraint(RigidBody* bodyA,
+                                                          RigidBody* bodyB,
+                                                          const glm::vec3& pivotA,
+                                                          const glm::vec3& pivotB,
+                                                          const glm::vec3& axisA,
+                                                          const glm::vec3& axisB,
+                                                          float maxForce,
+                                                          bool collideConnected) {
+    if (!bodyA || !bodyB) {
+        return nullptr;
+    }
+
+    auto itA = rigidToCannon_.find(bodyA);
+    auto itB = rigidToCannon_.find(bodyB);
+    if (itA == rigidToCannon_.end() || itB == rigidToCannon_.end()) {
+        return nullptr;
+    }
+
+    auto constraint = std::make_unique<cannon::HingeConstraint>(
+        itA->second,
+        itB->second,
+        toCannon(pivotA),
+        toCannon(pivotB),
+        toCannon(axisA),
+        toCannon(axisB),
+        maxForce,
+        collideConnected);
+
+    auto* raw = constraint.get();
+    constraints_.push_back(std::move(constraint));
+    cannonWorld_.addConstraint(raw);
+    return raw;
+}
+
+cannon::ConeTwistConstraint* PhysicsWorld::addConeTwistConstraint(RigidBody* bodyA,
+                                                                  RigidBody* bodyB,
+                                                                  const glm::vec3& pivotA,
+                                                                  const glm::vec3& pivotB,
+                                                                  const glm::vec3& axisA,
+                                                                  const glm::vec3& axisB,
+                                                                  float angle,
+                                                                  float twistAngle,
+                                                                  float maxForce,
+                                                                  bool collideConnected) {
+    if (!bodyA || !bodyB) {
+        return nullptr;
+    }
+
+    auto itA = rigidToCannon_.find(bodyA);
+    auto itB = rigidToCannon_.find(bodyB);
+    if (itA == rigidToCannon_.end() || itB == rigidToCannon_.end()) {
+        return nullptr;
+    }
+
+    auto constraint = std::make_unique<cannon::ConeTwistConstraint>(
+        itA->second,
+        itB->second,
+        toCannon(pivotA),
+        toCannon(pivotB),
+        toCannon(axisA),
+        toCannon(axisB),
+        angle,
+        twistAngle,
+        maxForce,
+        collideConnected);
+
+    auto* raw = constraint.get();
+    constraints_.push_back(std::move(constraint));
+    cannonWorld_.addConstraint(raw);
+    return raw;
+}
+
+void PhysicsWorld::removeConstraint(cannon::Constraint* constraint) {
+    if (!constraint) {
+        return;
+    }
+
+    cannonWorld_.removeConstraint(constraint);
+    constraints_.erase(std::remove_if(constraints_.begin(), constraints_.end(),
+                                      [constraint](const std::unique_ptr<cannon::Constraint>& c) {
+                                          return c.get() == constraint;
+                                      }),
+                       constraints_.end());
+}
+
+void PhysicsWorld::clearConstraints() {
+    for (const auto& constraint : constraints_) {
+        cannonWorld_.removeConstraint(constraint.get());
+    }
+    constraints_.clear();
+}
+
+void PhysicsWorld::rebuildContactManifolds() {
+    contactManifolds_.clear();
+
+    std::map<uint64_t, ContactManifold> manifoldsByPair;
+    for (const cannon::ContactEquation* contact : cannonWorld_.contacts) {
+        if (!contact || !contact->bi || !contact->bj) {
+            continue;
+        }
+
+        auto itA = idToRigid_.find(static_cast<uint32_t>(contact->bi->id));
+        auto itB = idToRigid_.find(static_cast<uint32_t>(contact->bj->id));
+        if (itA == idToRigid_.end() || itB == idToRigid_.end()) {
+            continue;
+        }
+
+        const uint32_t bodyIdA = static_cast<uint32_t>(contact->bi->id);
+        const uint32_t bodyIdB = static_cast<uint32_t>(contact->bj->id);
+        const uint64_t key = makeBodyPairKey(bodyIdA, bodyIdB);
+
+        ContactManifold& manifold = manifoldsByPair[key];
+        if (!manifold.bodyA || !manifold.bodyB) {
+            manifold.bodyA = itA->second;
+            manifold.bodyB = itB->second;
+        }
+
+        const glm::vec3 pointA(contact->bi->position.x + contact->ri.x,
+                               contact->bi->position.y + contact->ri.y,
+                               contact->bi->position.z + contact->ri.z);
+        const glm::vec3 pointB(contact->bj->position.x + contact->rj.x,
+                               contact->bj->position.y + contact->rj.y,
+                               contact->bj->position.z + contact->rj.z);
+        const glm::vec3 normal = glm::normalize(glm::vec3(contact->ni.x, contact->ni.y, contact->ni.z));
+        const glm::vec3 point = 0.5f * (pointA + pointB);
+        const float depth = std::max(0.0f, -glm::dot(normal, pointB - pointA));
+
+        Contact contactPoint;
+        contactPoint.bodyA = manifold.bodyA;
+        contactPoint.bodyB = manifold.bodyB;
+        contactPoint.normal = normal;
+        contactPoint.depth = depth;
+        contactPoint.point = point;
+        contactPoint.persistentId = static_cast<uint32_t>(hashContactSignature(bodyIdA, bodyIdB, point, normal));
+        manifold.contacts.push_back(contactPoint);
+        manifold.normal += normal;
+        manifold.isColliding = true;
+    }
+
+    contactManifolds_.reserve(manifoldsByPair.size());
+    for (auto& entry : manifoldsByPair) {
+        ContactManifold& manifold = entry.second;
+        if (!manifold.contacts.empty()) {
+            manifold.normal /= static_cast<float>(manifold.contacts.size());
+            const float normalLengthSq = glm::dot(manifold.normal, manifold.normal);
+            if (normalLengthSq > 1e-12f) {
+                manifold.normal = glm::normalize(manifold.normal);
+            } else {
+                manifold.normal = manifold.contacts.front().normal;
+            }
+        }
+        contactManifolds_.push_back(std::move(manifold));
+    }
+}
+
 void PhysicsWorld::setSolverIterations(int iterations) {
     solverIterations_ = std::max(1, iterations);
     if (cannonWorld_.solver) {
@@ -287,6 +582,14 @@ void PhysicsWorld::setSolverIterations(int iterations) {
 
 int PhysicsWorld::getSolverIterations() const {
     return solverIterations_;
+}
+
+void PhysicsWorld::setCollisionCallback(CollisionCallback callback) {
+    collisionCallback_ = std::move(callback);
+}
+
+void PhysicsWorld::setContactManifoldCallback(ContactManifoldCallback callback) {
+    contactManifoldCallback_ = std::move(callback);
 }
 
 void PhysicsWorld::step(float deltaTime, int maxSubSteps) {
@@ -320,10 +623,68 @@ void PhysicsWorld::step(float deltaTime, int maxSubSteps) {
         cannonWorld_.step(subDeltaTime, -1.0f, 1);
     }
 
+    rebuildContactManifolds();
+
+    if (contactManifoldCallback_) {
+        for (const ContactManifold& manifold : contactManifolds_) {
+            contactManifoldCallback_(manifold);
+        }
+    }
+
     for (const auto& binding : cannonBindings_) {
         const RigidBodyProps& props = binding.rigidBody->getProps();
         if (!props.isKinematic && props.mass > 0.0f) {
             syncCannonToRigid(*binding.cannonBody, *binding.rigidBody);
+        }
+    }
+
+    if (collisionCallback_) {
+        std::vector<std::pair<int, int>> began;
+        std::vector<std::pair<int, int>> ended;
+        std::vector<std::pair<int, int>> current;
+        cannonWorld_.getBodyOverlapDeltas(began, ended);
+        cannonWorld_.getCurrentBodyOverlaps(current);
+
+        std::unordered_set<uint64_t> beganKeys;
+        beganKeys.reserve(began.size());
+        for (const auto& pair : began) {
+            const int a = std::min(pair.first, pair.second);
+            const int b = std::max(pair.first, pair.second);
+            const uint64_t key = (static_cast<uint64_t>(static_cast<uint32_t>(a)) << 32) |
+                                 static_cast<uint64_t>(static_cast<uint32_t>(b));
+            beganKeys.insert(key);
+
+            auto itA = idToRigid_.find(static_cast<uint32_t>(a));
+            auto itB = idToRigid_.find(static_cast<uint32_t>(b));
+            if (itA != idToRigid_.end() && itB != idToRigid_.end()) {
+                collisionCallback_(CollisionEvent{CollisionPhase::Begin, itA->second, itB->second});
+            }
+        }
+
+        for (const auto& pair : current) {
+            const int a = std::min(pair.first, pair.second);
+            const int b = std::max(pair.first, pair.second);
+            const uint64_t key = (static_cast<uint64_t>(static_cast<uint32_t>(a)) << 32) |
+                                 static_cast<uint64_t>(static_cast<uint32_t>(b));
+            if (beganKeys.find(key) != beganKeys.end()) {
+                continue;
+            }
+
+            auto itA = idToRigid_.find(static_cast<uint32_t>(a));
+            auto itB = idToRigid_.find(static_cast<uint32_t>(b));
+            if (itA != idToRigid_.end() && itB != idToRigid_.end()) {
+                collisionCallback_(CollisionEvent{CollisionPhase::Stay, itA->second, itB->second});
+            }
+        }
+
+        for (const auto& pair : ended) {
+            const int a = std::min(pair.first, pair.second);
+            const int b = std::max(pair.first, pair.second);
+            auto itA = idToRigid_.find(static_cast<uint32_t>(a));
+            auto itB = idToRigid_.find(static_cast<uint32_t>(b));
+            if (itA != idToRigid_.end() && itB != idToRigid_.end()) {
+                collisionCallback_(CollisionEvent{CollisionPhase::End, itA->second, itB->second});
+            }
         }
     }
 }
@@ -364,6 +725,88 @@ PhysicsWorld::RaycastResult PhysicsWorld::raycast(const glm::vec3& origin, const
     }
 
     return result;
+}
+
+bool PhysicsWorld::raycastAny(const glm::vec3& origin,
+                             const glm::vec3& direction,
+                             float maxDistance,
+                             RaycastResult& result) {
+    result = RaycastResult{};
+
+    const float directionLength = glm::length(direction);
+    if (directionLength < 1e-6f || maxDistance <= 0.0f) {
+        return false;
+    }
+
+    const glm::vec3 dir = direction / directionLength;
+
+    for (const auto& body : bodies_) {
+        const auto& collider = body->getCollider();
+        const glm::mat4& transform = body->getWorldTransform();
+        float hitDistance = 0.0f;
+        glm::vec3 hitNormal(0.0f);
+        bool hit = false;
+
+        if (collider.getType() == ColliderType::Box) {
+            hit = raycastBox(static_cast<const BoxCollider&>(collider), transform, origin, dir, maxDistance, hitDistance, hitNormal);
+        } else if (collider.getType() == ColliderType::Sphere) {
+            hit = raycastSphere(static_cast<const SphereCollider&>(collider), transform, origin, dir, maxDistance, hitDistance, hitNormal);
+        }
+
+        if (hit && hitDistance > 0.0f && hitDistance <= maxDistance) {
+            result.hit = true;
+            result.body = body.get();
+            result.fraction = hitDistance / maxDistance;
+            result.point = origin + dir * hitDistance;
+            result.normal = hitNormal;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void PhysicsWorld::raycastAll(const glm::vec3& origin,
+                              const glm::vec3& direction,
+                              float maxDistance,
+                              const std::function<bool(const RaycastResult&)>& callback) {
+    if (!callback) {
+        return;
+    }
+
+    const float directionLength = glm::length(direction);
+    if (directionLength < 1e-6f || maxDistance <= 0.0f) {
+        return;
+    }
+
+    const glm::vec3 dir = direction / directionLength;
+
+    for (const auto& body : bodies_) {
+        const auto& collider = body->getCollider();
+        const glm::mat4& transform = body->getWorldTransform();
+        float hitDistance = 0.0f;
+        glm::vec3 hitNormal(0.0f);
+        bool hit = false;
+
+        if (collider.getType() == ColliderType::Box) {
+            hit = raycastBox(static_cast<const BoxCollider&>(collider), transform, origin, dir, maxDistance, hitDistance, hitNormal);
+        } else if (collider.getType() == ColliderType::Sphere) {
+            hit = raycastSphere(static_cast<const SphereCollider&>(collider), transform, origin, dir, maxDistance, hitDistance, hitNormal);
+        }
+
+        if (hit && hitDistance > 0.0f && hitDistance <= maxDistance) {
+            RaycastResult result;
+            result.hit = true;
+            result.body = body.get();
+            result.fraction = hitDistance / maxDistance;
+            result.point = origin + dir * hitDistance;
+            result.normal = hitNormal;
+
+            if (!callback(result)) {
+                return;
+            }
+        }
+    }
 }
 
 } // namespace ge

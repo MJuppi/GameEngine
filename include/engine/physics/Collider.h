@@ -8,6 +8,10 @@
 
 namespace ge {
 
+namespace cannon {
+class Material;
+}
+
 enum class ColliderType {
     Box,
     Sphere
@@ -46,11 +50,14 @@ public:
     virtual ~Collider() = default;
 
     ColliderType getType() const { return type_; }
+    void setMaterial(const cannon::Material* material) { material_ = material; }
+    const cannon::Material* getMaterial() const { return material_; }
     virtual void getLocalBounds(glm::vec3& min, glm::vec3& max) const = 0;
     virtual void getWorldBounds(glm::vec3& min, glm::vec3& max, const glm::mat4& transform) const = 0;
 
 private:
     ColliderType type_;
+    const cannon::Material* material_ = nullptr;
 };
 
 } // namespace ge

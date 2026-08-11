@@ -10,9 +10,12 @@ public:
     Material();
     explicit Material(const std::string& name);
 
+    int id;
     std::string name;
     float friction;
     float restitution;
+
+    static int idCounter;
 };
 
 class ContactMaterial {
@@ -25,6 +28,8 @@ public:
     float restitution;
     float contactEquationStiffness;
     float contactEquationRelaxation;
+    float frictionEquationStiffness;
+    float frictionEquationRelaxation;
 };
 
 } // namespace cannon

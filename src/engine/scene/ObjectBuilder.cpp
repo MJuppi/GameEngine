@@ -72,7 +72,6 @@ RigidBody* ObjectBuilder::attachPhysics(PhysicsEngine& physicsEngine, PhysicsMes
     }
 
     glm::mat4 initialTransform = object.getWorldTransform();
-    glm::vec3 colliderHalfExtents = object.halfExtents;
 
     if (object.type == ObjectType::Active) {
         // Compute a local center-of-mass offset from the active mesh bounds.
@@ -84,15 +83,22 @@ RigidBody* ObjectBuilder::attachPhysics(PhysicsEngine& physicsEngine, PhysicsMes
             object.physicsProps.centerOfMassOffset = glm::vec3(0.0f);
         }
 
-        // Active bodies bake mesh size into the transform; the collider stays as a unit cube.
-        initialTransform = glm::scale(initialTransform, object.halfExtents);
-        colliderHalfExtents = glm::vec3(0.5f);
+        // Active bodies use the same creation convention as projectiles:
+        // scaled transform with a unit cube collider.
     }
 
-    auto* body = physicsEngine.createBoxBody(
-        colliderHalfExtents,
-        initialTransform,
-        object.physicsProps);
+    RigidBody* body = nullptr;
+    if (object.type == ObjectType::Active) {
+        body = physicsEngine.createActiveBoxBody(
+            object.halfExtents,
+            initialTransform,
+            object.physicsProps);
+    } else {
+        body = physicsEngine.createBoxBody(
+            object.halfExtents,
+            initialTransform,
+            object.physicsProps);
+    }
 
     if (body) {
         body->setName(object.name);

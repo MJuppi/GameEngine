@@ -55,5 +55,49 @@ public:
     float computeB(float a, float b, float h) override;
 };
 
+class FrictionEquation : public Equation {
+public:
+    FrictionEquation(Body* bodyA, Body* bodyB, float slipForce = 1e6f);
+
+    Vec3 ri;
+    Vec3 rj;
+    Vec3 t;
+
+    float computeB(float a, float b, float h) override;
+};
+
+class ConeEquation : public Equation {
+public:
+    ConeEquation(Body* bodyA, Body* bodyB, float maxForce = 1e6f);
+
+    Vec3 axisA;
+    Vec3 axisB;
+    float angle;
+
+    float computeB(float a, float b, float h) override;
+};
+
+class RotationalEquation : public Equation {
+public:
+    RotationalEquation(Body* bodyA, Body* bodyB, float maxForce = 1e6f);
+
+    Vec3 axisA;
+    Vec3 axisB;
+    float maxAngle;
+
+    float computeB(float a, float b, float h) override;
+};
+
+class RotationalMotorEquation : public Equation {
+public:
+    RotationalMotorEquation(Body* bodyA, Body* bodyB, float maxForce = 1e6f);
+
+    Vec3 axisA;
+    Vec3 axisB;
+    float targetVelocity;
+
+    float computeB(float a, float b, float h) override;
+};
+
 } // namespace cannon
 } // namespace ge

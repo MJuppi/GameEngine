@@ -1,6 +1,8 @@
 #include "engine/physics/cannon/Equation.h"
 #include "engine/physics/cannon/Body.h"
 
+#include <cmath>
+
 namespace ge {
 namespace cannon {
 
@@ -99,6 +101,77 @@ float ContactEquation::computeB(float a, float b, float h) {
     const float GW = ePlusOne * (bj->velocity.dot(n) - bi->velocity.dot(n)) + bj->angularVelocity.dot(rjxn) - bi->angularVelocity.dot(rixn);
     const float GiMf = computeGiMf();
     return -g * a - GW * b - h * GiMf;
+}
+
+FrictionEquation::FrictionEquation(Body* bodyA, Body* bodyB, float slipForce)
+    : Equation(bodyA, bodyB, -slipForce, slipForce), ri(), rj(), t() {}
+
+float FrictionEquation::computeB(float /*a*/, float b, float h) {
+    const Vec3 rixt = ri.cross(t);
+    const Vec3 rjxt = rj.cross(t);
+
+    jacobianElementA.spatial = t;
+    jacobianElementA.spatial.scale(-1.0f);
+    jacobianElementA.rotational = rixt;
+    jacobianElementA.rotational.scale(-1.0f);
+    jacobianElementB.spatial = t;
+    jacobianElementB.rotational = rjxt;
+
+    const float GW = computeGW();
+    const float GiMf = computeGiMf();
+    return -GW * b - h * GiMf;
+}
+
+ConeEquation::ConeEquation(Body* bodyA, Body* bodyB, float maxForce)
+    : Equation(bodyA, bodyB, -maxForce, maxForce), axisA(1.0f, 0.0f, 0.0f), axisB(0.0f, 1.0f, 0.0f), angle(0.0f) {}
+
+float ConeEquation::computeB(float a, float b, float h) {
+    const Vec3 ni = axisA;
+    const Vec3 nj = axisB;
+    const Vec3 nixnj = ni.cross(nj);
+    const Vec3 njxni = nj.cross(ni);
+
+    jacobianElementA.rotational = njxni;
+    jacobianElementB.rotational = nixnj;
+
+    const float g = std::cos(angle) - ni.dot(nj);
+    const float GW = computeGW();
+    const float GiMf = computeGiMf();
+    return -g * a - GW * b - h * GiMf;
+}
+
+RotationalEquation::RotationalEquation(Body* bodyA, Body* bodyB, float maxForce)
+    : Equation(bodyA, bodyB, -maxForce, maxForce), axisA(1.0f, 0.0f, 0.0f), axisB(0.0f, 1.0f, 0.0f), maxAngle(1.57079632679f) {}
+
+float RotationalEquation::computeB(float a, float b, float h) {
+    const Vec3 ni = axisA;
+    const Vec3 nj = axisB;
+    const Vec3 nixnj = ni.cross(nj);
+    const Vec3 njxni = nj.cross(ni);
+
+    jacobianElementA.rotational = njxni;
+    jacobianElementB.rotational = nixnj;
+
+    const float g = std::cos(maxAngle) - ni.dot(nj);
+    const float GW = computeGW();
+    const float GiMf = computeGiMf();
+    return -g * a - GW * b - h * GiMf;
+}
+
+RotationalMotorEquation::RotationalMotorEquation(Body* bodyA, Body* bodyB, float maxForce)
+    : Equation(bodyA, bodyB, -maxForce, maxForce), axisA(), axisB(), targetVelocity(0.0f) {}
+
+float RotationalMotorEquation::computeB(float a, float b, float h) {
+    const Vec3 GAaxis = axisA;
+    const Vec3 GBaxis = axisB;
+
+    jacobianElementA.rotational = GAaxis;
+    jacobianElementB.rotational = GBaxis;
+    jacobianElementB.rotational.negate();
+
+    const float GW = computeGW() - targetVelocity;
+    const float GiMf = computeGiMf();
+    return -GW * b - h * GiMf;
 }
 
 } // namespace cannon

@@ -9,6 +9,14 @@ void LevelBuilder::registerDefaultLevels(LevelManager& levelManager) {
     SceneFactory::configureTestLevel(*testLevel);
     levelManager.addLevel(std::move(testLevel));
 
+    auto constraintLevel = std::make_unique<Level>("ConstraintParity");
+    SceneFactory::configureConstraintParityLevel(*constraintLevel);
+    levelManager.addLevel(std::move(constraintLevel));
+
+    auto pairOrderingLevel = std::make_unique<Level>("PairOrderingParity");
+    SceneFactory::configurePairOrderingLevel(*pairOrderingLevel);
+    levelManager.addLevel(std::move(pairOrderingLevel));
+
     // Add more levels here as needed:
     // auto level2 = std::make_unique<Level>("Level2");
     // SceneFactory::configureLevel2(*level2);

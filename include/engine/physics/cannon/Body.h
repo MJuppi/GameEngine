@@ -59,6 +59,8 @@ public:
     float linearDamping;
     float angularDamping;
     const Material* material;
+    Vec3 shapeOffset;
+    Quaternion shapeOrientation;
     ColliderType shapeType;
     std::unique_ptr<Collider> collider;
 
@@ -66,6 +68,10 @@ public:
     void updateMassProperties();
     void applyForce(const Vec3& f);
     void integrate(float dt, bool quatNormalize);
+    void pointToWorldFrame(const Vec3& localPoint, Vec3& out) const;
+    void pointToLocalFrame(const Vec3& worldPoint, Vec3& out) const;
+    void vectorToWorldFrame(const Vec3& localVector, Vec3& out) const;
+    void vectorToLocalFrame(const Vec3& worldVector, Vec3& out) const;
     void wakeUp();
     void sleep();
     void sleepTick(float time);

@@ -12,7 +12,11 @@ class Engine;
 class SceneFactory {
 public:
     static void configureTestLevel(Level& level);
+    static void configureConstraintParityLevel(Level& level);
+    static void configurePairOrderingLevel(Level& level);
     static void setupTestPhysics(Engine& engine);
+    static void setupConstraintParityPhysics(Engine& engine);
+    static void setupPairOrderingPhysics(Engine& engine);
     static void setupUI(Engine& engine);
 
     static RigidBodyProps makeDynamicBoxProps(float mass = 1.0f,
@@ -25,7 +29,7 @@ public:
                                       const glm::vec3& spawnPosition,
                                       const glm::vec3& fireDirection,
                                       const glm::vec3& velocityOffset = {0.0f, 0.2f, 0.0f},
-                                      const glm::vec3& halfExtents = {0.25f, 0.25f, 0.25f});
+                                      const glm::vec3& halfExtents = {1.0f, 1.0f, 1.0f});
 };
 
 } // namespace ge
