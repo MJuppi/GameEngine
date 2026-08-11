@@ -78,12 +78,17 @@ void Body::applyForce(const Vec3& f) {
 }
 
 void Body::integrate(float dt, bool quatNormalize) {
-    if (type != BodyType::DYNAMIC || sleepState == 2) {
+    if ((type != BodyType::DYNAMIC && type != BodyType::KINEMATIC) || sleepState == 2) {
         return;
     }
 
-    velocity.addScaledVector(dt, force);
-    angularVelocity.addScaledVector(dt, torque);
+    if (type == BodyType::DYNAMIC) {
+        velocity.addScaledVector(dt * invMass, force);
+
+        Vec3 angularForce = invInertiaWorld.vmult(torque);
+        angularVelocity.addScaledVector(dt, angularForce);
+    }
+
     position.addScaledVector(dt, velocity);
 
     Vec3 axis = angularVelocity;

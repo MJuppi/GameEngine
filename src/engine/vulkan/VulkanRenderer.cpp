@@ -370,10 +370,15 @@ void VulkanRenderer::recreateSwapchain() {
     vkDeviceWaitIdle(m_device->logical());
     destroySyncObjects();
     m_swapchain->recreate(m_window.handle());
+    m_materialSystem->recreateEffects(*m_swapchain);
+    if (m_uiEffect) {
+        m_uiEffect->recreate(*m_swapchain);
+    }
     vkDestroyCommandPool(m_device->logical(), m_commandPool, nullptr);
     createCommandPool();
     createCommandBuffers();
     createSyncObjects();
+    m_currentFrame = 0;
 }
 
 void VulkanRenderer::cleanupSwapchain() { m_swapchain.reset(); }

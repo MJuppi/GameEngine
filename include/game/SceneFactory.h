@@ -1,9 +1,11 @@
 #pragma once
 
 #include "game/Level.h"
+#include "game/LevelManager.h"
 #include "engine/physics/PhysicsEngine.h"
 
 #include <glm/glm.hpp>
+#include <functional>
 
 namespace ge {
 
@@ -11,13 +13,21 @@ class Engine;
 
 class SceneFactory {
 public:
+    struct PauseMenuBindings {
+        std::function<void(bool)> setVisible;
+        std::function<bool()> isVisible;
+    };
+
     static void configureTestLevel(Level& level);
     static void configureConstraintParityLevel(Level& level);
     static void configurePairOrderingLevel(Level& level);
     static void setupTestPhysics(Engine& engine);
     static void setupConstraintParityPhysics(Engine& engine);
     static void setupPairOrderingPhysics(Engine& engine);
-    static void setupUI(Engine& engine);
+    static PauseMenuBindings setupUI(Engine& engine,
+                                     const LevelManager& levelManager,
+                                     size_t currentLevelIndex,
+                                     std::function<void(size_t)> onLevelSelected);
 
     static RigidBodyProps makeDynamicBoxProps(float mass = 1.0f,
                                               float friction = 0.3f,

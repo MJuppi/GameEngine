@@ -25,6 +25,7 @@ public:
     FrameTimer frameTimer;
     FixedUpdateCallback fixedUpdateCallback;
     VariableUpdateCallback variableUpdateCallback;
+    bool stopRequested = false;
 
     explicit Impl(MeshData mesh, SceneLights sceneLights)
         : renderer(window, std::move(mesh))
@@ -57,8 +58,9 @@ public:
     void run() {
         const float fixedStep = 1.0f / 60.0f;
         float accumulator = 0.0f;
+        stopRequested = false;
 
-        while (!window.shouldClose()) {
+        while (!window.shouldClose() && !stopRequested) {
             const float deltaTime = frameTimer.beginFrame();
             window.pollEvents();
 
@@ -109,6 +111,10 @@ private:
 Engine::Engine(MeshData mesh, SceneLights sceneLights)
     : m_impl(new Impl(std::move(mesh), std::move(sceneLights)))
 {
+}
+
+void Engine::requestStop() {
+    m_impl->stopRequested = true;
 }
 
 Engine::~Engine() {

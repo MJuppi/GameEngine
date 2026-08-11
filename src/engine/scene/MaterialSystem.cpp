@@ -50,4 +50,13 @@ Material MaterialSystem::createTexturedMaterial(const std::string& name, const s
     return mat;
 }
 
+void MaterialSystem::recreateEffects(VulkanSwapchain& swapchain) {
+    for (auto& [name, effect] : effects_) {
+        (void)name;
+        if (effect) {
+            effect->recreate(swapchain);
+        }
+    }
+}
+
 } // namespace ge

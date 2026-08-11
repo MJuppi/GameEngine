@@ -34,6 +34,9 @@ public:
     /// Returns the default lit effect.
     [[nodiscard]] std::shared_ptr<ShaderEffect> getDefaultEffect() const { return defaultEffect_; }
 
+    /// Recreates all pipelines that depend on the swapchain extent/render pass.
+    void recreateEffects(VulkanSwapchain& swapchain);
+
 private:
     VulkanDevice& device_;
     VulkanSwapchain& swapchain_;

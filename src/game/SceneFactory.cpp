@@ -3,12 +3,14 @@
 #include "engine/physics/PhysicsEngine.h"
 #include "engine/ui/UIManager.h"
 #include "engine/ui/Label.h"
+#include "engine/ui/Button.h"
 #include "engine/FrameTimer.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <iomanip>
 #include <sstream>
 #include <vector>
+#include <memory>
 
 namespace ge {
 
@@ -55,7 +57,7 @@ void SceneFactory::configureTestLevel(Level& level) {
     // Stacking test for stability
     for (int i = 0; i < 5; ++i) {
         level.add("test_cube").name("Stack_" + std::to_string(i))
-             .at(0.0f, 2.0f + i * 1.5f, 0.0f).extents({1.0f, 1.0f, 1.0f}).mass(1.0f).asActive();
+             .at(0.0f, 2.0f + i * 2.1f, 0.0f).extents({1.0f, 1.0f, 1.0f}).mass(1.0f).asActive();
     }
 
     // Trigger test: A ghost cube that doesn't block
@@ -225,7 +227,10 @@ void SceneFactory::setupPairOrderingPhysics(Engine& engine) {
         });
 }
 
-void SceneFactory::setupUI(Engine& engine) {
+SceneFactory::PauseMenuBindings SceneFactory::setupUI(Engine& engine,
+                                                      const LevelManager& levelManager,
+                                                      size_t currentLevelIndex,
+                                                      std::function<void(size_t)> onLevelSelected) {
     auto fpsLabel = std::make_shared<Label>();
     fpsLabel->setPosition({0.85f, 0.05f});
     fpsLabel->setSize({0.1f, 0.03f});
@@ -255,9 +260,9 @@ void SceneFactory::setupUI(Engine& engine) {
     cubeDebugLabel->setOnUpdate([&engine](Label& label, float /*deltaTime*/) {
         const RigidBody* hingeDoor = findBodyByName(engine, "HingeDoor");
         const RigidBody* coneTip = findBodyByName(engine, "ConeTip");
-        const RigidBody* fallback = findBodyByName(engine, "Stack_0");
+        const RigidBody* stack0 = findBodyByName(engine, "Stack_0");
 
-        if (!hingeDoor && !coneTip && !fallback) {
+        if (!hingeDoor && !coneTip && !stack0) {
             label.setText("Constraint parity: not found");
             return;
         }
@@ -281,12 +286,144 @@ void SceneFactory::setupUI(Engine& engine) {
 
         appendBody("HingeDoor", hingeDoor);
         appendBody("ConeTip", coneTip);
-        if (!hingeDoor && !coneTip) {
-            appendBody("Stack_0", fallback);
+        if (!hingeDoor && !coneTip && stack0) {
+            appendBody("Stack_0", stack0);
+            const glm::vec3 pos = stack0->getPosition();
+            const glm::vec3 vel = stack0->getVelocity();
+            std::cout << "[Stack_0] loc=(" << std::fixed << std::setprecision(3)
+                      << pos.x << ", " << pos.y << ", " << pos.z
+                      << ") vel=(" << vel.x << ", " << vel.y << ", " << vel.z << ")\n";
+
+            size_t stackManifoldCount = 0;
+            const ContactManifold* firstStackManifold = nullptr;
+            const auto& manifolds = engine.getPhysicsEngine().getWorld().getContactManifolds();
+            for (const auto& manifold : manifolds) {
+                if (!manifold.bodyA || !manifold.bodyB) {
+                    continue;
+                }
+
+                const bool involvesStack0 = manifold.bodyA->getName() == "Stack_0" || manifold.bodyB->getName() == "Stack_0";
+                if (!involvesStack0) {
+                    continue;
+                }
+
+                ++stackManifoldCount;
+                if (!firstStackManifold) {
+                    firstStackManifold = &manifold;
+                }
+            }
+
+            std::cout << "[StackProbe] manifolds=" << stackManifoldCount;
+            if (firstStackManifold) {
+                const std::string manifoldNameA = firstStackManifold->bodyA->getName().empty() ? std::string("BodyA") : firstStackManifold->bodyA->getName();
+                const std::string manifoldNameB = firstStackManifold->bodyB->getName().empty() ? std::string("BodyB") : firstStackManifold->bodyB->getName();
+                std::cout << " pair=" << manifoldNameA << "<->" << manifoldNameB
+                          << " contacts=" << firstStackManifold->contacts.size()
+                          << " normal=(" << firstStackManifold->normal.x << ", " << firstStackManifold->normal.y << ", " << firstStackManifold->normal.z << ")";
+
+                if (!firstStackManifold->contacts.empty()) {
+                    const Contact& c = firstStackManifold->contacts.front();
+                    std::cout << " point=(" << c.point.x << ", " << c.point.y << ", " << c.point.z << ")"
+                              << " depth=" << c.depth
+                              << " nImpulse=" << c.normalImpulse
+                              << " tImpulse=" << c.tangentImpulse;
+                }
+            }
+            std::cout << '\n';
         }
         label.setText(ss.str());
     });
     engine.getUIManager().addElement(cubeDebugLabel);
+
+    auto menuVisible = std::make_shared<bool>(false);
+    auto menuElements = std::make_shared<std::vector<std::shared_ptr<UIElement>>>();
+
+    auto backdrop = std::make_shared<Button>();
+    backdrop->setPosition({0.0f, 0.0f});
+    backdrop->setSize({1.0f, 1.0f});
+    backdrop->setColor({0.0f, 0.0f, 0.0f, 0.65f});
+    backdrop->setVisible(false);
+    backdrop->setOnClick([]() {});
+    engine.getUIManager().addElement(backdrop);
+    menuElements->push_back(backdrop);
+
+    auto panel = std::make_shared<Button>();
+    panel->setPosition({0.22f, 0.15f});
+    panel->setSize({0.56f, 0.7f});
+    panel->setColor({0.1f, 0.12f, 0.17f, 0.95f});
+    panel->setVisible(false);
+    panel->setOnClick([]() {});
+    engine.getUIManager().addElement(panel);
+    menuElements->push_back(panel);
+
+    auto title = std::make_shared<Label>();
+    title->setPosition({0.26f, 0.2f});
+    title->setSize({0.48f, 0.07f});
+    title->setColor({1.0f, 0.92f, 0.3f, 1.0f});
+    title->setFontSize(1.4f);
+    title->setText("Pause Menu");
+    title->setVisible(false);
+    engine.getUIManager().addElement(title);
+    menuElements->push_back(title);
+
+    auto subtitle = std::make_shared<Label>();
+    subtitle->setPosition({0.26f, 0.27f});
+    subtitle->setSize({0.48f, 0.05f});
+    subtitle->setColor({0.8f, 0.85f, 0.95f, 1.0f});
+    subtitle->setFontSize(1.0f);
+    subtitle->setText("Select level (ESC to resume)");
+    subtitle->setVisible(false);
+    engine.getUIManager().addElement(subtitle);
+    menuElements->push_back(subtitle);
+
+    for (size_t i = 0; i < levelManager.getLevelCount(); ++i) {
+        const Level* level = levelManager.getLevel(i);
+        if (!level) {
+            continue;
+        }
+
+        const float y = 0.35f + static_cast<float>(i) * 0.09f;
+        const bool isCurrent = i == currentLevelIndex;
+
+        auto levelButton = std::make_shared<Button>();
+        levelButton->setPosition({0.28f, y});
+        levelButton->setSize({0.44f, 0.07f});
+        levelButton->setColor(isCurrent ? glm::vec4{0.2f, 0.38f, 0.68f, 1.0f}
+                                        : glm::vec4{0.18f, 0.2f, 0.26f, 1.0f});
+        levelButton->setVisible(false);
+        levelButton->setOnClick([onLevelSelected, i]() {
+            if (onLevelSelected) {
+                onLevelSelected(i);
+            }
+        });
+        engine.getUIManager().addElement(levelButton);
+        menuElements->push_back(levelButton);
+
+        auto levelLabel = std::make_shared<Label>();
+        levelLabel->setPosition({0.30f, y + 0.015f});
+        levelLabel->setSize({0.40f, 0.04f});
+        levelLabel->setColor({1.0f, 1.0f, 1.0f, 1.0f});
+        levelLabel->setFontSize(1.0f);
+        levelLabel->setText((isCurrent ? "* " : "") + level->getName());
+        levelLabel->setVisible(false);
+        engine.getUIManager().addElement(levelLabel);
+        menuElements->push_back(levelLabel);
+    }
+
+    PauseMenuBindings bindings;
+    bindings.setVisible = [menuVisible, menuElements](bool visible) {
+        *menuVisible = visible;
+        for (const auto& element : *menuElements) {
+            if (element) {
+                element->setVisible(visible);
+            }
+        }
+    };
+    bindings.isVisible = [menuVisible]() {
+        return *menuVisible;
+    };
+
+    return bindings;
 }
 
 RigidBodyProps SceneFactory::makeDynamicBoxProps(float mass, float friction, float restitution) {

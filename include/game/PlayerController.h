@@ -12,6 +12,9 @@ public:
     explicit PlayerController(Engine& engine);
     ~PlayerController() = default;
 
+    void setInputEnabled(bool enabled);
+    bool isInputEnabled() const { return inputEnabled_; }
+
     void fixedUpdate(float deltaTime);
     void variableUpdate(float deltaTime, float alpha);
 
@@ -53,6 +56,7 @@ private:
     double lastCursorY_ = 0.0;
     bool firstMouse_ = true;
     bool mouseCaptured_ = false;
+    bool inputEnabled_ = true;
 };
 
 } // namespace ge

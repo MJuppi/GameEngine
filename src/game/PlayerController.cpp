@@ -15,9 +15,27 @@ namespace ge {
 PlayerController::PlayerController(Engine& engine)
     : engine_(engine) {}
 
+void PlayerController::setInputEnabled(bool enabled) {
+    inputEnabled_ = enabled;
+    if (!inputEnabled_) {
+        auto* window = engine_.getWindowHandle();
+        if (window && mouseCaptured_) {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        }
+        mouseCaptured_ = false;
+        firstMouse_ = true;
+        pendingFire_ = false;
+        leftMouseDown_ = false;
+    }
+}
+
 /// @brief Updates the player controller state in a fixed time step.
 /// @param deltaTime
 void PlayerController::fixedUpdate(float deltaTime) {
+    if (!inputEnabled_) {
+        return;
+    }
+
     // Logical movement
     prevCameraPosition_ = cameraPosition_;
 
@@ -58,6 +76,11 @@ void PlayerController::fixedUpdate(float deltaTime) {
 void PlayerController::variableUpdate(float deltaTime, float alpha) {
     auto* window = engine_.getWindowHandle();
     if (!window) return;
+
+    if (!inputEnabled_) {
+        engine_.setCamera(cameraPosition_, cameraFront_, cameraUp_);
+        return;
+    }
 
     // Toggle mouse capture
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {

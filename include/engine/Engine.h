@@ -31,6 +31,9 @@ public:
     /// Blocks until the window is closed. One frame = poll input + render.
     void run();
 
+    /// Request the run loop to stop after the current frame.
+    void requestStop();
+
     /// Get the physics engine
     PhysicsEngine& getPhysicsEngine();
     const PhysicsEngine& getPhysicsEngine() const;

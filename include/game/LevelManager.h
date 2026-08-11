@@ -28,6 +28,7 @@ public:
     void unloadAll();
 
     size_t getLevelCount() const { return levels_.size(); }
+    int getCurrentLevelIndex() const { return currentLevelIndex_; }
 
 private:
     std::vector<std::unique_ptr<Level>> levels_;

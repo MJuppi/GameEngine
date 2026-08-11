@@ -36,6 +36,8 @@ public:
     ShaderEffect(VulkanDevice& device, VulkanSwapchain& swapchain, const Config& config);
     ~ShaderEffect();
 
+    void recreate(VulkanSwapchain& swapchain);
+
     [[nodiscard]] VulkanPipeline& getPipeline() const { return *pipeline_; }
     [[nodiscard]] const Config& getConfig() const { return config_; }
 

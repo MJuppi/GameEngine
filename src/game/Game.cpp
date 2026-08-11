@@ -9,7 +9,9 @@
 #include "engine/physics/RigidBody.h"
 #include "engine/scene/ObjectBuilder.h"
 #include <iostream>
+#include <iomanip>
 #include <glm/glm.hpp>
+#include <GLFW/glfw3.h>
 
 namespace ge {
 
@@ -52,7 +54,33 @@ void Game::run() {
     }
 
     state_ = GameState::Running;
-    engine_->run();
+    while (engine_) {
+        escWasDown_ = false;
+        pendingLevelIndex_.reset();
+        setMenuVisible(false);
+        engine_->run();
+
+        if (!pendingLevelIndex_.has_value()) {
+            break;
+        }
+
+        const size_t requestedIndex = *pendingLevelIndex_;
+        pendingLevelIndex_.reset();
+
+        if (!levelManager_.setCurrentLevel(requestedIndex)) {
+            std::cerr << "Requested level index is out of range: " << requestedIndex << '\n';
+            break;
+        }
+
+        playerController_.reset();
+        engine_.reset();
+
+        Level* nextLevel = levelManager_.getCurrentLevel();
+        if (!nextLevel || !loadLevel(*nextLevel)) {
+            loadFallbackLevel();
+            break;
+        }
+    }
 }
 
 bool Game::loadLevel(Level& level) {
@@ -81,6 +109,36 @@ bool Game::loadLevel(Level& level) {
                     ? manifold.bodyB->getName()
                     : std::string("BodyB");
 
+                const bool probeStack0 = bodyNameA == "Stack_0" || bodyNameB == "Stack_0";
+                if (probeStack0) {
+                    std::cout << "[probe] Stack_0 manifold " << bodyNameA << " <-> " << bodyNameB
+                              << " contacts=" << manifold.contacts.size()
+                              << " normal=(" << std::fixed << std::setprecision(3)
+                              << manifold.normal.x << ", " << manifold.normal.y << ", " << manifold.normal.z << ")";
+
+                    if (!manifold.contacts.empty()) {
+                        const Contact& contact = manifold.contacts.front();
+                        std::cout << " point=(" << contact.point.x << ", " << contact.point.y << ", " << contact.point.z << ")"
+                                  << " depth=" << contact.depth
+                                  << " nImpulse=" << contact.normalImpulse
+                                  << " tImpulse=" << contact.tangentImpulse;
+                    }
+
+                    if (manifold.bodyA && bodyNameA == "Stack_0") {
+                        const glm::vec3 pos = manifold.bodyA->getPosition();
+                        const glm::vec3 vel = manifold.bodyA->getVelocity();
+                        std::cout << " posA=(" << pos.x << ", " << pos.y << ", " << pos.z << ")"
+                                  << " velA=(" << vel.x << ", " << vel.y << ", " << vel.z << ")";
+                    } else if (manifold.bodyB && bodyNameB == "Stack_0") {
+                        const glm::vec3 pos = manifold.bodyB->getPosition();
+                        const glm::vec3 vel = manifold.bodyB->getVelocity();
+                        std::cout << " posB=(" << pos.x << ", " << pos.y << ", " << pos.z << ")"
+                                  << " velB=(" << vel.x << ", " << vel.y << ", " << vel.z << ")";
+                    }
+
+                    std::cout << '\n';
+                }
+
                 std::cout << "[manifold] " << bodyNameA << " <-> " << bodyNameB
                           << " contacts=" << manifold.contacts.size()
                           << " normal=(" << manifold.normal.x << ", " << manifold.normal.y << ", " << manifold.normal.z << ")\n";
@@ -93,15 +151,38 @@ bool Game::loadLevel(Level& level) {
 
     playerController_ = std::make_unique<PlayerController>(*engine_);
 
-    SceneFactory::setupUI(*engine_);
+    const int currentIndex = levelManager_.getCurrentLevelIndex();
+    const size_t safeIndex = currentIndex < 0 ? 0u : static_cast<size_t>(currentIndex);
+    pauseMenu_ = SceneFactory::setupUI(
+        *engine_,
+        levelManager_,
+        safeIndex,
+        [this](size_t levelIndex) {
+            pendingLevelIndex_ = levelIndex;
+            if (engine_) {
+                engine_->requestStop();
+            }
+        });
+    setMenuVisible(false);
 
     engine_->setFixedUpdateCallback([this](float deltaTime) {
-        if (playerController_) {
+        if (playerController_ && !isMenuVisible()) {
             playerController_->fixedUpdate(deltaTime);
         }
     });
 
     engine_->setVariableUpdateCallback([this](float deltaTime, float alpha) {
+        if (engine_) {
+            auto* window = engine_->getWindowHandle();
+            if (window) {
+                const bool escDown = glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS;
+                if (escDown && !escWasDown_) {
+                    setMenuVisible(!isMenuVisible());
+                }
+                escWasDown_ = escDown;
+            }
+        }
+
         engine_->getUIManager().update(deltaTime);
         if (playerController_) {
             playerController_->variableUpdate(deltaTime, alpha);
@@ -146,11 +227,23 @@ void Game::shutdown() {
 
 void Game::initializeLevels() {
     LevelBuilder::registerDefaultLevels(levelManager_);
-    if (!levelManager_.setCurrentLevel("PairOrderingParity")) {
-        if (!levelManager_.setCurrentLevel("ConstraintParity")) {
-            levelManager_.setCurrentLevel("TestCube");
-        }
+    if (!levelManager_.setCurrentLevel("TestCube")) {
+        levelManager_.setCurrentLevel(0);
     }
+}
+
+void Game::setMenuVisible(bool visible) {
+    if (pauseMenu_.setVisible) {
+        pauseMenu_.setVisible(visible);
+    }
+
+    if (playerController_) {
+        playerController_->setInputEnabled(!visible);
+    }
+}
+
+bool Game::isMenuVisible() const {
+    return pauseMenu_.isVisible ? pauseMenu_.isVisible() : false;
 }
 
 } // namespace ge

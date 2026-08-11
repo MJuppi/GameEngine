@@ -95,8 +95,11 @@ float ContactEquation::computeB(float a, float b, float h) {
     jacobianElementB.spatial = n;
     jacobianElementB.rotational = rjxn;
 
-    const float contactSlop = 0.01f;
-    const float g = (n.dot(bj->position) + n.dot(rj) - n.dot(bi->position) - n.dot(ri)) + contactSlop;
+    Vec3 penetrationVec = bj->position;
+    penetrationVec.vadd(rj);
+    penetrationVec.vsub(bi->position);
+    penetrationVec.vsub(ri);
+    const float g = n.dot(penetrationVec);
     const float ePlusOne = restitution + 1.0f;
     const float GW = ePlusOne * (bj->velocity.dot(n) - bi->velocity.dot(n)) + bj->angularVelocity.dot(rjxn) - bi->angularVelocity.dot(rixn);
     const float GiMf = computeGiMf();

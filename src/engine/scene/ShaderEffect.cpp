@@ -26,4 +26,10 @@ ShaderEffect::ShaderEffect(VulkanDevice& device, VulkanSwapchain& swapchain, con
 
 ShaderEffect::~ShaderEffect() = default;
 
+void ShaderEffect::recreate(VulkanSwapchain& swapchain) {
+    if (pipeline_) {
+        pipeline_->recreate(swapchain);
+    }
+}
+
 } // namespace ge
