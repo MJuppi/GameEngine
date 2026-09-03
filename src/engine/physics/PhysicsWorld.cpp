@@ -617,11 +617,7 @@ void PhysicsWorld::step(float deltaTime, int maxSubSteps) {
         }
     }
 
-    const int subSteps = std::max(1, maxSubSteps);
-    const float subDeltaTime = deltaTime / static_cast<float>(subSteps);
-    for (int i = 0; i < subSteps; ++i) {
-        cannonWorld_.step(subDeltaTime, -1.0f, 1);
-    }
+    cannonWorld_.step(deltaTime, deltaTime, std::max(1, maxSubSteps));
 
     rebuildContactManifolds();
 
@@ -633,7 +629,7 @@ void PhysicsWorld::step(float deltaTime, int maxSubSteps) {
 
     for (const auto& binding : cannonBindings_) {
         const RigidBodyProps& props = binding.rigidBody->getProps();
-        if (!props.isKinematic && props.mass > 0.0f) {
+        if (props.isKinematic || props.mass > 0.0f) {
             syncCannonToRigid(*binding.cannonBody, *binding.rigidBody);
         }
     }

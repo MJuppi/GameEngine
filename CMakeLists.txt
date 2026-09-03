@@ -193,3 +193,18 @@ if(MSVC)
 else()
     target_compile_options(Game PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+include(CTest)
+
+if(BUILD_TESTING)
+    add_executable(PhysicsWorldTests tests/PhysicsWorldTests.cpp)
+    target_link_libraries(PhysicsWorldTests PRIVATE game_engine_lib glm::glm)
+
+    if(MSVC)
+        target_compile_options(PhysicsWorldTests PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(PhysicsWorldTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+
+    add_test(NAME PhysicsWorldTests COMMAND PhysicsWorldTests)
+endif()
