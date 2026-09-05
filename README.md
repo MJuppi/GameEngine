@@ -1,6 +1,6 @@
 # GameEngine
 
-A **lightweight 3D game engine** built with **C++20** and **Vulkan**. The codebase is written like a hands-on tutorial: almost every file has verbose comments explaining *what* each piece does and *why* it exists in a Vulkan renderer.
+A **lightweight 3D game engine** built with **C++20** and **Vulkan**. The codebase is written like a hands-on tutorial: almost every file has verbose comments explaining _what_ each piece does and _why_ it exists in a Vulkan renderer.
 
 ## What you get
 
@@ -9,18 +9,41 @@ A **lightweight 3D game engine** built with **C++20** and **Vulkan**. The codeba
 - **Game Loop:** Decoupled update and render loops with fixed-timestep physics.
 - **Level System:** Structured level loading and scene configuration via `LevelManager` and `SceneFactory`.
 - **Asset Loading:** Wavefront `.obj` (with `.mtl`) and glTF 2.0 support.
-- **Player Controller:** First-person style movement and interaction.
-
+- **Sky Raid mission:** Arcade fighter flight, enemy interception, weapons, lock-on, heat, health, and HUD.
 
 ```bash
 ./build/Game.exe
 ```
 
-Camera controls in the viewer:
-- `W` / `S`: move forward / backward
-- `A` / `D`: strafe left / right
-- `E` / `Q`: move up / down
-- Right mouse button + drag: look around
+## Sky Raid: CombatMission
+
+The default level is a single mission: destroy all four enemy jets before your hull reaches zero. The scene uses the existing fixed-step physics, active-body renderer path, scene lighting, and bitmap-font UI; the old test/parity levels are no longer registered at runtime.
+
+Build and run from the repository root:
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j 8
+./build/Game         # Linux / macOS
+.\build\Game.exe    # Windows
+```
+
+Flight and combat controls:
+
+- `W` / `S`: increase or decrease throttle
+- `Arrow keys`: pitch and yaw
+- `A` / `D`: roll input / lateral maneuvering
+- Mouse movement while holding right mouse: fine flight look control
+- `Left Shift`: afterburner; it raises speed and heat, and guns stop firing while overheated
+- `Space` or left mouse: machine guns
+- `R` or right mouse: launch a locked missile
+- `C`: toggle first-person and chase camera
+- `Tab`: switch between gun loadouts
+- `Escape`: open the existing pause menu / release input
+
+The HUD reports speed, altitude, hull, heat, remaining enemies, missiles, and lock state. Missile lock requires the target to be in front of the aircraft for a short hold. Aircraft are kept above the terrain plane by a simple ground-following clamp, and collision callbacks apply projectile damage.
+
+The repository currently has no audio playback backend or sound files. Engine, gun, and explosion events are represented by the game-side weapon/collision events, ready for the existing `assets/audio/` directory to be connected to an audio library without coupling Vulkan rendering to sound playback.
 
 Quick check without opening the window:
 
@@ -111,6 +134,7 @@ src/
 This project uses an out-of-source CMake build and compiles GLSL shaders from `assets/shaders/` into SPIR-V under `build/shaders`.
 
 First time building on Windows with MinGW:
+
 ```powershell
 $env:VULKAN_SDK = "C:\VulkanSDK\1.4.350.0"
 cmake -B build -G "MinGW Makefiles" `
@@ -120,6 +144,7 @@ cmake -B build -G "MinGW Makefiles" `
 ```
 
 After the first build:
+
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j 8
@@ -166,6 +191,7 @@ docs/                    # design notes, asset conventions
 ```
 
 Guidelines:
+
 - Put all runtime assets under `assets/` and load by relative paths at runtime.
 - Keep engine code in `src/engine` and game logic in `src/game` so the engine can be reused.
 - Store shader sources in `assets/shaders/` and compile them during the build into SPIR-V in `build/shaders` (or check them into `assets/shaders/bin` for releases).
@@ -185,11 +211,11 @@ This project has evolved from a simple renderer into a basic engine. Below is th
 - [x] **Input & Game Loop:** Fixed-timestep update loop and centralized input.
 - [x] **Physics & Collision:** Integrated physics engine with collision events.
 - [x] **Scene / Entity System:** Lightweight scene management and level loading.
-- [x] **Sample Level:** Test levels with physics interactions.
+- [x] **Playable Mission:** CombatMission with flight, enemies, weapons, objective, and HUD.
 - [ ] **Renderer Polish:** Material/descriptor-system, batching, and shader hot-reload.
 - [ ] **Stabilize Asset Pipeline:** Robust path resolution and asset manifest.
-- [ ] **UI & HUD:** Minimal overlay for gameplay information.
-- [ ] **Gameplay Loop:** Objectives, scoring, and state transitions.
+- [x] **UI & HUD:** Mission HUD with flight and weapon state.
+- [x] **Gameplay Loop:** Destroy-all objective, health, heat, lock-on, and win/lose states.
 
 ## License
 
@@ -214,4 +240,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-

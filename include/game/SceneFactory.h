@@ -18,6 +18,7 @@ public:
         std::function<bool()> isVisible;
     };
 
+    static void configureCombatMission(Level& level);
     static void configureTestLevel(Level& level);
     static void configureConstraintParityLevel(Level& level);
     static void configurePairOrderingLevel(Level& level);

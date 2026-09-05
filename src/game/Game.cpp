@@ -227,7 +227,7 @@ void Game::shutdown() {
 
 void Game::initializeLevels() {
     LevelBuilder::registerDefaultLevels(levelManager_);
-    if (!levelManager_.setCurrentLevel("TestCube")) {
+    if (!levelManager_.setCurrentLevel("CombatMission")) {
         levelManager_.setCurrentLevel(0);
     }
 }

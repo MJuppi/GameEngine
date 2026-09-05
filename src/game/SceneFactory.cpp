@@ -28,6 +28,39 @@ RigidBody* findBodyByName(Engine& engine, const std::string& name) {
 
 } // namespace
 
+void SceneFactory::configureCombatMission(Level& level) {
+    auto& lights = level.getSceneLights();
+    lights.ambient.color = {0.42f, 0.52f, 0.68f, 1.0f};
+    lights.ambient.intensity = 0.28f;
+    lights.directional.direction = glm::normalize(glm::vec4(-0.35f, 1.0f, 0.25f, 0.0f));
+    lights.directional.color = {1.0f, 0.86f, 0.68f, 1.0f};
+    lights.directional.intensity = 0.85f;
+    lights.pointLightCount = 1;
+    lights.pointLights[0].position = {0.0f, 40.0f, 0.0f, 1.0f};
+    lights.pointLights[0].color = {0.35f, 0.55f, 1.0f, 1.0f};
+    lights.pointLights[0].parameters = {1.0f, 0.03f, 0.01f, 2.0f};
+
+    RigidBodyProps aircraft;
+    aircraft.mass = 1.0f;
+    aircraft.useGravity = false;
+    aircraft.linearDamping = 0.02f;
+    aircraft.angularDamping = 0.9f;
+
+    level.add("").name("Terrain").at(0.0f, -1.0f, 0.0f).extents({150.0f, 1.0f, 150.0f}).asStatic();
+    level.add("test_cube").name("PlayerJet").at(0.0f, 30.0f, 20.0f).extents({1.8f, 0.45f, 3.2f}).asActive(aircraft);
+    level.add("test_cube").name("EnemyJet0").at(-34.0f, 34.0f, -75.0f).extents({1.6f, 0.4f, 2.8f}).asActive(aircraft);
+    level.add("test_cube").name("EnemyJet1").at(38.0f, 42.0f, -120.0f).extents({1.6f, 0.4f, 2.8f}).asActive(aircraft);
+    level.add("test_cube").name("EnemyJet2").at(-62.0f, 27.0f, -155.0f).extents({1.6f, 0.4f, 2.8f}).asActive(aircraft);
+    level.add("test_cube").name("EnemyJet3").at(74.0f, 50.0f, -190.0f).extents({1.6f, 0.4f, 2.8f}).asActive(aircraft);
+
+    for (int i = 0; i < 12; ++i) {
+        const float x = static_cast<float>((i % 4) * 38 - 57);
+        const float z = static_cast<float>((i / 4) * -55 - 35);
+        level.add("test_cube").name("TerrainMarker" + std::to_string(i)).at(x, 0.0f, z)
+            .extents({1.5f, 4.0f, 1.5f}).asStatic();
+    }
+}
+
 void SceneFactory::configureTestLevel(Level& level) {
     // Configure lighting
     auto& lights = level.getSceneLights();
