@@ -54,6 +54,7 @@ public:
     ~RigidBody() = default;
 
     void setTransform(const glm::mat4& transform);
+    void setPhysicsTransform(const glm::mat4& transform);
     void setPosition(const glm::vec3& position) { state_.position = state_.prevPosition = position; updateTransform(); }
     void setVelocity(const glm::vec3& velocity) { state_.velocity = velocity; }
     void setMass(const float mass) { props_.mass = mass; }

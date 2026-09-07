@@ -72,7 +72,18 @@ bool raycastBox(const BoxCollider& box,
                 float maxDistance,
                 float& outDistance,
                 glm::vec3& outNormal) {
-    const glm::mat4 invTransform = glm::inverse(transform);
+    const glm::vec3 scale = extractWorldScale(transform);
+    if (scale.x < 1e-6f || scale.y < 1e-6f || scale.z < 1e-6f) {
+        return false;
+    }
+
+    glm::mat4 collisionTransform(1.0f);
+    collisionTransform[0] = glm::vec4(glm::vec3(transform[0]) / scale.x, 0.0f);
+    collisionTransform[1] = glm::vec4(glm::vec3(transform[1]) / scale.y, 0.0f);
+    collisionTransform[2] = glm::vec4(glm::vec3(transform[2]) / scale.z, 0.0f);
+    collisionTransform[3] = transform[3];
+
+    const glm::mat4 invTransform = glm::inverse(collisionTransform);
     const glm::vec3 localOrigin = glm::vec3(invTransform * glm::vec4(origin, 1.0f));
     const glm::vec3 localDirection = glm::vec3(invTransform * glm::vec4(direction, 0.0f));
     const float directionLength = glm::length(localDirection);
@@ -83,10 +94,12 @@ bool raycastBox(const BoxCollider& box,
     const glm::vec3 localDir = localDirection / directionLength;
     const glm::vec3 halfExtents = box.getHalfExtents();
 
-    float tMin = 0.0f;
+    float tMin = -std::numeric_limits<float>::infinity();
     float tMax = maxDistance * directionLength;
-    int hitAxis = -1;
-    float hitSign = 1.0f;
+    int entryAxis = -1;
+    float entrySign = 1.0f;
+    int exitAxis = -1;
+    float exitSign = 1.0f;
 
     for (int axis = 0; axis < 3; ++axis) {
         if (std::abs(localDir[axis]) < 1e-6f) {
@@ -99,36 +112,44 @@ bool raycastBox(const BoxCollider& box,
         const float invD = 1.0f / localDir[axis];
         float t0 = (-halfExtents[axis] - localOrigin[axis]) * invD;
         float t1 = (halfExtents[axis] - localOrigin[axis]) * invD;
-        float sign = 1.0f;
+        float sign = -1.0f;
         if (invD < 0.0f) {
             std::swap(t0, t1);
-            sign = -1.0f;
+            sign = 1.0f;
         }
 
         if (t0 > tMin) {
             tMin = t0;
-            hitAxis = axis;
-            hitSign = sign;
+            entryAxis = axis;
+            entrySign = sign;
         }
-        tMax = std::min(tMax, t1);
-        if (tMax <= tMin) {
+        if (t1 < tMax) {
+            tMax = t1;
+            exitAxis = axis;
+            exitSign = -sign;
+        }
+        if (tMax < tMin) {
             return false;
         }
     }
 
-    if (tMax <= tMin || tMin <= 0.0f || tMin > maxDistance * directionLength) {
+    if (tMax < 0.0f || tMin > maxDistance * directionLength) {
         return false;
     }
 
-    outDistance = tMin / directionLength;
+    const bool startsInside = tMin < 0.0f;
+    const float hitT = startsInside ? tMax : tMin;
+    outDistance = hitT / directionLength;
     glm::vec3 localNormal(0.0f);
+    const int hitAxis = startsInside ? exitAxis : entryAxis;
+    const float hitSign = startsInside ? exitSign : entrySign;
     if (hitAxis >= 0) {
         localNormal[hitAxis] = hitSign;
     } else {
         localNormal = glm::vec3(0.0f, 1.0f, 0.0f);
     }
 
-    outNormal = glm::normalize(glm::vec3(transform * glm::vec4(localNormal, 0.0f)));
+    outNormal = glm::normalize(glm::vec3(collisionTransform * glm::vec4(localNormal, 0.0f)));
     return true;
 }
 
@@ -140,8 +161,7 @@ bool raycastSphere(const SphereCollider& sphere,
                    float& outDistance,
                    glm::vec3& outNormal) {
     const glm::vec3 center = glm::vec3(transform[3]);
-    const glm::vec3 scale = extractWorldScale(transform);
-    const float radius = sphere.getRadius() * std::max({scale.x, scale.y, scale.z});
+    const float radius = sphere.getRadius();
 
     const glm::vec3 oc = origin - center;
     const float a = glm::dot(direction, direction);
@@ -252,7 +272,7 @@ void PhysicsWorld::syncCannonToRigid(const cannon::Body& cannonBody, RigidBody& 
     const glm::vec3 shapeOrigin = comWorld - (rotation * centerOfMassOffset);
     transform[3] = glm::vec4(shapeOrigin, 1.0f);
 
-    rigidBody.setTransform(transform);
+    rigidBody.setPhysicsTransform(transform);
     rigidBody.setVelocity(toGlm(cannonBody.velocity));
     rigidBody.setAngularVelocity(toGlm(cannonBody.angularVelocity));
 }

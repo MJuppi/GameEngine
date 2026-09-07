@@ -6,6 +6,9 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <vector>
+
+#include <glm/gtc/matrix_transform.hpp>
 
 namespace {
 
@@ -19,10 +22,12 @@ void requireNear(float actual, float expected, float tolerance, const char* mess
     }
 }
 
-std::unique_ptr<ge::RigidBody> makeBoxBody(const ge::RigidBodyProps& props) {
+std::unique_ptr<ge::RigidBody> makeBoxBody(const ge::RigidBodyProps& props,
+                                           const glm::mat4& transform = glm::mat4(1.0f),
+                                           const glm::vec3& halfExtents = glm::vec3(0.5f)) {
     return std::make_unique<ge::RigidBody>(
-        std::make_unique<ge::BoxCollider>(glm::vec3(0.5f)),
-        glm::mat4(1.0f),
+        std::make_unique<ge::BoxCollider>(halfExtents),
+        transform,
         props);
 }
 
@@ -54,12 +59,166 @@ void testKinematicBodySynchronizesVelocityMotion() {
                 "Kinematic Cannon motion must synchronize to RigidBody");
 }
 
+void testContactManifoldsRemainAvailableAfterStep() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps dynamicProps;
+    dynamicProps.useGravity = false;
+    dynamicProps.linearDamping = 0.0f;
+    dynamicProps.angularDamping = 0.0f;
+
+    ge::RigidBodyProps staticProps = dynamicProps;
+    staticProps.mass = 0.0f;
+
+    world.addBody(makeBoxBody(dynamicProps));
+    world.addBody(makeBoxBody(staticProps));
+
+    int callbackCount = 0;
+    world.setContactManifoldCallback([&callbackCount](const ge::ContactManifold& manifold) {
+        if (manifold.isColliding && !manifold.contacts.empty()) {
+            ++callbackCount;
+        }
+    });
+
+    world.step(kFixedTimeStep, 4);
+
+    if (world.getContactManifolds().empty()) {
+        throw std::runtime_error("An overlapping pair must produce a contact manifold after stepping");
+    }
+    if (callbackCount != 1) {
+        throw std::runtime_error("The contact manifold callback must run once for an overlapping pair");
+    }
+}
+
+void testTriggerOverlapEmitsCollisionEvent() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps dynamicProps;
+    dynamicProps.useGravity = false;
+
+    ge::RigidBodyProps triggerProps;
+    triggerProps.mass = 0.0f;
+    triggerProps.isTrigger = true;
+
+    world.addBody(makeBoxBody(dynamicProps));
+    world.addBody(makeBoxBody(triggerProps));
+
+    int beginCount = 0;
+    world.setCollisionCallback([&beginCount](const ge::PhysicsWorld::CollisionEvent& event) {
+        if (event.phase == ge::PhysicsWorld::CollisionPhase::Begin) {
+            ++beginCount;
+        }
+    });
+
+    world.step(kFixedTimeStep, 4);
+
+    if (beginCount != 1) {
+        throw std::runtime_error("An overlapping trigger must emit one collision begin event");
+    }
+}
+
+void testRotatedBoxesSeparatedOnEdgeAxisDoNotCollide() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps dynamicProps;
+    dynamicProps.useGravity = false;
+
+    ge::RigidBodyProps staticProps = dynamicProps;
+    staticProps.mass = 0.0f;
+
+    const glm::vec3 edgeAxis(0.577350269f, -0.577350269f, -0.577350269f);
+    const glm::mat4 firstTransform = glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    glm::mat4 secondTransform = glm::rotate(glm::mat4(1.0f), glm::radians(-45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    secondTransform = glm::translate(secondTransform, edgeAxis * 0.5f);
+
+    world.addBody(makeBoxBody(dynamicProps, firstTransform, glm::vec3(1.0f, 0.1f, 0.1f)));
+    world.addBody(makeBoxBody(staticProps, secondTransform, glm::vec3(1.0f, 0.1f, 0.1f)));
+
+    int beginCount = 0;
+    world.setCollisionCallback([&beginCount](const ge::PhysicsWorld::CollisionEvent& event) {
+        if (event.phase == ge::PhysicsWorld::CollisionPhase::Begin) {
+            ++beginCount;
+        }
+    });
+
+    world.step(kFixedTimeStep, 4);
+
+    if (beginCount != 0) {
+        throw std::runtime_error("Boxes separated on an edge-cross-edge axis must not collide");
+    }
+}
+
+void testRaycastFromInsideBoxFindsExitFace() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps staticProps;
+    staticProps.mass = 0.0f;
+    world.addBody(makeBoxBody(staticProps));
+
+    const ge::PhysicsWorld::RaycastResult result = world.raycast(
+        glm::vec3(0.0f), glm::vec3(1.0f, 0.0f, 0.0f), 2.0f);
+
+    if (!result.hit) {
+        throw std::runtime_error("A ray starting inside a box must hit its exit face");
+    }
+    requireNear(result.fraction, 0.25f, 1e-5f,
+                "The inside-box raycast must report the forward exit distance");
+}
+
+void testInterpolatedTransformUsesPreviousPhysicsState() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps props;
+    props.linearDamping = 0.0f;
+    props.angularDamping = 0.0f;
+
+    ge::RigidBody* body = world.addBody(makeBoxBody(props));
+    world.step(kFixedTimeStep, 4);
+
+    const float expectedY = -0.5f * 9.81f * kFixedTimeStep * kFixedTimeStep;
+    requireNear(glm::vec3(body->getInterpolatedTransform(0.5f)[3]).y, expectedY, 1e-5f,
+                "Interpolated transforms must blend the previous and current physics positions");
+}
+
+void testInterpolatedTransformPreservesCenterOfMassOffset() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps props;
+    props.useGravity = false;
+    props.centerOfMassOffset = glm::vec3(0.5f, 0.0f, 0.0f);
+
+    ge::RigidBody* body = world.addBody(makeBoxBody(props));
+    world.step(kFixedTimeStep, 4);
+
+    requireNear(glm::vec3(body->getInterpolatedTransform(1.0f)[3]).x, 0.0f, 1e-5f,
+                "Interpolated transforms must use the shape origin instead of the center of mass");
+}
+
+void testRaycastUsesPhysicalColliderSizeWhenTransformIsScaled() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps staticProps;
+    staticProps.mass = 0.0f;
+
+    const glm::mat4 visualTransform = glm::scale(glm::mat4(1.0f), glm::vec3(2.0f));
+    world.addBody(makeBoxBody(staticProps, visualTransform));
+
+    const ge::PhysicsWorld::RaycastResult result = world.raycast(
+        glm::vec3(-2.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), 4.0f);
+
+    if (!result.hit) {
+        throw std::runtime_error("A scaled visual transform must not disable the physical box raycast");
+    }
+    requireNear(result.fraction, 0.375f, 1e-5f,
+                "Raycasts must use the collider dimensions used by simulation, not visual scale");
+}
+
 } // namespace
 
 int main() {
     try {
         testAccumulatorAdvancesOneFixedStep();
         testKinematicBodySynchronizesVelocityMotion();
+        testContactManifoldsRemainAvailableAfterStep();
+        testTriggerOverlapEmitsCollisionEvent();
+        testRotatedBoxesSeparatedOnEdgeAxisDoNotCollide();
+        testRaycastFromInsideBoxFindsExitFace();
+        testInterpolatedTransformUsesPreviousPhysicsState();
+        testInterpolatedTransformPreservesCenterOfMassOffset();
+        testRaycastUsesPhysicalColliderSizeWhenTransformIsScaled();
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 1;

@@ -172,7 +172,14 @@ bool Narrowphase::bodiesOverlap(const Body* bi, const Body* bj) const {
         getBoxAxes(qj, bx, by, bz);
 
         const Vec3 delta(xj.x - xi.x, xj.y - xi.y, xj.z - xi.z);
-        const Vec3 testAxes[6] = {ax, ay, az, bx, by, bz};
+        const Vec3 axesA[3] = {ax, ay, az};
+        const Vec3 axesB[3] = {bx, by, bz};
+        std::vector<Vec3> testAxes = {ax, ay, az, bx, by, bz};
+        for (const Vec3& axisA : axesA) {
+            for (const Vec3& axisB : axesB) {
+                testAxes.push_back(axisA.cross(axisB));
+            }
+        }
         for (const Vec3& axisIn : testAxes) {
             Vec3 axis = axisIn;
             const float axisLenSq = axis.lengthSquared();
@@ -411,13 +418,20 @@ void Narrowphase::getContacts(const std::vector<Body*>& p1,
             getBoxAxes(qj, bx, by, bz);
 
             const Vec3 delta(xj.x - xi.x, xj.y - xi.y, xj.z - xi.z);
-            const Vec3 testAxes[6] = {ax, ay, az, bx, by, bz};
+            const Vec3 axesA[3] = {ax, ay, az};
+            const Vec3 axesB[3] = {bx, by, bz};
+            std::vector<Vec3> testAxes = {ax, ay, az, bx, by, bz};
+            for (const Vec3& axisA : axesA) {
+                for (const Vec3& axisB : axesB) {
+                    testAxes.push_back(axisA.cross(axisB));
+                }
+            }
             float minOverlap = 1e30f;
             Vec3 bestAxis(1.0f, 0.0f, 0.0f);
             int bestAxisIndex = 0;
             bool separated = false;
 
-            for (int axisIndex = 0; axisIndex < 6; ++axisIndex) {
+            for (int axisIndex = 0; axisIndex < static_cast<int>(testAxes.size()); ++axisIndex) {
                 const Vec3& axisIn = testAxes[axisIndex];
                 Vec3 axis = axisIn;
                 const float axisLenSq = axis.lengthSquared();

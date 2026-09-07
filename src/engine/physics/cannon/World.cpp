@@ -393,10 +393,6 @@ void World::internalStep(float dt_) {
             return false;
         }
 
-        if (bi->isTrigger || bj->isTrigger) {
-            return false;
-        }
-
         if (((bi->collisionMask & bj->collisionLayer) == 0u) ||
             ((bj->collisionMask & bi->collisionLayer) == 0u)) {
             return false;
@@ -454,7 +450,9 @@ void World::internalStep(float dt_) {
                     continue;
                 }
 
-                if (shouldSolveCollision(ei.body, ej.body)) {
+                if (ei.body->isTrigger || ej.body->isTrigger) {
+                    overlapOnlyPairs.emplace_back(ei.body, ej.body);
+                } else if (shouldSolveCollision(ei.body, ej.body)) {
                     p1.push_back(ei.body);
                     p2.push_back(ej.body);
                 } else if (isKinematicEdgePair(ei.body, ej.body)) {
@@ -471,7 +469,9 @@ void World::internalStep(float dt_) {
                     continue;
                 }
 
-                if (shouldSolveCollision(bi, bj)) {
+                if (bi->isTrigger || bj->isTrigger) {
+                    overlapOnlyPairs.emplace_back(bi, bj);
+                } else if (shouldSolveCollision(bi, bj)) {
                     p1.push_back(bi);
                     p2.push_back(bj);
                 } else if (isKinematicEdgePair(bi, bj)) {
@@ -670,7 +670,6 @@ void World::internalStep(float dt_) {
         }
     }
 
-    narrowphase->releaseEquationPools(contacts, frictionEquations);
     ++stepnumber;
 }
 

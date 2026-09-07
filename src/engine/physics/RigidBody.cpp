@@ -58,6 +58,15 @@ void RigidBody::setTransform(const glm::mat4& transform) {
     updateTransform();
 }
 
+void RigidBody::setPhysicsTransform(const glm::mat4& transform) {
+    state_.prevPosition = state_.position;
+    state_.prevRotation = state_.rotation;
+    state_.rotation = extractRotation(transform);
+    state_.position = glm::vec3(transform[3]) + state_.rotation * props_.centerOfMassOffset;
+    inverseInertiaTensorDirty_ = true;
+    updateTransform();
+}
+
 glm::vec3 RigidBody::getLocalScale() const {
     if (baseTransform_ == glm::mat4(1.0f)) {
         return glm::vec3(1.0f);
@@ -89,18 +98,17 @@ void RigidBody::updateInertiaTensor() const {
         return;
     }
 
-    const glm::vec3 scale = getLocalScale();
     glm::vec3 inertia(1.0f);
 
     if (collider_->getType() == ColliderType::Box) {
         const auto& box = static_cast<const BoxCollider&>(*collider_);
-        const glm::vec3 h = box.getHalfExtents() * scale;
+        const glm::vec3 h = box.getHalfExtents();
         inertia.x = (1.0f / 3.0f) * mass * (h.y * h.y + h.z * h.z);
         inertia.y = (1.0f / 3.0f) * mass * (h.x * h.x + h.z * h.z);
         inertia.z = (1.0f / 3.0f) * mass * (h.x * h.x + h.y * h.y);
     } else if (collider_->getType() == ColliderType::Sphere) {
         const auto& sphere = static_cast<const SphereCollider&>(*collider_);
-        const float radius = sphere.getRadius() * std::max({scale.x, scale.y, scale.z});
+        const float radius = sphere.getRadius();
         const float moment = (2.0f / 5.0f) * mass * radius * radius;
         inertia = glm::vec3(moment);
     }
@@ -120,7 +128,7 @@ glm::mat4 RigidBody::getInterpolatedTransform(float alpha) const {
     const glm::quat rotation = glm::slerp(state_.prevRotation, state_.rotation, alpha);
 
     glm::mat4 transform = glm::mat4_cast(rotation);
-    transform[3] = glm::vec4(position, 1.0f);
+    transform[3] = glm::vec4(position - rotation * props_.centerOfMassOffset, 1.0f);
 
     const glm::vec3 scale = getLocalScale();
     transform[0] *= scale.x;
