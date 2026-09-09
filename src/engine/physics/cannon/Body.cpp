@@ -11,7 +11,7 @@ Body::Body()
     mass(0.0f), invMass(0.0f), invMassSolve(0.0f), invInertia(), invInertiaWorld(), invInertiaWorldSolve(), vlambda(), wlambda(), initPosition(), initQuaternion(),
       initVelocity(), initAngularVelocity(), allowSleep(true), sleepState(0), sleepSpeedLimit(0.1f), sleepTimeLimit(1.0f),
       timeLastSleepy(0.0f), wakeUpAfterNarrowphase(false), isTrigger(false), linearDamping(0.01f), angularDamping(0.01f),
-    material(nullptr), shapeOffset(), shapeOrientation(), shapeType(ColliderType::Box), collider(nullptr) {
+    restitution(0.0f), material(nullptr), shapeOffset(), shapeOrientation(), shapeType(ColliderType::Box), collider(nullptr) {
 }
 
 Body::Body(const RigidBodyProps& props, const glm::mat4& transform)
@@ -20,7 +20,7 @@ Body::Body(const RigidBodyProps& props, const glm::mat4& transform)
     invInertia(), invInertiaWorld(), invInertiaWorldSolve(), vlambda(), wlambda(), initPosition(), initQuaternion(), initVelocity(), initAngularVelocity(),
       allowSleep(true), sleepState(0), sleepSpeedLimit(0.1f), sleepTimeLimit(1.0f), timeLastSleepy(0.0f),
       wakeUpAfterNarrowphase(false), isTrigger(props.isTrigger), linearDamping(props.linearDamping), angularDamping(props.angularDamping),
-            material(nullptr), shapeOffset(), shapeOrientation(), shapeType(ColliderType::Box), collider(nullptr) {
+            restitution(props.restitution), material(nullptr), shapeOffset(), shapeOrientation(), shapeType(ColliderType::Box), collider(nullptr) {
     position = Vec3(transform[3][0], transform[3][1], transform[3][2]);
 }
 

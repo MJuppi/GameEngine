@@ -1,6 +1,7 @@
 #include "engine/physics/cannon/Equation.h"
 #include "engine/physics/cannon/Body.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace ge {
@@ -103,7 +104,9 @@ float ContactEquation::computeB(float a, float b, float h) {
     const float ePlusOne = restitution + 1.0f;
     const float GW = ePlusOne * (bj->velocity.dot(n) - bi->velocity.dot(n)) + bj->angularVelocity.dot(rjxn) - bi->angularVelocity.dot(rixn);
     const float GiMf = computeGiMf();
-    return -g * a - GW * b - h * GiMf;
+    constexpr float kMaxPenetrationVelocity = 0.1f;
+    const float penetrationBias = std::clamp(-g * a, 0.0f, kMaxPenetrationVelocity);
+    return penetrationBias - GW * b - h * GiMf;
 }
 
 FrictionEquation::FrictionEquation(Body* bodyA, Body* bodyB, float slipForce)

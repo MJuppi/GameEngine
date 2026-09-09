@@ -248,6 +248,7 @@ void PhysicsWorld::syncRigidToCannon(const RigidBody& rigidBody, cannon::Body& c
     cannonBody.invMassSolve = cannonBody.invMass;
     cannonBody.linearDamping = rigidBody.getProps().linearDamping;
     cannonBody.angularDamping = rigidBody.getProps().angularDamping;
+    cannonBody.restitution = rigidBody.getProps().restitution;
     cannonBody.isTrigger = rigidBody.getProps().isTrigger;
     cannonBody.useGravity = rigidBody.getProps().useGravity;
     cannonBody.collisionLayer = rigidBody.getProps().collisionLayer;

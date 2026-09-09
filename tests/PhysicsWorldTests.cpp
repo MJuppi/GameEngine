@@ -206,6 +206,94 @@ void testRaycastUsesPhysicalColliderSizeWhenTransformIsScaled() {
                 "Raycasts must use the collider dimensions used by simulation, not visual scale");
 }
 
+void testHeadOnCubeCollisionDoesNotAmplifyVelocity() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps props;
+    props.useGravity = false;
+    props.linearDamping = 0.0f;
+    props.angularDamping = 0.0f;
+    props.restitution = 0.0f;
+
+    const glm::mat4 leftTransform = glm::translate(glm::mat4(1.0f), glm::vec3(-0.9f, 0.0f, 0.0f));
+    const glm::mat4 rightTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.9f, 0.0f, 0.0f));
+    ge::RigidBody* left = world.addBody(makeBoxBody(props, leftTransform));
+    ge::RigidBody* right = world.addBody(makeBoxBody(props, rightTransform));
+
+    world.step(kFixedTimeStep, 4);
+
+    const float leftSpeed = glm::length(left->getVelocity());
+    const float rightSpeed = glm::length(right->getVelocity());
+    if (leftSpeed > 0.5f || rightSpeed > 0.5f) {
+        throw std::runtime_error("A resting-restitution cube collision created excessive speed: left=" +
+                                 std::to_string(leftSpeed) + ", right=" + std::to_string(rightSpeed));
+    }
+}
+
+void testHeadOnCubeCollisionRespectsRestitution() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps props;
+    props.useGravity = false;
+    props.linearDamping = 0.0f;
+    props.angularDamping = 0.0f;
+    props.restitution = 0.5f;
+
+    const glm::mat4 leftTransform = glm::translate(glm::mat4(1.0f), glm::vec3(-0.9f, 0.0f, 0.0f));
+    const glm::mat4 rightTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.9f, 0.0f, 0.0f));
+    ge::RigidBody* left = world.addBody(makeBoxBody(props, leftTransform));
+    ge::RigidBody* right = world.addBody(makeBoxBody(props, rightTransform));
+    left->setVelocity(glm::vec3(1.0f, 0.0f, 0.0f));
+    right->setVelocity(glm::vec3(-1.0f, 0.0f, 0.0f));
+
+    world.step(kFixedTimeStep, 4);
+
+    if (left->getVelocity().x < -1.5f || right->getVelocity().x > 1.5f) {
+        throw std::runtime_error("Cube collision response must remain bounded by restitution");
+    }
+}
+
+void testHighSpeedCubeCollisionDoesNotCreateImpulseSpike() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps props;
+    props.useGravity = false;
+    props.linearDamping = 0.0f;
+    props.angularDamping = 0.0f;
+    props.restitution = 0.1f;
+
+    const glm::mat4 leftTransform = glm::translate(glm::mat4(1.0f), glm::vec3(-0.9f, 0.0f, 0.0f));
+    const glm::mat4 rightTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.9f, 0.0f, 0.0f));
+    ge::RigidBody* left = world.addBody(makeBoxBody(props, leftTransform));
+    ge::RigidBody* right = world.addBody(makeBoxBody(props, rightTransform));
+    left->setVelocity(glm::vec3(10.0f, 0.0f, 0.0f));
+    right->setVelocity(glm::vec3(-10.0f, 0.0f, 0.0f));
+
+    world.step(kFixedTimeStep, 4);
+
+    if (glm::length(left->getVelocity()) > 12.0f || glm::length(right->getVelocity()) > 12.0f) {
+        throw std::runtime_error("A high-speed cube collision must not produce an impulse spike");
+    }
+}
+
+void testRepeatedRestingContactDoesNotReuseStaleImpulse() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps props;
+    props.useGravity = false;
+    props.linearDamping = 0.0f;
+    props.angularDamping = 0.0f;
+    props.restitution = 0.0f;
+
+    const glm::mat4 leftTransform = glm::translate(glm::mat4(1.0f), glm::vec3(-0.9f, 0.0f, 0.0f));
+    const glm::mat4 rightTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.9f, 0.0f, 0.0f));
+    ge::RigidBody* left = world.addBody(makeBoxBody(props, leftTransform));
+    ge::RigidBody* right = world.addBody(makeBoxBody(props, rightTransform));
+
+    world.step(kFixedTimeStep, 4);
+    world.step(kFixedTimeStep, 4);
+
+    if (glm::length(left->getVelocity()) > 0.5f || glm::length(right->getVelocity()) > 0.5f) {
+        throw std::runtime_error("Repeated resting contacts must not reuse a stale collision impulse");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -219,6 +307,10 @@ int main() {
         testInterpolatedTransformUsesPreviousPhysicsState();
         testInterpolatedTransformPreservesCenterOfMassOffset();
         testRaycastUsesPhysicalColliderSizeWhenTransformIsScaled();
+        testHeadOnCubeCollisionDoesNotAmplifyVelocity();
+        testHeadOnCubeCollisionRespectsRestitution();
+        testHighSpeedCubeCollisionDoesNotCreateImpulseSpike();
+        testRepeatedRestingContactDoesNotReuseStaleImpulse();
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 1;

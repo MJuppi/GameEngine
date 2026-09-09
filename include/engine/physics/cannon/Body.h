@@ -58,6 +58,7 @@ public:
     bool isTrigger;
     float linearDamping;
     float angularDamping;
+    float restitution;
     const Material* material;
     Vec3 shapeOffset;
     Quaternion shapeOrientation;

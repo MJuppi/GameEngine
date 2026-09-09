@@ -54,17 +54,6 @@ int GSSolver::solve(float dt, World& world, const std::vector<Body*>& bodies) {
     std::vector<float> Bs(Neq);
     std::vector<float> lambda(Neq, 0.0f);
 
-    if (useWarmstarting) {
-        for (int i = 0; i < Neq; ++i) {
-            Equation* c = equations[i];
-            const float initialLambda = c->multiplier * dt;
-            lambda[i] = initialLambda;
-            if (initialLambda != 0.0f) {
-                c->addToWlambda(initialLambda);
-            }
-        }
-    }
-
     for (int i = 0; i < Neq; ++i) {
         Equation* c = equations[i];
         Bs[i] = c->computeB(c->a, c->b, dt);

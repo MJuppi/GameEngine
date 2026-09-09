@@ -558,12 +558,13 @@ ContactEquation* Narrowphase::createContactEquation(Body* bi,
         c = new ContactEquation(bi, bj);
     }
     c->enabled = true;
+    c->multiplier = 0.0f;
 
     const Material* matA = shapeMatA ? shapeMatA : bi->material;
     const Material* matB = shapeMatB ? shapeMatB : bj->material;
     const ContactMaterial& cm = world.getContactMaterial(matA, matB);
 
-    c->restitution = cm.restitution;
+    c->restitution = std::max({cm.restitution, bi->restitution, bj->restitution});
     c->setSpookParams(cm.contactEquationStiffness, cm.contactEquationRelaxation, std::max(world.dt, 1e-6f));
     c->minForce = 0.0f;
     c->maxForce = 1e7f;

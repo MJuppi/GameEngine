@@ -137,16 +137,48 @@ void PlayerController::updateFlight(float deltaTime) {
 }
 
 void PlayerController::updateEnemies(float deltaTime) {
+    const glm::vec3 playerPos = player_->getPosition();
+    const float playerRange = 26.0f;
+
     for (auto* enemy : enemies_) {
         if (!enemy || enemy->getProps().mass <= 0.0f) continue;
-        const glm::vec3 toPlayer = player_->getPosition() - enemy->getPosition();
-        const float distance = glm::length(toPlayer);
-        const glm::vec3 direction = glm::normalize(toPlayer);
-        const float speed = 32.0f + static_cast<float>((enemy->getName().back() - '0') * 3);
-        enemy->setVelocity(direction * speed);
-        setAircraftTransform(*enemy, enemy->getPosition() + direction * speed * deltaTime, direction);
-        if (distance < 18.0f) playerHealth_ -= deltaTime * 4.0f;
+
+        const glm::vec3 enemyPos = enemy->getPosition();
+        const glm::vec3 toPlayer = playerPos - enemyPos;
+        const float playerDistance = glm::length(toPlayer);
+        const glm::vec3 chaseDirection = playerDistance > 0.0001f ? glm::normalize(toPlayer) : glm::vec3(0.0f, 0.0f, 1.0f);
+
+        glm::vec3 avoidance(0.0f);
+        for (auto* other : enemies_) {
+            if (!other || other == enemy || other->getProps().mass <= 0.0f) continue;
+            const glm::vec3 delta = enemyPos - other->getPosition();
+            const float dist = glm::length(delta);
+            if (dist > 0.0001f && dist < 12.0f) {
+                avoidance += glm::normalize(delta) * ((12.0f - dist) / 12.0f);
+            }
+        }
+
+        if (playerDistance < playerRange) {
+            const glm::vec3 playerAvoid = glm::normalize(enemyPos - playerPos) * ((playerRange - playerDistance) / playerRange);
+            avoidance += playerAvoid * 1.8f;
+        }
+
+        glm::vec3 desiredDirection = chaseDirection * 0.75f + avoidance * 1.5f;
+        if (glm::dot(desiredDirection, desiredDirection) < 0.0001f) {
+            desiredDirection = chaseDirection;
+        }
+        desiredDirection = glm::normalize(desiredDirection);
+
+        const float speedBias = 18.0f + static_cast<float>((enemy->getName().back() - '0') * 2.0f);
+        const float speed = std::max(18.0f, speedBias);
+        enemy->setVelocity(desiredDirection * speed);
+        setAircraftTransform(*enemy, enemyPos + desiredDirection * speed * deltaTime, desiredDirection);
+
+        if (playerDistance < 18.0f) {
+            playerHealth_ -= deltaTime * 4.0f;
+        }
     }
+
     lockedTarget_ = nullptr;
     float nearest = 1000.0f;
     for (auto* enemy : enemies_) {
