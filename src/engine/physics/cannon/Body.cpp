@@ -62,6 +62,12 @@ void Body::updateMassProperties() {
     } else if (collider->getType() == ColliderType::Sphere) {
         const auto* sphere = static_cast<const SphereCollider*>(collider.get());
         const float radius = sphere->getRadius();
+        if (radius <= 1e-6f) {
+            invInertia.setZero();
+            invInertiaWorld.setZero();
+            invInertiaWorldSolve.setZero();
+            return;
+        }
         const float invInertiaScalar = 5.0f / (2.0f * mass * radius * radius);
         invInertia = Vec3(invInertiaScalar, invInertiaScalar, invInertiaScalar);
     }
@@ -70,6 +76,40 @@ void Body::updateMassProperties() {
     invInertiaWorld.elements[0] = invInertia.x;
     invInertiaWorld.elements[4] = invInertia.y;
     invInertiaWorld.elements[8] = invInertia.z;
+    updateInertiaWorld();
+}
+
+void Body::updateInertiaWorld() {
+    if (invInertia.x == 0.0f && invInertia.y == 0.0f && invInertia.z == 0.0f) {
+        invInertiaWorld.setZero();
+        invInertiaWorldSolve.setZero();
+        return;
+    }
+
+    const Vec3 axisX = quaternion.vmult(Vec3(1.0f, 0.0f, 0.0f));
+    const Vec3 axisY = quaternion.vmult(Vec3(0.0f, 1.0f, 0.0f));
+    const Vec3 axisZ = quaternion.vmult(Vec3(0.0f, 0.0f, 1.0f));
+
+    Mat3 rotation;
+    rotation.elements = {
+        axisX.x, axisY.x, axisZ.x,
+        axisX.y, axisY.y, axisZ.y,
+        axisX.z, axisY.z, axisZ.z
+    };
+
+    Mat3 localInverse;
+    localInverse.setZero();
+    localInverse.elements[0] = invInertia.x;
+    localInverse.elements[4] = invInertia.y;
+    localInverse.elements[8] = invInertia.z;
+
+    Mat3 transpose;
+    transpose.elements = {
+        rotation.elements[0], rotation.elements[3], rotation.elements[6],
+        rotation.elements[1], rotation.elements[4], rotation.elements[7],
+        rotation.elements[2], rotation.elements[5], rotation.elements[8]
+    };
+    invInertiaWorld = rotation.mmult(localInverse).mmult(transpose);
     invInertiaWorldSolve = invInertiaWorld;
 }
 
@@ -103,6 +143,8 @@ void Body::integrate(float dt, bool quatNormalize) {
     if (quatNormalize) {
         quaternion.normalize();
     }
+
+    updateInertiaWorld();
 }
 
 void Body::pointToWorldFrame(const Vec3& localPoint, Vec3& out) const {

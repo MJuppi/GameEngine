@@ -240,7 +240,14 @@ void PhysicsWorld::syncRigidToCannon(const RigidBody& rigidBody, cannon::Body& c
     cannonBody.angularVelocity = toCannon(rigidBody.getAngularVelocity());
 
     const glm::mat4 transform = rigidBody.getWorldTransform();
-    const glm::quat rotation = glm::quat_cast(transform);
+    glm::mat4 rotationTransform = transform;
+    for (int axis = 0; axis < 3; ++axis) {
+        const float axisLength = glm::length(glm::vec3(rotationTransform[axis]));
+        if (axisLength > 1e-6f) {
+            rotationTransform[axis] /= axisLength;
+        }
+    }
+    const glm::quat rotation = glm::quat_cast(rotationTransform);
     cannonBody.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
 
     cannonBody.mass = rigidBody.getProps().mass;
@@ -249,6 +256,7 @@ void PhysicsWorld::syncRigidToCannon(const RigidBody& rigidBody, cannon::Body& c
     cannonBody.linearDamping = rigidBody.getProps().linearDamping;
     cannonBody.angularDamping = rigidBody.getProps().angularDamping;
     cannonBody.restitution = rigidBody.getProps().restitution;
+    cannonBody.shapeOffset = toCannon(-rigidBody.getProps().centerOfMassOffset);
     cannonBody.isTrigger = rigidBody.getProps().isTrigger;
     cannonBody.useGravity = rigidBody.getProps().useGravity;
     cannonBody.collisionLayer = rigidBody.getProps().collisionLayer;

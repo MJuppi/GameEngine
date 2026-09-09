@@ -1,6 +1,9 @@
 #include "engine/physics/BoxCollider.h"
+#include "engine/physics/PhysicsEngine.h"
 #include "engine/physics/PhysicsWorld.h"
 #include "engine/physics/RigidBody.h"
+#include "engine/physics/SphereCollider.h"
+#include "engine/physics/cannon/World.h"
 
 #include <cmath>
 #include <iostream>
@@ -43,6 +46,83 @@ void testAccumulatorAdvancesOneFixedStep() {
     const float expectedY = -9.81f * kFixedTimeStep * kFixedTimeStep;
     requireNear(body->getPosition().y, expectedY, 1e-5f,
                 "A fixed elapsed tick must produce one Cannon simulation step");
+}
+
+void testPhysicsEngineUpdateUsesElapsedTimeParameter() {
+    ge::PhysicsEngine engine;
+    ge::RigidBodyProps props;
+    props.linearDamping = 0.0f;
+    props.angularDamping = 0.0f;
+
+    ge::RigidBody* body = engine.createBoxBody(glm::vec3(0.5f), glm::mat4(1.0f), props);
+    engine.update(kFixedTimeStep, 4);
+
+    const float expectedY = -9.81f * kFixedTimeStep * kFixedTimeStep;
+    requireNear(body->getPosition().y, expectedY, 1e-5f,
+                "PhysicsEngine update must pass elapsed time separately from max substeps");
+}
+
+void testCannonAccumulatorRemainsBoundedAfterSubstepLimit() {
+    ge::cannon::World world;
+    world.step(kFixedTimeStep, 1.0f, 1);
+
+    if (world.accumulator < 0.0f || world.accumulator >= kFixedTimeStep) {
+        throw std::runtime_error("Cannon accumulator must remain below one fixed timestep");
+    }
+}
+
+void testRotatedBodyUpdatesWorldInverseInertia() {
+    ge::RigidBodyProps props;
+    props.useGravity = false;
+    props.mass = 1.0f;
+
+    ge::cannon::Body body(props, glm::mat4(1.0f));
+    body.addShape(std::make_unique<ge::BoxCollider>(glm::vec3(1.0f, 2.0f, 3.0f)));
+    body.quaternion.setFromAxisAngle(ge::cannon::Vec3(0.0f, 0.0f, 1.0f), glm::radians(90.0f));
+    body.updateMassProperties();
+
+    requireNear(body.invInertiaWorld.elements[0], body.invInertia.y, 1e-5f,
+                "Rotating a body must rotate its inverse inertia tensor");
+    requireNear(body.invInertiaWorld.elements[4], body.invInertia.x, 1e-5f,
+                "Rotating a body must swap the rotated box inertia axes");
+}
+
+void testCenterOfMassOffsetKeepsCannonShapeAtShapeOrigin() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps dynamicProps;
+    dynamicProps.useGravity = false;
+    dynamicProps.centerOfMassOffset = glm::vec3(0.5f, 0.0f, 0.0f);
+
+    ge::RigidBodyProps staticProps = dynamicProps;
+    staticProps.mass = 0.0f;
+    staticProps.centerOfMassOffset = glm::vec3(0.0f);
+
+    world.addBody(makeBoxBody(dynamicProps));
+    world.addBody(makeBoxBody(staticProps,
+                              glm::translate(glm::mat4(1.0f), glm::vec3(1.2f, 0.0f, 0.0f))));
+
+    int beginCount = 0;
+    world.setCollisionCallback([&beginCount](const ge::PhysicsWorld::CollisionEvent& event) {
+        if (event.phase == ge::PhysicsWorld::CollisionPhase::Begin) {
+            ++beginCount;
+        }
+    });
+    world.step(kFixedTimeStep, 4);
+
+    if (beginCount != 0) {
+        throw std::runtime_error("A center-of-mass offset must not move the Cannon shape origin");
+    }
+}
+
+void testZeroRadiusSphereHasFiniteInverseInertia() {
+    ge::RigidBodyProps props;
+    props.useGravity = false;
+    ge::cannon::Body body(props, glm::mat4(1.0f));
+    body.addShape(std::make_unique<ge::SphereCollider>(0.0f));
+
+    if (body.invInertia.x != 0.0f || body.invInertia.y != 0.0f || body.invInertia.z != 0.0f) {
+        throw std::runtime_error("A zero-radius sphere must have zero inverse inertia");
+    }
 }
 
 void testKinematicBodySynchronizesVelocityMotion() {
@@ -206,6 +286,55 @@ void testRaycastUsesPhysicalColliderSizeWhenTransformIsScaled() {
                 "Raycasts must use the collider dimensions used by simulation, not visual scale");
 }
 
+void testSphereRaycastUsesPhysicalRadiusWhenTransformIsScaled() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps staticProps;
+    staticProps.mass = 0.0f;
+
+    const glm::mat4 visualTransform = glm::scale(glm::mat4(1.0f), glm::vec3(3.0f));
+    auto sphere = std::make_unique<ge::RigidBody>(
+        std::make_unique<ge::SphereCollider>(0.5f), visualTransform, staticProps);
+    world.addBody(std::move(sphere));
+
+    const ge::PhysicsWorld::RaycastResult result = world.raycast(
+        glm::vec3(-2.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), 4.0f);
+
+    if (!result.hit) {
+        throw std::runtime_error("A scaled visual transform must not enlarge the physical sphere raycast");
+    }
+    requireNear(result.fraction, 0.375f, 1e-5f,
+                "Sphere raycasts must use the collider radius used by simulation");
+}
+
+void testScaledVisualTransformDoesNotEnlargeBoxCollision() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps dynamicProps;
+    dynamicProps.useGravity = false;
+    dynamicProps.linearDamping = 0.0f;
+    dynamicProps.angularDamping = 0.0f;
+
+    ge::RigidBodyProps staticProps = dynamicProps;
+    staticProps.mass = 0.0f;
+
+    const glm::mat4 scaledTransform = glm::scale(glm::mat4(1.0f), glm::vec3(4.0f));
+    world.addBody(makeBoxBody(dynamicProps, scaledTransform));
+    world.addBody(makeBoxBody(staticProps,
+                              glm::translate(glm::mat4(1.0f), glm::vec3(1.2f, 0.0f, 0.0f))));
+
+    int beginCount = 0;
+    world.setCollisionCallback([&beginCount](const ge::PhysicsWorld::CollisionEvent& event) {
+        if (event.phase == ge::PhysicsWorld::CollisionPhase::Begin) {
+            ++beginCount;
+        }
+    });
+
+    world.step(kFixedTimeStep, 4);
+
+    if (beginCount != 0) {
+        throw std::runtime_error("A visual transform scale must not enlarge the simulated box collider");
+    }
+}
+
 void testHeadOnCubeCollisionDoesNotAmplifyVelocity() {
     ge::PhysicsWorld world;
     ge::RigidBodyProps props;
@@ -299,6 +428,11 @@ void testRepeatedRestingContactDoesNotReuseStaleImpulse() {
 int main() {
     try {
         testAccumulatorAdvancesOneFixedStep();
+        testPhysicsEngineUpdateUsesElapsedTimeParameter();
+        testCannonAccumulatorRemainsBoundedAfterSubstepLimit();
+        testRotatedBodyUpdatesWorldInverseInertia();
+        testCenterOfMassOffsetKeepsCannonShapeAtShapeOrigin();
+        testZeroRadiusSphereHasFiniteInverseInertia();
         testKinematicBodySynchronizesVelocityMotion();
         testContactManifoldsRemainAvailableAfterStep();
         testTriggerOverlapEmitsCollisionEvent();
@@ -307,6 +441,8 @@ int main() {
         testInterpolatedTransformUsesPreviousPhysicsState();
         testInterpolatedTransformPreservesCenterOfMassOffset();
         testRaycastUsesPhysicalColliderSizeWhenTransformIsScaled();
+        testSphereRaycastUsesPhysicalRadiusWhenTransformIsScaled();
+        testScaledVisualTransformDoesNotEnlargeBoxCollision();
         testHeadOnCubeCollisionDoesNotAmplifyVelocity();
         testHeadOnCubeCollisionRespectsRestitution();
         testHighSpeedCubeCollisionDoesNotCreateImpulseSpike();

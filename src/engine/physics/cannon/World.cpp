@@ -366,6 +366,10 @@ void World::step(float dt_, float timeSinceLastCalled, int maxSubSteps) {
         substeps++;
     }
 
+    if (dt_ > 0.0f) {
+        accumulator = std::fmod(accumulator, dt_);
+    }
+
     time += timeSinceLastCalled;
 }
 

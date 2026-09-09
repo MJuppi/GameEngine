@@ -67,6 +67,7 @@ public:
 
     void addShape(std::unique_ptr<Collider> shape);
     void updateMassProperties();
+    void updateInertiaWorld();
     void applyForce(const Vec3& f);
     void integrate(float dt, bool quatNormalize);
     void pointToWorldFrame(const Vec3& localPoint, Vec3& out) const;
