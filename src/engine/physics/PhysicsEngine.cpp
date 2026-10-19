@@ -20,11 +20,11 @@ RigidBody* PhysicsEngine::createBoxBody(const glm::vec3& halfExtents,
 RigidBody* PhysicsEngine::createActiveBoxBody(const glm::vec3& visualHalfExtents,
                                               const glm::mat4& transform,
                                               const RigidBodyProps& props) {
-    glm::mat4 scaledTransform = glm::scale(transform, visualHalfExtents);
-    // Active cube visuals use a unit mesh (-0.5..0.5). Keep physics in sync
-    // by scaling collider half extents with the same factor used for rendering.
-    auto collider = std::make_unique<BoxCollider>(glm::vec3(0.5f) * visualHalfExtents);
-    auto body = std::make_unique<RigidBody>(std::move(collider), scaledTransform, props);
+    // Active cube visuals are often authored as a unit cube and then scaled during
+    // rendering. The collider should use the same world size as the visual bounds, but
+    // the rigid body transform must not be scaled twice on top of the collider extents.
+    auto collider = std::make_unique<BoxCollider>(visualHalfExtents);
+    auto body = std::make_unique<RigidBody>(std::move(collider), transform, props);
     return world_.addBody(std::move(body));
 }
 

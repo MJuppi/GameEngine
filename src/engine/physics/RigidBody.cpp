@@ -103,9 +103,12 @@ void RigidBody::updateInertiaTensor() const {
     if (collider_->getType() == ColliderType::Box) {
         const auto& box = static_cast<const BoxCollider&>(*collider_);
         const glm::vec3 h = box.getHalfExtents();
-        inertia.x = (1.0f / 3.0f) * mass * (h.y * h.y + h.z * h.z);
-        inertia.y = (1.0f / 3.0f) * mass * (h.x * h.x + h.z * h.z);
-        inertia.z = (1.0f / 3.0f) * mass * (h.x * h.x + h.y * h.y);
+        // BoxCollider stores half-extents, so the full side length is 2 * h. The
+        // principal moments must account for that factor; otherwise the inverse inertia
+        // is off by 4x and rotational response becomes unstable.
+        inertia.x = (4.0f / 3.0f) * mass * (h.y * h.y + h.z * h.z);
+        inertia.y = (4.0f / 3.0f) * mass * (h.x * h.x + h.z * h.z);
+        inertia.z = (4.0f / 3.0f) * mass * (h.x * h.x + h.y * h.y);
     } else if (collider_->getType() == ColliderType::Sphere) {
         const auto& sphere = static_cast<const SphereCollider&>(*collider_);
         const float radius = sphere.getRadius();
