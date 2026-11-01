@@ -105,8 +105,11 @@ float PhysicsEngine::update(float deltaTime, int maxSubSteps) {
         return 0.0f;
     }
 
-    const float stepSize = fixedTimeStep_ > 0.0f ? fixedTimeStep_ : deltaTime;
-    world_.step(stepSize, maxSubSteps);
+    if (fixedTimeStep_ > 0.0f) {
+        world_.step(deltaTime, maxSubSteps, fixedTimeStep_);
+    } else {
+        world_.step(deltaTime, 1, deltaTime);
+    }
     return fixedTimeStep_ > 0.0f ? 0.0f : 1.0f;
 }
 

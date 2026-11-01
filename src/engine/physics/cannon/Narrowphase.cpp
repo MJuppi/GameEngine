@@ -18,6 +18,20 @@ void getBoxAxes(const Quaternion& q, Vec3& ax, Vec3& ay, Vec3& az) {
     az = q.vmult(Vec3(0.0f, 0.0f, 1.0f));
 }
 
+float getComponent(const Vec3& value, int axis) {
+    return axis == 0 ? value.x : (axis == 1 ? value.y : value.z);
+}
+
+void setComponent(Vec3& value, int axis, float component) {
+    if (axis == 0) {
+        value.x = component;
+    } else if (axis == 1) {
+        value.y = component;
+    } else {
+        value.z = component;
+    }
+}
+
 float projectedRadiusOnAxis(const glm::vec3& halfExtents,
                             const Vec3& axis,
                             const Vec3& bx,
@@ -76,6 +90,68 @@ void getShapeWorldTransform(const Body* body, Vec3& worldPosition, Quaternion& w
     const Vec3 worldOffset = body->quaternion.vmult(body->shapeOffset);
     worldPosition = body->position;
     worldPosition.vadd(worldOffset);
+}
+
+bool getSphereBoxContact(const SphereCollider& sphere,
+                         const BoxCollider& box,
+                         const Vec3& sphereCenter,
+                         const Vec3& boxCenter,
+                         const Quaternion& boxOrientation,
+                         Vec3& normalSphereToBox,
+                         Vec3& sphereContactPoint,
+                         Vec3& boxContactPoint) {
+    const glm::vec3 halfExtents = box.getHalfExtents();
+    Vec3 sphereToBox = sphereCenter;
+    sphereToBox.sub(boxCenter);
+    Quaternion inverseOrientation = boxOrientation;
+    inverseOrientation.conjugate();
+    const Vec3 localCenter = inverseOrientation.vmult(sphereToBox);
+
+    Vec3 closest(
+        std::fmax(-halfExtents.x, std::fmin(localCenter.x, halfExtents.x)),
+        std::fmax(-halfExtents.y, std::fmin(localCenter.y, halfExtents.y)),
+        std::fmax(-halfExtents.z, std::fmin(localCenter.z, halfExtents.z)));
+    boxContactPoint = boxOrientation.vmult(closest);
+    boxContactPoint.vadd(boxCenter);
+
+    const bool inside = std::fabs(localCenter.x) <= halfExtents.x &&
+                        std::fabs(localCenter.y) <= halfExtents.y &&
+                        std::fabs(localCenter.z) <= halfExtents.z;
+    if (inside) {
+        const float faceDistances[3] = {
+            halfExtents.x - std::fabs(localCenter.x),
+            halfExtents.y - std::fabs(localCenter.y),
+            halfExtents.z - std::fabs(localCenter.z)
+        };
+        const int faceAxis = static_cast<int>(
+            std::min_element(std::begin(faceDistances), std::end(faceDistances)) -
+            std::begin(faceDistances));
+        Vec3 outwardLocal(0.0f, 0.0f, 0.0f);
+        const float faceSign = getComponent(localCenter, faceAxis) >= 0.0f ? 1.0f : -1.0f;
+        setComponent(outwardLocal, faceAxis, faceSign);
+        setComponent(closest, faceAxis, faceSign * halfExtents[faceAxis]);
+        boxContactPoint = boxOrientation.vmult(closest);
+        boxContactPoint.vadd(boxCenter);
+        normalSphereToBox = boxOrientation.vmult(outwardLocal);
+        normalSphereToBox.negate();
+    } else {
+        normalSphereToBox = boxContactPoint;
+        normalSphereToBox.sub(sphereCenter);
+        const float distanceSquared = normalSphereToBox.lengthSquared();
+        const float radius = sphere.getRadius();
+        if (distanceSquared > radius * radius) {
+            return false;
+        }
+        if (distanceSquared > 1e-12f) {
+            normalSphereToBox.scale(1.0f / std::sqrt(distanceSquared));
+        } else {
+            normalSphereToBox.set(0.0f, 1.0f, 0.0f);
+        }
+    }
+
+    sphereContactPoint = sphereCenter;
+    sphereContactPoint.addScaledVector(sphere.getRadius(), normalSphereToBox);
+    return true;
 }
 
 } // namespace
@@ -323,41 +399,13 @@ void Narrowphase::getContacts(const std::vector<Body*>& p1,
         if (bi->collider->getType() == ColliderType::Sphere && bj->collider->getType() == ColliderType::Box) {
             const SphereCollider* sphere = static_cast<const SphereCollider*>(bi->collider.get());
             const BoxCollider* box = static_cast<const BoxCollider*>(bj->collider.get());
-
-            const glm::vec3 he = box->getHalfExtents();
-            const Vec3 centerSphere = xi;
-            const Vec3 centerBox = xj;
-
-            Vec3 sphereToBox = centerSphere;
-            sphereToBox.sub(centerBox);
-            Quaternion qjInv = qj;
-            qjInv.conjugate();
-            const Vec3 local = qjInv.vmult(sphereToBox);
-
-            const Vec3 closest(
-                std::fmax(-he.x, std::fmin(local.x, he.x)),
-                std::fmax(-he.y, std::fmin(local.y, he.y)),
-                std::fmax(-he.z, std::fmin(local.z, he.z)));
-            Vec3 closestWorld = qj.vmult(closest);
-            closestWorld.vadd(centerBox);
-            Vec3 diff = closestWorld;
-            diff.sub(centerSphere);
-
-            const float distSq = diff.lengthSquared();
-            const float radius = sphere->getRadius();
-            if (distSq <= radius * radius) {
-                Vec3 normal = diff;
-                const float dist = std::sqrt(std::fmax(0.0f, distSq));
-                if (dist > 1e-6f) {
-                    normal.scale(1.0f / dist);
-                } else {
-                    normal.set(0.0f, 1.0f, 0.0f);
-                }
-
-                Vec3 contactPointI = centerSphere;
-                contactPointI.addScaledVector(sphere->getRadius(), normal);
-                const Vec3 contactPointJ = closestWorld;
-                emitContact(bi, bj, shapeMatA, shapeMatB, normal, contactPointI, contactPointJ);
+            Vec3 normal;
+            Vec3 sphereContactPoint;
+            Vec3 boxContactPoint;
+            if (getSphereBoxContact(*sphere, *box, xi, xj, qj,
+                                   normal, sphereContactPoint, boxContactPoint)) {
+                emitContact(bi, bj, shapeMatA, shapeMatB,
+                            normal, sphereContactPoint, boxContactPoint);
             }
             finalizePairFriction(contactStartIndex, shapeMatA, shapeMatB);
             continue;
@@ -366,41 +414,14 @@ void Narrowphase::getContacts(const std::vector<Body*>& p1,
         if (bi->collider->getType() == ColliderType::Box && bj->collider->getType() == ColliderType::Sphere) {
             const SphereCollider* sphere = static_cast<const SphereCollider*>(bj->collider.get());
             const BoxCollider* box = static_cast<const BoxCollider*>(bi->collider.get());
-
-            const glm::vec3 he = box->getHalfExtents();
-            const Vec3 centerSphere = xj;
-            const Vec3 centerBox = xi;
-
-            Vec3 sphereToBox = centerSphere;
-            sphereToBox.sub(centerBox);
-            Quaternion qiInv = qi;
-            qiInv.conjugate();
-            const Vec3 local = qiInv.vmult(sphereToBox);
-
-            const Vec3 closest(
-                std::fmax(-he.x, std::fmin(local.x, he.x)),
-                std::fmax(-he.y, std::fmin(local.y, he.y)),
-                std::fmax(-he.z, std::fmin(local.z, he.z)));
-            Vec3 closestWorld = qi.vmult(closest);
-            closestWorld.vadd(centerBox);
-            Vec3 diff = centerSphere;
-            diff.sub(closestWorld);
-
-            const float distSq = diff.lengthSquared();
-            const float radius = sphere->getRadius();
-            if (distSq <= radius * radius) {
-                Vec3 normal = diff;
-                const float dist = std::sqrt(std::fmax(0.0f, distSq));
-                if (dist > 1e-6f) {
-                    normal.scale(1.0f / dist);
-                } else {
-                    normal.set(0.0f, -1.0f, 0.0f);
-                }
-
-                const Vec3 contactPointI = closestWorld;
-                Vec3 contactPointJ = centerSphere;
-                contactPointJ.addScaledVector(-sphere->getRadius(), normal);
-                emitContact(bi, bj, shapeMatA, shapeMatB, normal, contactPointI, contactPointJ);
+            Vec3 normalSphereToBox;
+            Vec3 sphereContactPoint;
+            Vec3 boxContactPoint;
+            if (getSphereBoxContact(*sphere, *box, xj, xi, qi,
+                                   normalSphereToBox, sphereContactPoint, boxContactPoint)) {
+                normalSphereToBox.negate();
+                emitContact(bi, bj, shapeMatA, shapeMatB,
+                            normalSphereToBox, boxContactPoint, sphereContactPoint);
             }
             finalizePairFriction(contactStartIndex, shapeMatA, shapeMatB);
             continue;
@@ -494,7 +515,7 @@ void Narrowphase::getContacts(const std::vector<Body*>& p1,
                             }
                         }
                     }
-                } else {
+                } else if (bestAxisIndex < 6) {
                     const Vec3 axesB[3] = {bx, by, bz};
                     const float heArrB[3] = {heB.x, heB.y, heB.z};
                     const int nIdx = bestAxisIndex - 3;
@@ -595,16 +616,6 @@ bool Narrowphase::createFrictionEquationsFromContact(ContactEquation* contactEqu
     const Material* matA = shapeMatA ? shapeMatA : bodyA->material;
     const Material* matB = shapeMatB ? shapeMatB : bodyB->material;
     const ContactMaterial& cm = world.getContactMaterial(matA, matB);
-    float friction = cm.friction;
-
-    if (matA && matB && matA->friction >= 0.0f && matB->friction >= 0.0f) {
-        friction = matA->friction * matB->friction;
-    }
-
-    if (friction <= 0.0f) {
-        return false;
-    }
-
     const float gravityMagnitude = (world.frictionGravity > 0.0f) ? world.frictionGravity : world.gravity.length();
     const float invMassSum = bodyA->invMass + bodyB->invMass;
     float reducedMass = 0.0f;
@@ -612,6 +623,25 @@ bool Narrowphase::createFrictionEquationsFromContact(ContactEquation* contactEqu
         reducedMass = 1.0f / invMassSum;
     }
 
+    Vec3 velocityA = bodyA->angularVelocity.cross(contactEquation->ri);
+    velocityA.vadd(bodyA->velocity);
+    Vec3 velocityB = bodyB->angularVelocity.cross(contactEquation->rj);
+    velocityB.vadd(bodyB->velocity);
+    velocityB.vsub(velocityA);
+    velocityB.addScaledVector(-velocityB.dot(contactEquation->ni), contactEquation->ni);
+    const bool isStaticContact = velocityB.lengthSquared() <= 0.01f;
+
+    auto combineFriction = [](float frictionA, float frictionB) {
+        return std::sqrt(std::max(0.0f, frictionA) * std::max(0.0f, frictionB));
+    };
+    float dynamicFriction = combineFriction(bodyA->friction, bodyB->friction);
+    float staticFriction = combineFriction(bodyA->staticFriction, bodyB->staticFriction);
+    if (matA && matB && matA->friction >= 0.0f && matB->friction >= 0.0f) {
+        dynamicFriction = matA->friction * matB->friction;
+        staticFriction = dynamicFriction;
+    }
+
+    const float friction = isStaticContact ? staticFriction : dynamicFriction;
     const float slipForce = friction * gravityMagnitude * reducedMass;
 
     FrictionEquation* c1 = nullptr;
@@ -639,6 +669,8 @@ bool Narrowphase::createFrictionEquationsFromContact(ContactEquation* contactEqu
     c1->maxForce = slipForce;
     c2->minForce = -slipForce;
     c2->maxForce = slipForce;
+    c1->angularOnly = false;
+    c2->angularOnly = false;
 
     c1->ri = contactEquation->ri;
     c1->rj = contactEquation->rj;
@@ -652,8 +684,76 @@ bool Narrowphase::createFrictionEquationsFromContact(ContactEquation* contactEqu
     c1->enabled = contactEquation->enabled;
     c2->enabled = contactEquation->enabled;
 
-    outArray.push_back(c1);
-    outArray.push_back(c2);
+    if (friction > 0.0f) {
+        outArray.push_back(c1);
+        outArray.push_back(c2);
+    } else {
+        pool.push_back(c1);
+        pool.push_back(c2);
+    }
+
+    const float rollingFriction = combineFriction(bodyA->rollingFriction, bodyB->rollingFriction);
+    if (rollingFriction <= 0.0f || reducedMass <= 0.0f) {
+        return friction > 0.0f;
+    }
+
+    auto shapeRadius = [](const Body* body) {
+        if (!body->collider) {
+            return 0.0f;
+        }
+        if (body->collider->getType() == ColliderType::Sphere) {
+            return static_cast<const SphereCollider*>(body->collider.get())->getRadius();
+        }
+        const glm::vec3 halfExtents =
+            static_cast<const BoxCollider*>(body->collider.get())->getHalfExtents();
+        return std::min({halfExtents.x, halfExtents.y, halfExtents.z});
+    };
+
+    float radius = std::numeric_limits<float>::max();
+    if (bodyA->invMass > 0.0f) {
+        radius = std::min(radius, shapeRadius(bodyA));
+    }
+    if (bodyB->invMass > 0.0f) {
+        radius = std::min(radius, shapeRadius(bodyB));
+    }
+    if (radius == std::numeric_limits<float>::max()) {
+        radius = 0.0f;
+    }
+
+    const float rollingLimit = rollingFriction * gravityMagnitude * reducedMass * radius;
+    if (rollingLimit <= 0.0f) {
+        return friction > 0.0f;
+    }
+
+    FrictionEquation* rolling1 = nullptr;
+    FrictionEquation* rolling2 = nullptr;
+    auto acquireEquation = [&pool, contactEquation, &cm, &world](Body* a, Body* b, float limit) {
+        FrictionEquation* equation = nullptr;
+        if (!pool.empty()) {
+            equation = pool.back();
+            pool.pop_back();
+            equation->bi = a;
+            equation->bj = b;
+        } else {
+            equation = new FrictionEquation(a, b, limit);
+        }
+        equation->minForce = -limit;
+        equation->maxForce = limit;
+        equation->ri.setZero();
+        equation->rj.setZero();
+        equation->angularOnly = true;
+        equation->enabled = contactEquation->enabled;
+        equation->setSpookParams(cm.frictionEquationStiffness,
+                                 cm.frictionEquationRelaxation,
+                                 std::max(world.dt, 1e-6f));
+        return equation;
+    };
+
+    rolling1 = acquireEquation(bodyA, bodyB, rollingLimit);
+    rolling2 = acquireEquation(bodyA, bodyB, rollingLimit);
+    tangentsFromNormal(contactEquation->ni, rolling1->t, rolling2->t);
+    outArray.push_back(rolling1);
+    outArray.push_back(rolling2);
     return true;
 }
 

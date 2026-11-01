@@ -9,6 +9,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -48,6 +49,20 @@ void testAccumulatorAdvancesOneFixedStep() {
                 "A fixed elapsed tick must produce one Cannon simulation step");
 }
 
+void testWorldRunsAllAvailableFixedSubsteps() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps props;
+    props.linearDamping = 0.0f;
+    props.angularDamping = 0.0f;
+
+    ge::RigidBody* body = world.addBody(makeBoxBody(props));
+    world.step(3.0f * kFixedTimeStep, 4);
+
+    const float expectedY = -9.81f * kFixedTimeStep * kFixedTimeStep * 6.0f;
+    requireNear(body->getPosition().y, expectedY, 1e-5f,
+                "Elapsed time must be simulated using multiple fixed substeps");
+}
+
 void testPhysicsEngineUpdateUsesElapsedTimeParameter() {
     ge::PhysicsEngine engine;
     ge::RigidBodyProps props;
@@ -60,6 +75,20 @@ void testPhysicsEngineUpdateUsesElapsedTimeParameter() {
     const float expectedY = -9.81f * kFixedTimeStep * kFixedTimeStep;
     requireNear(body->getPosition().y, expectedY, 1e-5f,
                 "PhysicsEngine update must pass elapsed time separately from max substeps");
+}
+
+void testPhysicsEngineUpdateAdvancesEveryElapsedFixedStep() {
+    ge::PhysicsEngine engine;
+    ge::RigidBodyProps props;
+    props.linearDamping = 0.0f;
+    props.angularDamping = 0.0f;
+
+    ge::RigidBody* body = engine.createBoxBody(glm::vec3(0.5f), glm::mat4(1.0f), props);
+    engine.update(3.0f * kFixedTimeStep, 4);
+
+    const float expectedY = -9.81f * kFixedTimeStep * kFixedTimeStep * 6.0f;
+    requireNear(body->getPosition().y, expectedY, 1e-5f,
+                "PhysicsEngine must advance all fixed steps available in elapsed time");
 }
 
 void testCannonAccumulatorRemainsBoundedAfterSubstepLimit() {
@@ -223,6 +252,55 @@ void testRotatedBoxesSeparatedOnEdgeAxisDoNotCollide() {
     if (beginCount != 0) {
         throw std::runtime_error("Boxes separated on an edge-cross-edge axis must not collide");
     }
+}
+
+void testOverlappingBoxesWithEdgeCrossAxisContactRemainFinite() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps dynamicProps;
+    dynamicProps.useGravity = false;
+    dynamicProps.linearDamping = 0.0f;
+    dynamicProps.angularDamping = 0.0f;
+
+    ge::RigidBodyProps staticProps = dynamicProps;
+    staticProps.mass = 0.0f;
+
+    const glm::vec3 axisA(0.47652294f, -0.6378618f, 0.3262588f);
+    const glm::vec3 axisB(0.4477766f, 0.12897387f, 1.1022723f);
+    const glm::vec3 offset(0.42707607f, -0.27017182f, -0.05218757f);
+    const glm::vec3 halfExtentsA(1.0f, 0.11f, 0.08f);
+    const glm::vec3 halfExtentsB(0.9f, 0.13f, 0.07f);
+
+    const glm::mat4 transformA = glm::rotate(glm::mat4(1.0f), 0.56903144f, axisA);
+    glm::mat4 transformB = glm::rotate(glm::mat4(1.0f), 1.4123662f, axisB);
+    transformB[3] = glm::vec4(offset, 1.0f);
+
+    ge::RigidBody* bodyA = world.addBody(makeBoxBody(dynamicProps, transformA, halfExtentsA));
+    world.addBody(makeBoxBody(staticProps, transformB, halfExtentsB));
+    world.step(kFixedTimeStep, 4);
+
+    const auto& manifolds = world.getContactManifolds();
+    if (manifolds.empty() || manifolds.front().contacts.empty()) {
+        throw std::runtime_error("An edge-cross-axis box overlap must generate a contact");
+    }
+
+    const glm::vec3 normal = manifolds.front().normal;
+    if (!std::isfinite(normal.x) || !std::isfinite(normal.y) || !std::isfinite(normal.z) ||
+        !std::isfinite(bodyA->getVelocity().x) || !std::isfinite(bodyA->getVelocity().y) ||
+        !std::isfinite(bodyA->getVelocity().z)) {
+        throw std::runtime_error("Edge-cross-axis box contact must not generate non-finite physics state");
+    }
+
+    const glm::vec3 axisAWorld(transformA[0]);
+    const glm::vec3 axisBWorld(transformB[0]);
+    glm::vec3 expectedNormal = glm::normalize(glm::cross(axisAWorld, axisBWorld));
+    if (glm::dot(offset, expectedNormal) < 0.0f) {
+        expectedNormal = -expectedNormal;
+    }
+    if (glm::dot(normal, expectedNormal) < 0.99f) {
+        throw std::runtime_error("The edge-cross-axis contact must use its separating axis as the normal");
+    }
+    requireNear(manifolds.front().contacts.front().depth, 0.0371f, 0.02f,
+                "The edge-cross-axis contact must report the SAT penetration depth");
 }
 
 void testRaycastFromInsideBoxFindsExitFace() {
@@ -423,12 +501,197 @@ void testRepeatedRestingContactDoesNotReuseStaleImpulse() {
     }
 }
 
+void testSphereInsideBoxIsResolvedTowardNearestExit() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps sphereProps;
+    sphereProps.useGravity = false;
+    sphereProps.linearDamping = 0.0f;
+    sphereProps.angularDamping = 0.0f;
+
+    ge::RigidBodyProps boxProps = sphereProps;
+    boxProps.mass = 0.0f;
+
+    auto sphere = std::make_unique<ge::RigidBody>(
+        std::make_unique<ge::SphereCollider>(0.2f),
+        glm::translate(glm::mat4(1.0f), glm::vec3(0.4f, 0.0f, 0.0f)),
+        sphereProps);
+    ge::RigidBody* body = world.addBody(std::move(sphere));
+    world.addBody(makeBoxBody(boxProps));
+    world.step(kFixedTimeStep, 4);
+
+    if (body->getVelocity().x <= 0.0f) {
+        throw std::runtime_error("A sphere inside a box must be pushed toward its nearest exit face");
+    }
+}
+
+void testDynamicFrictionUsesRigidBodyProperties() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps slidingProps;
+    slidingProps.linearDamping = 0.0f;
+    slidingProps.angularDamping = 0.0f;
+    slidingProps.friction = 0.0f;
+    slidingProps.staticFriction = 0.0f;
+
+    ge::RigidBodyProps floorProps = slidingProps;
+    floorProps.mass = 0.0f;
+
+    const glm::mat4 slidingTransform =
+        glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.49f, 0.0f));
+    ge::RigidBody* slidingBody = world.addBody(makeBoxBody(slidingProps, slidingTransform));
+    world.addBody(makeBoxBody(floorProps,
+                               glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.5f, 0.0f)),
+                               glm::vec3(2.0f, 0.5f, 2.0f)));
+    slidingBody->setVelocity(glm::vec3(5.0f, 0.0f, 0.0f));
+
+    world.step(kFixedTimeStep, 4);
+
+    requireNear(slidingBody->getVelocity().x, 5.0f, 1e-4f,
+                "Zero body friction must not slow a sliding body");
+}
+
+void testStaticFrictionUsesRigidBodyProperties() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps restingProps;
+    restingProps.linearDamping = 0.0f;
+    restingProps.angularDamping = 0.0f;
+    restingProps.friction = 0.0f;
+    restingProps.staticFriction = 1.0f;
+
+    ge::RigidBodyProps floorProps = restingProps;
+    floorProps.mass = 0.0f;
+
+    const glm::mat4 bodyTransform =
+        glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.49f, 0.0f));
+    ge::RigidBody* body = world.addBody(makeBoxBody(restingProps, bodyTransform));
+    world.addBody(makeBoxBody(floorProps,
+                               glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.5f, 0.0f)),
+                               glm::vec3(2.0f, 0.5f, 2.0f)));
+    body->setVelocity(glm::vec3(0.05f, 0.0f, 0.0f));
+
+    world.step(kFixedTimeStep, 4);
+
+    if (std::fabs(body->getVelocity().x) >= 0.05f) {
+        throw std::runtime_error("Static friction must reduce a low-speed tangential velocity");
+    }
+}
+
+void testRollingFrictionUsesRigidBodyProperties() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps sphereProps;
+    sphereProps.linearDamping = 0.0f;
+    sphereProps.angularDamping = 0.0f;
+    sphereProps.friction = 0.0f;
+    sphereProps.staticFriction = 0.0f;
+    sphereProps.rollingFriction = 1.0f;
+
+    ge::RigidBodyProps floorProps = sphereProps;
+    floorProps.mass = 0.0f;
+
+    auto sphere = std::make_unique<ge::RigidBody>(
+        std::make_unique<ge::SphereCollider>(0.5f),
+        glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.49f, 0.0f)),
+        sphereProps);
+    ge::RigidBody* body = world.addBody(std::move(sphere));
+    world.addBody(makeBoxBody(floorProps,
+                               glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.5f, 0.0f)),
+                               glm::vec3(2.0f, 0.5f, 2.0f)));
+    body->setAngularVelocity(glm::vec3(5.0f, 0.0f, 0.0f));
+
+    world.step(kFixedTimeStep, 4);
+
+    if (body->getAngularVelocity().x >= 5.0f) {
+        throw std::runtime_error("Rolling friction must oppose rotation at a contact");
+    }
+}
+
+void testDynamicCollisionFilterChangesAfterBodyCreation() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps dynamicProps;
+    dynamicProps.useGravity = false;
+
+    ge::RigidBodyProps staticProps = dynamicProps;
+    staticProps.mass = 0.0f;
+    staticProps.collisionLayer = 0x2;
+
+    ge::RigidBody* dynamicBody = world.addBody(makeBoxBody(
+        dynamicProps, glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f, 0.0f, 0.0f))));
+    ge::RigidBody* staticBody = world.addBody(makeBoxBody(
+        staticProps, glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 0.0f, 0.0f))));
+    world.step(kFixedTimeStep, 4);
+
+    ge::RigidBodyProps updatedProps = dynamicBody->getProps();
+    updatedProps.collisionMask = 0u;
+    dynamicBody->setProps(updatedProps);
+    staticBody->setPosition(glm::vec3(0.0f));
+    world.step(kFixedTimeStep, 4);
+
+    if (!world.getContactManifolds().empty()) {
+        throw std::runtime_error("Collision filter changes must take effect after body creation");
+    }
+}
+
+void testGravityPropertyChangesAfterBodyCreation() {
+    ge::PhysicsWorld world;
+    ge::RigidBodyProps props;
+    props.useGravity = false;
+    props.linearDamping = 0.0f;
+    props.angularDamping = 0.0f;
+
+    ge::RigidBody* body = world.addBody(makeBoxBody(props));
+    world.step(kFixedTimeStep, 4);
+    requireNear(body->getPosition().y, 0.0f, 1e-5f,
+                "A body without gravity must stay at its initial height");
+
+    props.useGravity = true;
+    body->setProps(props);
+    world.step(kFixedTimeStep, 4);
+    if (body->getPosition().y >= 0.0f) {
+        throw std::runtime_error("Changing useGravity must take effect after body creation");
+    }
+}
+
+void testMassChangeUpdatesRigidBodyInertia() {
+    ge::RigidBodyProps props;
+    auto body = makeBoxBody(props);
+    const float initialInverseInertia = body->getInverseInertiaTensor()[0][0];
+    body->setMass(2.0f);
+    const float updatedInverseInertia = body->getInverseInertiaTensor()[0][0];
+    requireNear(updatedInverseInertia, initialInverseInertia * 0.5f, 1e-5f,
+                "Changing mass must invalidate the cached inverse inertia tensor");
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
     try {
+        if (argc == 2) {
+            const std::string testName = argv[1];
+            if (testName == "fixed-substeps") {
+                testWorldRunsAllAvailableFixedSubsteps();
+            } else if (testName == "engine-elapsed-time") {
+                testPhysicsEngineUpdateAdvancesEveryElapsedFixedStep();
+            } else if (testName == "edge-contact") {
+                testOverlappingBoxesWithEdgeCrossAxisContactRemainFinite();
+            } else if (testName == "sphere-inside-box") {
+                testSphereInsideBoxIsResolvedTowardNearestExit();
+            } else if (testName == "friction-properties") {
+                testDynamicFrictionUsesRigidBodyProperties();
+                testStaticFrictionUsesRigidBodyProperties();
+                testRollingFrictionUsesRigidBodyProperties();
+            } else if (testName == "runtime-body-properties") {
+                testDynamicCollisionFilterChangesAfterBodyCreation();
+                testGravityPropertyChangesAfterBodyCreation();
+                testMassChangeUpdatesRigidBodyInertia();
+            } else {
+                throw std::runtime_error("Unknown physics test: " + testName);
+            }
+            return 0;
+        }
+
         testAccumulatorAdvancesOneFixedStep();
+        testWorldRunsAllAvailableFixedSubsteps();
         testPhysicsEngineUpdateUsesElapsedTimeParameter();
+        testPhysicsEngineUpdateAdvancesEveryElapsedFixedStep();
         testCannonAccumulatorRemainsBoundedAfterSubstepLimit();
         testRotatedBodyUpdatesWorldInverseInertia();
         testCenterOfMassOffsetKeepsCannonShapeAtShapeOrigin();
@@ -437,6 +700,7 @@ int main() {
         testContactManifoldsRemainAvailableAfterStep();
         testTriggerOverlapEmitsCollisionEvent();
         testRotatedBoxesSeparatedOnEdgeAxisDoNotCollide();
+        testOverlappingBoxesWithEdgeCrossAxisContactRemainFinite();
         testRaycastFromInsideBoxFindsExitFace();
         testInterpolatedTransformUsesPreviousPhysicsState();
         testInterpolatedTransformPreservesCenterOfMassOffset();
@@ -447,6 +711,13 @@ int main() {
         testHeadOnCubeCollisionRespectsRestitution();
         testHighSpeedCubeCollisionDoesNotCreateImpulseSpike();
         testRepeatedRestingContactDoesNotReuseStaleImpulse();
+        testSphereInsideBoxIsResolvedTowardNearestExit();
+        testDynamicFrictionUsesRigidBodyProperties();
+        testStaticFrictionUsesRigidBodyProperties();
+        testRollingFrictionUsesRigidBodyProperties();
+        testDynamicCollisionFilterChangesAfterBodyCreation();
+        testGravityPropertyChangesAfterBodyCreation();
+        testMassChangeUpdatesRigidBodyInertia();
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 1;

@@ -57,9 +57,9 @@ public:
     void setPhysicsTransform(const glm::mat4& transform);
     void setPosition(const glm::vec3& position) { state_.position = state_.prevPosition = position; updateTransform(); }
     void setVelocity(const glm::vec3& velocity) { state_.velocity = velocity; }
-    void setMass(const float mass) { props_.mass = mass; }
+    void setMass(const float mass) { props_.mass = mass; inverseInertiaTensorDirty_ = true; }
     void setAngularVelocity(const glm::vec3& angularVelocity) { state_.angularVelocity = angularVelocity; }
-    void setProps(const RigidBodyProps& props) { props_ = props; inverseInertiaTensorDirty_ = true; }
+    void setProps(const RigidBodyProps& props);
     void setName(std::string name) { debugName_ = std::move(name); }
     const std::string& getName() const { return debugName_; }
 

@@ -62,6 +62,7 @@ public:
     Vec3 ri;
     Vec3 rj;
     Vec3 t;
+    bool angularOnly;
 
     float computeB(float a, float b, float h) override;
 };

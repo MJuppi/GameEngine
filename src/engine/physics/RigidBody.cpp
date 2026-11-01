@@ -58,6 +58,17 @@ void RigidBody::setTransform(const glm::mat4& transform) {
     updateTransform();
 }
 
+void RigidBody::setProps(const RigidBodyProps& props) {
+    const glm::vec3 shapeOrigin = state_.position - state_.rotation * props_.centerOfMassOffset;
+    const glm::vec3 previousShapeOrigin =
+        state_.prevPosition - state_.prevRotation * props_.centerOfMassOffset;
+    props_ = props;
+    state_.position = shapeOrigin + state_.rotation * props_.centerOfMassOffset;
+    state_.prevPosition = previousShapeOrigin + state_.prevRotation * props_.centerOfMassOffset;
+    inverseInertiaTensorDirty_ = true;
+    updateTransform();
+}
+
 void RigidBody::setPhysicsTransform(const glm::mat4& transform) {
     state_.prevPosition = state_.position;
     state_.prevRotation = state_.rotation;

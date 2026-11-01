@@ -59,6 +59,9 @@ public:
     float linearDamping;
     float angularDamping;
     float restitution;
+    float friction;
+    float staticFriction;
+    float rollingFriction;
     const Material* material;
     Vec3 shapeOffset;
     Quaternion shapeOrientation;

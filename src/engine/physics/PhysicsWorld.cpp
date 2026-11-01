@@ -256,6 +256,9 @@ void PhysicsWorld::syncRigidToCannon(const RigidBody& rigidBody, cannon::Body& c
     cannonBody.linearDamping = rigidBody.getProps().linearDamping;
     cannonBody.angularDamping = rigidBody.getProps().angularDamping;
     cannonBody.restitution = rigidBody.getProps().restitution;
+    cannonBody.friction = rigidBody.getProps().friction;
+    cannonBody.staticFriction = rigidBody.getProps().staticFriction;
+    cannonBody.rollingFriction = rigidBody.getProps().rollingFriction;
     cannonBody.shapeOffset = toCannon(-rigidBody.getProps().centerOfMassOffset);
     cannonBody.isTrigger = rigidBody.getProps().isTrigger;
     cannonBody.useGravity = rigidBody.getProps().useGravity;
@@ -622,31 +625,64 @@ void PhysicsWorld::setContactManifoldCallback(ContactManifoldCallback callback) 
 }
 
 void PhysicsWorld::step(float deltaTime, int maxSubSteps) {
+    step(deltaTime, maxSubSteps, cannonWorld_.dt);
+}
+
+void PhysicsWorld::step(float deltaTime, int maxSubSteps, float fixedTimeStep) {
     if (deltaTime <= 0.0f) {
         return;
     }
 
     for (const auto& binding : cannonBindings_) {
         const RigidBodyProps& props = binding.rigidBody->getProps();
-        if (props.isKinematic || props.mass <= 0.0f) {
-            syncRigidToCannon(*binding.rigidBody, *binding.cannonBody);
-            continue;
-        }
-
-        // Dynamic bodies are simulation-owned, but gameplay code may inject
-        // launch/spin updates through RigidBody setters between frames.
         const glm::vec3 rbVelocity = binding.rigidBody->getVelocity();
         const glm::vec3 rbAngularVelocity = binding.rigidBody->getAngularVelocity();
         const glm::vec3 cbVelocity = toGlm(binding.cannonBody->velocity);
         const glm::vec3 cbAngularVelocity = toGlm(binding.cannonBody->angularVelocity);
+        const cannon::Body& cannonBody = *binding.cannonBody;
+        const glm::vec3 rbPosition = binding.rigidBody->getPosition();
+        const glm::vec3 cbPosition = toGlm(cannonBody.position);
+        const glm::quat cbRotation(cannonBody.quaternion.w,
+                                   cannonBody.quaternion.x,
+                                   cannonBody.quaternion.y,
+                                   cannonBody.quaternion.z);
+        glm::mat4 rigidRotationTransform = binding.rigidBody->getWorldTransform();
+        for (int axis = 0; axis < 3; ++axis) {
+            const float axisLength = glm::length(glm::vec3(rigidRotationTransform[axis]));
+            if (axisLength > 1e-6f) {
+                rigidRotationTransform[axis] /= axisLength;
+            }
+        }
+        const glm::quat rigidRotation = glm::quat_cast(rigidRotationTransform);
+        const bool transformChanged =
+            differs(rbPosition, cbPosition) ||
+            std::abs(glm::dot(glm::normalize(rigidRotation), glm::normalize(cbRotation))) < 1.0f - 1e-5f;
+        const bool propertiesChanged =
+            cannonBody.mass != props.mass ||
+            cannonBody.linearDamping != props.linearDamping ||
+            cannonBody.angularDamping != props.angularDamping ||
+            cannonBody.restitution != props.restitution ||
+            cannonBody.friction != props.friction ||
+            cannonBody.staticFriction != props.staticFriction ||
+            cannonBody.rollingFriction != props.rollingFriction ||
+            cannonBody.isTrigger != props.isTrigger ||
+            cannonBody.useGravity != props.useGravity ||
+            differs(toGlm(cannonBody.shapeOffset), -props.centerOfMassOffset) ||
+            cannonBody.collisionLayer != props.collisionLayer ||
+            cannonBody.collisionMask != props.collisionMask ||
+            cannonBody.type != (props.isKinematic ? cannon::BodyType::KINEMATIC
+                              : (props.mass > 0.0f ? cannon::BodyType::DYNAMIC : cannon::BodyType::STATIC));
 
-        if (differs(rbVelocity, cbVelocity) || differs(rbAngularVelocity, cbAngularVelocity)) {
-            syncRigidToCannon(*binding.rigidBody, *binding.cannonBody);
+        syncRigidToCannon(*binding.rigidBody, *binding.cannonBody);
+        if (propertiesChanged || transformChanged || differs(rbVelocity, cbVelocity) ||
+            differs(rbAngularVelocity, cbAngularVelocity)) {
             binding.cannonBody->wakeUp();
         }
     }
 
-    cannonWorld_.step(deltaTime, deltaTime, std::max(1, maxSubSteps));
+    const bool useFixedStep = fixedTimeStep > 0.0f;
+    const float stepSize = useFixedStep ? fixedTimeStep : deltaTime;
+    cannonWorld_.step(stepSize, deltaTime, useFixedStep ? std::max(1, maxSubSteps) : 1);
 
     rebuildContactManifolds();
 

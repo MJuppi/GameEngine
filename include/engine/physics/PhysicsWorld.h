@@ -42,6 +42,7 @@ public:
     void clearBodies();
 
     void step(float deltaTime, int maxSubSteps = 1);
+    void step(float deltaTime, int maxSubSteps, float fixedTimeStep);
 
     struct RaycastResult {
         bool hit = false;

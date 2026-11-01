@@ -110,18 +110,26 @@ float ContactEquation::computeB(float a, float b, float h) {
 }
 
 FrictionEquation::FrictionEquation(Body* bodyA, Body* bodyB, float slipForce)
-    : Equation(bodyA, bodyB, -slipForce, slipForce), ri(), rj(), t() {}
+    : Equation(bodyA, bodyB, -slipForce, slipForce), ri(), rj(), t(), angularOnly(false) {}
 
 float FrictionEquation::computeB(float /*a*/, float b, float h) {
-    const Vec3 rixt = ri.cross(t);
-    const Vec3 rjxt = rj.cross(t);
+    if (angularOnly) {
+        jacobianElementA.spatial.setZero();
+        jacobianElementA.rotational = t;
+        jacobianElementA.rotational.negate();
+        jacobianElementB.spatial.setZero();
+        jacobianElementB.rotational = t;
+    } else {
+        const Vec3 rixt = ri.cross(t);
+        const Vec3 rjxt = rj.cross(t);
 
-    jacobianElementA.spatial = t;
-    jacobianElementA.spatial.scale(-1.0f);
-    jacobianElementA.rotational = rixt;
-    jacobianElementA.rotational.scale(-1.0f);
-    jacobianElementB.spatial = t;
-    jacobianElementB.rotational = rjxt;
+        jacobianElementA.spatial = t;
+        jacobianElementA.spatial.scale(-1.0f);
+        jacobianElementA.rotational = rixt;
+        jacobianElementA.rotational.scale(-1.0f);
+        jacobianElementB.spatial = t;
+        jacobianElementB.rotational = rjxt;
+    }
 
     const float GW = computeGW();
     const float GiMf = computeGiMf();

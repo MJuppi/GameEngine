@@ -67,7 +67,7 @@ public:
     bool isPaused() const { return paused_; }
     void setSolverIterations(int iterations) { world_.setSolverIterations(iterations); }
 
-    // Returns interpolation alpha (0 when fixed-stepping; caller owns accumulator)
+    // Returns 0 for fixed stepping and 1 for variable stepping.
     float update(float deltaTime, int maxSubSteps = 1);
     void clear();
 
