@@ -213,4 +213,20 @@ if(BUILD_TESTING)
     add_test(NAME PhysicsWorldSphereInsideBox COMMAND PhysicsWorldTests sphere-inside-box)
     add_test(NAME PhysicsWorldFrictionProperties COMMAND PhysicsWorldTests friction-properties)
     add_test(NAME PhysicsWorldRuntimeBodyProperties COMMAND PhysicsWorldTests runtime-body-properties)
+
+    add_executable(PhysicsShowcaseTests
+        tests/PhysicsShowcaseTests.cpp
+        src/game/Level.cpp
+        src/game/LevelManager.cpp
+        src/game/SceneFactory.cpp
+    )
+    target_link_libraries(PhysicsShowcaseTests PRIVATE game_engine_lib glfw glm::glm Vulkan::Vulkan)
+
+    if(MSVC)
+        target_compile_options(PhysicsShowcaseTests PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(PhysicsShowcaseTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+
+    add_test(NAME PhysicsShowcaseTests COMMAND PhysicsShowcaseTests)
 endif()

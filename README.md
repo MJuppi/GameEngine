@@ -15,7 +15,11 @@ A **lightweight 3D game engine** built with **C++20** and **Vulkan**. The codeba
 ./build/Game.exe
 ```
 
-## Sky Raid: CombatMission
+## PhysicsShowcase
+
+The default level is a physics test scene demonstrating stacked rigid bodies, low- versus high-friction sliders, low- versus high-restitution drops, a non-blocking trigger gate, a moving kinematic platform, a motorized hinge, and a distance constraint. The on-screen legend identifies the color-coded comparisons; press **Escape** to open the level menu.
+
+The **CombatMission** Sky Raid level remains available from that menu. Destroy all four enemy jets before your hull reaches zero. The scene uses the existing fixed-step physics, active-body renderer path, scene lighting, and bitmap-font UI.
 
 The default level is a single mission: destroy all four enemy jets before your hull reaches zero. The scene uses the existing fixed-step physics, active-body renderer path, scene lighting, and bitmap-font UI; the old test/parity levels are no longer registered at runtime.
 

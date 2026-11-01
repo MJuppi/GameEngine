@@ -5,6 +5,10 @@
 namespace ge {
 
 void LevelBuilder::registerDefaultLevels(LevelManager& levelManager) {
+    auto showcase = std::make_unique<Level>("PhysicsShowcase");
+    SceneFactory::configurePhysicsShowcaseLevel(*showcase);
+    levelManager.addLevel(std::move(showcase));
+
     auto mission = std::make_unique<Level>("CombatMission");
     SceneFactory::configureCombatMission(*mission);
     levelManager.addLevel(std::move(mission));

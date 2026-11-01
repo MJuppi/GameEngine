@@ -87,7 +87,7 @@ public:
             const auto& bodies = physicsEngine.getWorld().getBodies();
             renderer.clearDynamicObjects();
             for (const auto& body : bodies) {
-                if (!body->getProps().isKinematic && body->getProps().mass > 0.0f) {
+                if (body->getProps().mass > 0.0f) {
                     const auto& mesh = body->getMesh();
                     glm::mat4 interpolatedTransform = body->getInterpolatedTransform(alpha);
                     renderer.addDynamicObject(interpolatedTransform, body->getMaterial(), mesh.has_value() ? &mesh.value() : nullptr);

@@ -61,6 +61,94 @@ void SceneFactory::configureCombatMission(Level& level) {
     }
 }
 
+void SceneFactory::configurePhysicsShowcaseLevel(Level& level) {
+    auto& lights = level.getSceneLights();
+    lights.ambient.color = {0.72f, 0.82f, 1.0f, 1.0f};
+    lights.ambient.intensity = 0.24f;
+    lights.directional.direction = glm::normalize(glm::vec4(-0.4f, 1.0f, 0.3f, 0.0f));
+    lights.directional.color = {1.0f, 0.94f, 0.82f, 1.0f};
+    lights.directional.intensity = 0.7f;
+    lights.pointLightCount = 2;
+    lights.pointLights[0].position = {-8.0f, 10.0f, 8.0f, 1.0f};
+    lights.pointLights[0].color = {0.2f, 0.55f, 1.0f, 1.0f};
+    lights.pointLights[0].parameters = {1.0f, 0.03f, 0.01f, 2.0f};
+    lights.pointLights[1].position = {10.0f, 12.0f, -8.0f, 1.0f};
+    lights.pointLights[1].color = {1.0f, 0.35f, 0.16f, 1.0f};
+    lights.pointLights[1].parameters = {1.0f, 0.03f, 0.01f, 2.0f};
+
+    level.add("test_cube").name("ShowcaseGround").at(0.0f, -1.0f, 0.0f)
+        .extents({30.0f, 1.0f, 25.0f}).asStatic();
+
+    for (int i = 0; i < 5; ++i) {
+        level.add("test_cube").name("Stack_" + std::to_string(i))
+            .at(-12.0f, 0.8f + static_cast<float>(i) * 1.62f, 0.0f)
+            .extents({0.8f, 0.8f, 0.8f}).mass(1.0f).asActive();
+    }
+
+    RigidBodyProps lowFriction = makeDynamicBoxProps(1.0f, 0.03f, 0.0f);
+    lowFriction.staticFriction = 0.04f;
+    lowFriction.linearDamping = 0.0f;
+    Material lowFrictionMaterial = makeDefaultMaterial("ShowcaseLowFriction");
+    lowFrictionMaterial.diffuse = {0.15f, 0.45f, 1.0f};
+    RigidBodyProps highFriction = makeDynamicBoxProps(1.0f, 0.9f, 0.0f);
+    highFriction.staticFriction = 1.0f;
+    highFriction.linearDamping = 0.0f;
+    Material highFrictionMaterial = makeDefaultMaterial("ShowcaseHighFriction");
+    highFrictionMaterial.diffuse = {1.0f, 0.2f, 0.15f};
+    level.add("test_cube").name("LowFrictionSlider").at(-13.0f, 0.55f, -10.0f)
+        .extents({0.55f, 0.55f, 0.55f}).material(lowFrictionMaterial).asActive(lowFriction);
+    level.add("test_cube").name("HighFrictionSlider").at(-13.0f, 0.55f, -6.0f)
+        .extents({0.55f, 0.55f, 0.55f}).material(highFrictionMaterial).asActive(highFriction);
+
+    RigidBodyProps lowBounce = makeDynamicBoxProps(1.0f, 0.4f, 0.05f);
+    lowBounce.linearDamping = 0.0f;
+    Material lowBounceMaterial = makeDefaultMaterial("ShowcaseLowBounce");
+    lowBounceMaterial.diffuse = {1.0f, 0.48f, 0.12f};
+    RigidBodyProps highBounce = makeDynamicBoxProps(1.0f, 0.4f, 0.9f);
+    highBounce.linearDamping = 0.0f;
+    Material highBounceMaterial = makeDefaultMaterial("ShowcaseHighBounce");
+    highBounceMaterial.diffuse = {0.2f, 0.9f, 0.35f};
+    level.add("test_cube").name("LowBounceBlock").at(6.0f, 9.0f, -5.0f)
+        .extents({0.7f, 0.7f, 0.7f}).material(lowBounceMaterial).asActive(lowBounce);
+    level.add("test_cube").name("HighBounceBlock").at(11.0f, 9.0f, -5.0f)
+        .extents({0.7f, 0.7f, 0.7f}).material(highBounceMaterial).asActive(highBounce);
+
+    RigidBodyProps triggerProps;
+    triggerProps.mass = 0.1f;
+    triggerProps.useGravity = false;
+    triggerProps.isTrigger = true;
+    triggerProps.friction = 0.0f;
+    triggerProps.staticFriction = 0.0f;
+    Material triggerMaterial = makeDefaultMaterial("ShowcaseTrigger");
+    triggerMaterial.diffuse = {0.1f, 0.85f, 0.95f};
+    level.add("test_cube").name("SensorGate").at(-3.0f, 0.6f, -10.0f)
+        .extents({0.15f, 0.6f, 1.2f}).material(triggerMaterial).asActive(triggerProps);
+
+    RigidBodyProps kinematicProps;
+    kinematicProps.mass = 1.0f;
+    kinematicProps.isKinematic = true;
+    kinematicProps.useGravity = false;
+    kinematicProps.linearDamping = 0.0f;
+    Material platformMaterial = makeDefaultMaterial("ShowcaseKinematic");
+    platformMaterial.diffuse = {0.55f, 0.3f, 0.95f};
+    level.add("test_cube").name("KinematicPlatform").at(0.0f, 0.0f, 6.0f)
+        .extents({2.5f, 0.25f, 1.5f}).material(platformMaterial).asActive(kinematicProps);
+    level.add("test_cube").name("PlatformRider").at(0.0f, 1.0f, 6.0f)
+        .extents({0.6f, 0.6f, 0.6f}).mass(1.0f).asActive();
+
+    level.add("test_cube").name("HingePost").at(-10.0f, 2.5f, 7.0f)
+        .extents({0.25f, 2.5f, 0.25f}).asStatic();
+    Material hingeDoorMaterial = makeDefaultMaterial("ShowcaseHingeDoor");
+    hingeDoorMaterial.diffuse = {0.95f, 0.75f, 0.2f};
+    level.add("test_cube").name("HingeDoor").at(-8.0f, 2.5f, 7.0f)
+        .extents({1.75f, 2.0f, 0.25f}).material(hingeDoorMaterial).mass(2.0f).asActive();
+
+    level.add("test_cube").name("DistanceAnchor").at(13.0f, 10.0f, 5.0f)
+        .extents({0.35f, 0.35f, 0.35f}).asStatic();
+    level.add("test_cube").name("DistanceWeight").at(13.0f, 6.0f, 5.0f)
+        .extents({0.55f, 0.55f, 0.55f}).mass(1.5f).asActive();
+}
+
 void SceneFactory::configureTestLevel(Level& level) {
     // Configure lighting
     auto& lights = level.getSceneLights();
@@ -260,6 +348,45 @@ void SceneFactory::setupPairOrderingPhysics(Engine& engine) {
         });
 }
 
+void SceneFactory::setupPhysicsShowcasePhysics(Engine& engine) {
+    auto& physics = engine.getPhysicsEngine();
+    if (RigidBody* lowFriction = findBodyByName(engine, "LowFrictionSlider")) {
+        lowFriction->setVelocity({8.0f, 0.0f, 0.0f});
+    }
+    if (RigidBody* highFriction = findBodyByName(engine, "HighFrictionSlider")) {
+        highFriction->setVelocity({8.0f, 0.0f, 0.0f});
+    }
+    if (RigidBody* lowBounce = findBodyByName(engine, "LowBounceBlock")) {
+        lowBounce->setVelocity({0.0f, -2.0f, 0.0f});
+    }
+    if (RigidBody* highBounce = findBodyByName(engine, "HighBounceBlock")) {
+        highBounce->setVelocity({0.0f, -2.0f, 0.0f});
+    }
+    if (RigidBody* platform = findBodyByName(engine, "KinematicPlatform")) {
+        platform->setVelocity({1.5f, 0.0f, 0.0f});
+    }
+
+    if (RigidBody* post = findBodyByName(engine, "HingePost")) {
+        if (RigidBody* door = findBodyByName(engine, "HingeDoor")) {
+            if (auto* hinge = physics.addHingeConstraint(
+                    post, door,
+                    {0.25f, 0.0f, 0.0f}, {-1.75f, 0.0f, 0.0f},
+                    {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f},
+                    24.0f, false)) {
+                hinge->enableMotor();
+                hinge->setMotorSpeed(0.4f);
+                hinge->setMotorMaxForce(16.0f);
+            }
+        }
+    }
+
+    if (RigidBody* anchor = findBodyByName(engine, "DistanceAnchor")) {
+        if (RigidBody* weight = findBodyByName(engine, "DistanceWeight")) {
+            physics.addDistanceConstraint(anchor, weight, 4.0f, 60.0f, false);
+        }
+    }
+}
+
 SceneFactory::PauseMenuBindings SceneFactory::setupUI(Engine& engine,
                                                       const LevelManager& levelManager,
                                                       size_t currentLevelIndex,
@@ -282,15 +409,22 @@ SceneFactory::PauseMenuBindings SceneFactory::setupUI(Engine& engine,
 
     engine.getUIManager().addElement(fpsLabel);
 
-    // Debug label for the active regression bodies, with a fallback to the old stack test.
+    const Level* currentLevel = levelManager.getLevel(currentLevelIndex);
+    const bool showPhysicsDebug = currentLevel
+        && currentLevel->getName() != "PhysicsShowcase"
+        && currentLevel->getName() != "CombatMission";
     auto cubeDebugLabel = std::make_shared<Label>();
     cubeDebugLabel->setPosition({0.02f, 0.05f});
     cubeDebugLabel->setSize({0.8f, 0.08f});
     cubeDebugLabel->setColor({0.0f, 1.0f, 1.0f, 1.0f});
     cubeDebugLabel->setFontSize(1.2f);
     cubeDebugLabel->setText("Constraint parity: searching...");
+    cubeDebugLabel->setVisible(showPhysicsDebug);
 
-    cubeDebugLabel->setOnUpdate([&engine](Label& label, float /*deltaTime*/) {
+    cubeDebugLabel->setOnUpdate([&engine, showPhysicsDebug](Label& label, float /*deltaTime*/) {
+        if (!showPhysicsDebug) {
+            return;
+        }
         const RigidBody* hingeDoor = findBodyByName(engine, "HingeDoor");
         const RigidBody* coneTip = findBodyByName(engine, "ConeTip");
         const RigidBody* stack0 = findBodyByName(engine, "Stack_0");

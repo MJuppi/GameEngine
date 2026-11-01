@@ -19,12 +19,14 @@ public:
     };
 
     static void configureCombatMission(Level& level);
+    static void configurePhysicsShowcaseLevel(Level& level);
     static void configureTestLevel(Level& level);
     static void configureConstraintParityLevel(Level& level);
     static void configurePairOrderingLevel(Level& level);
     static void setupTestPhysics(Engine& engine);
     static void setupConstraintParityPhysics(Engine& engine);
     static void setupPairOrderingPhysics(Engine& engine);
+    static void setupPhysicsShowcasePhysics(Engine& engine);
     static PauseMenuBindings setupUI(Engine& engine,
                                      const LevelManager& levelManager,
                                      size_t currentLevelIndex,

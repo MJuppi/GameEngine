@@ -4,6 +4,7 @@
 #include "game/SceneFactory.h"
 #include "engine/Engine.h"
 #include "engine/ui/UIManager.h"
+#include "engine/ui/Label.h"
 #include "engine/mesh/MeshData.h"
 #include "engine/physics/PhysicsEngine.h"
 #include "engine/physics/RigidBody.h"
@@ -97,9 +98,10 @@ bool Game::loadLevel(Level& level) {
         ObjectBuilder::attachPhysics(engine_->getPhysicsEngine(), levelObject);
     }
 
+    const bool isPhysicsShowcase = level.getName() == "PhysicsShowcase";
     if (level.getName() == "PairOrderingParity") {
         SceneFactory::setupPairOrderingPhysics(*engine_);
-    } else {
+    } else if (!isPhysicsShowcase) {
         engine_->getPhysicsEngine().getWorld().setContactManifoldCallback(
             [](const ContactManifold& manifold) {
                 const std::string bodyNameA = (manifold.bodyA && !manifold.bodyA->getName().empty())
@@ -149,7 +151,32 @@ bool Game::loadLevel(Level& level) {
         SceneFactory::setupConstraintParityPhysics(*engine_);
     }
 
-    playerController_ = std::make_unique<PlayerController>(*engine_);
+    if (isPhysicsShowcase) {
+        SceneFactory::setupPhysicsShowcasePhysics(*engine_);
+        const glm::vec3 cameraPosition{27.0f, 20.0f, 35.0f};
+        engine_->setCamera(cameraPosition,
+                           glm::normalize(glm::vec3{0.0f, 3.0f, 0.0f} - cameraPosition),
+                           {0.0f, 1.0f, 0.0f});
+
+        const auto addShowcaseLabel = [this](const std::string& text, float y, const glm::vec4& color) {
+            auto label = std::make_shared<Label>();
+            label->setPosition({0.02f, y});
+            label->setSize({0.78f, 0.035f});
+            label->setColor(color);
+            label->setFontSize(1.0f);
+            label->setText(text);
+            engine_->getUIManager().addElement(label);
+        };
+        addShowcaseLabel("PHYSICS SHOWCASE", 0.03f, {1.0f, 0.9f, 0.35f, 1.0f});
+        addShowcaseLabel("Stack: gravity and resting contacts", 0.075f, {0.9f, 0.95f, 1.0f, 1.0f});
+        addShowcaseLabel("Friction: blue = low, red = high", 0.12f, {0.65f, 0.85f, 1.0f, 1.0f});
+        addShowcaseLabel("Bounce: orange = low, green = high | cyan gate = trigger", 0.165f,
+                         {0.65f, 1.0f, 0.8f, 1.0f});
+        addShowcaseLabel("Moving platform, motorized hinge, distance constraint | ESC: menu", 0.21f,
+                         {0.9f, 0.9f, 0.95f, 1.0f});
+    } else {
+        playerController_ = std::make_unique<PlayerController>(*engine_);
+    }
 
     const int currentIndex = levelManager_.getCurrentLevelIndex();
     const size_t safeIndex = currentIndex < 0 ? 0u : static_cast<size_t>(currentIndex);
@@ -168,6 +195,20 @@ bool Game::loadLevel(Level& level) {
     engine_->setFixedUpdateCallback([this](float deltaTime) {
         if (playerController_ && !isMenuVisible()) {
             playerController_->fixedUpdate(deltaTime);
+        }
+        if (engine_ && levelManager_.getCurrentLevel()
+            && levelManager_.getCurrentLevel()->getName() == "PhysicsShowcase") {
+            for (const auto& body : engine_->getPhysicsEngine().getWorld().getBodies()) {
+                if (!body || body->getName() != "KinematicPlatform") {
+                    continue;
+                }
+                const float x = body->getPosition().x;
+                const float vx = body->getVelocity().x;
+                if ((x >= 4.5f && vx > 0.0f) || (x <= -4.5f && vx < 0.0f)) {
+                    body->setVelocity({-vx, 0.0f, 0.0f});
+                }
+                break;
+            }
         }
     });
 
@@ -227,7 +268,7 @@ void Game::shutdown() {
 
 void Game::initializeLevels() {
     LevelBuilder::registerDefaultLevels(levelManager_);
-    if (!levelManager_.setCurrentLevel("CombatMission")) {
+    if (!levelManager_.setCurrentLevel("PhysicsShowcase")) {
         levelManager_.setCurrentLevel(0);
     }
 }
