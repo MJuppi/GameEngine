@@ -23,6 +23,7 @@ struct MeshBounds {
 };
 
 [[nodiscard]] MeshData makeUnitCubeMesh();
+[[nodiscard]] MeshData makeBoxMesh(const glm::vec3& size, const Material& material = Material{});
 [[nodiscard]] MeshData makeSkyboxMesh(uint32_t materialIndex = 0, float size = 50.0f);
 [[nodiscard]] MeshData makeGroundPlaneMesh(uint32_t materialIndex = 0, float size = 20.0f, float y = -1.0f);
 [[nodiscard]] MeshData makeQuadMesh(uint32_t materialIndex = 0);

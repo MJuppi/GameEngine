@@ -10,7 +10,7 @@ struct ScenePushConstants {
     glm::mat4 normal;
 };
 
-static_assert(sizeof(ScenePushConstants) == 128, "ScenePushConstants must be 128 bytes to match pipeline push constant range");
+static_assert(sizeof(ScenePushConstants) == 128, "ScenePushConstants must match the scene shader push constants");
 
 struct UIPushConstants {
     glm::vec2 uiPosition;

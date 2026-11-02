@@ -73,6 +73,14 @@ public:
         const glm::vec3& halfExtents = {0.5f, 0.5f, 0.5f},
         const RigidBodyProps& physicsProps = {});
 
+    static PhysicsMeshObject createBox(
+        std::string name,
+        const glm::vec3& size,
+        const glm::vec3& location = {0.0f, 0.0f, 0.0f},
+        ObjectType type = ObjectType::Static,
+        const RigidBodyProps& physicsProps = {},
+        Material material = {});
+
     static RigidBody* attachPhysics(
         PhysicsEngine& physicsEngine,
         PhysicsMeshObject& object);

@@ -31,13 +31,16 @@ TextureData loadTextureFile(const std::string& path) {
     texture.path = path;
 
     if (extension == ".hdr") {
-        float* pixels = stbi_loadf(path.c_str(), &texture.width, &texture.height, &texture.channels, 0);
+        float* pixels = stbi_loadf(path.c_str(), &texture.width, &texture.height, &texture.channels, 4);
         if (!pixels) {
             throw std::runtime_error("TextureLoader: Failed to load HDR texture: " + path);
         }
 
         texture.hdr = true;
-        texture.pixels.assign(reinterpret_cast<uint8_t*>(pixels), reinterpret_cast<uint8_t*>(pixels) + texture.width * texture.height * texture.channels * sizeof(float));
+        const size_t byteCount = static_cast<size_t>(texture.width) * texture.height *
+                                 texture.channels * sizeof(float);
+        texture.pixels.assign(reinterpret_cast<uint8_t*>(pixels),
+                              reinterpret_cast<uint8_t*>(pixels) + byteCount);
         stbi_image_free(pixels);
         return texture;
     }

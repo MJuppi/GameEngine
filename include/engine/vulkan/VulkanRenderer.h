@@ -101,6 +101,8 @@ private:
     void createDescriptorSets();
     void createUIBuffers();
     void createFontTexture();
+    struct DynamicMaterialResources;
+    DynamicMaterialResources& getOrCreateDynamicMaterialResources(const std::shared_ptr<Material>& material);
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     void renderUI(VkCommandBuffer cb);
 
@@ -137,7 +139,8 @@ private:
     std::unique_ptr<VulkanBuffer> m_materialBuffer;
     MaterialBufferObject m_materialGpu{};
 
-    VulkanImage m_texture;
+    VulkanImage m_fallbackTexture;
+    std::vector<VulkanImage> m_materialTextures;
 
     VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
     std::vector<VkDescriptorSet> m_descriptorSets;
@@ -162,6 +165,7 @@ private:
     glm::mat4 m_modelMatrix = glm::mat4(1.0f);
     std::vector<RenderObject> m_dynamicObjects;
     std::map<const MeshData*, MeshBuffers> m_dynamicMeshCache;
+    std::map<const Material*, std::unique_ptr<DynamicMaterialResources>> m_dynamicMaterialCache;
     MeshData m_boxMesh{};
     std::unique_ptr<MaterialSystem> m_materialSystem;
 

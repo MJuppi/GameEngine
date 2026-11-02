@@ -7,6 +7,7 @@
 #include "engine/vulkan/VulkanContext.h"
 #include "engine/vulkan/VulkanDevice.h"
 #include "engine/vulkan/VulkanPipeline.h"
+#include "engine/vulkan/RenderSupport.h"
 #include "engine/vulkan/VulkanSwapchain.h"
 
 #include <GLFW/glfw3.h>
@@ -18,6 +19,8 @@
 #include <stdexcept>
 #include <vector>
 #include <algorithm>
+#include <exception>
+#include <memory>
 
 #include "engine/asset/TextureLoader.h"
 #include "engine/asset/AssetLoader.h"
@@ -33,6 +36,43 @@
 #include "engine/vulkan/PushConstants.h"
 
 namespace ge {
+
+struct VulkanRenderer::DynamicMaterialResources {
+    std::shared_ptr<Material> material;
+    std::vector<std::unique_ptr<VulkanBuffer>> materialBuffers;
+    std::vector<void*> materialBuffersMapped;
+    VulkanImage texture;
+    VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+    std::vector<VkDescriptorSet> descriptorSets;
+};
+
+namespace {
+
+TextureData whiteTextureData() {
+    TextureData data;
+    data.width = 1;
+    data.height = 1;
+    data.channels = 4;
+    data.pixels = {255, 255, 255, 255};
+    return data;
+}
+
+VulkanImage loadMaterialTexture(VulkanDevice& device, VkCommandPool commandPool,
+                                VkQueue queue, const std::string& path) {
+    TextureData data = whiteTextureData();
+    if (!path.empty()) {
+        try {
+            const auto resolved = AssetLoader::resolveAssetPath(path);
+            data = loadTextureFile(resolved.string());
+        } catch (const std::exception& error) {
+            std::cerr << "[VulkanRenderer] Failed to load texture '" << path
+                      << "': " << error.what() << "; using white texture." << std::endl;
+        }
+    }
+    return VulkanImage::fromTextureData(device, commandPool, queue, data);
+}
+
+} // namespace
 
 VulkanRenderer::VulkanRenderer(Window& window, MeshData mesh)
     : m_window(window)
@@ -67,13 +107,33 @@ VulkanRenderer::~VulkanRenderer() {
     }
     if (m_materialBuffer) m_materialBuffer->destroy(*m_device);
 
+    for (auto& [material, resources] : m_dynamicMaterialCache) {
+        (void)material;
+        for (size_t i = 0; i < resources->materialBuffers.size(); ++i) {
+            if (resources->materialBuffersMapped[i]) {
+                vkUnmapMemory(m_device->logical(), resources->materialBuffers[i]->memory());
+            }
+            resources->materialBuffers[i]->destroy(*m_device);
+        }
+        resources->texture.destroy(*m_device);
+        if (resources->descriptorPool != VK_NULL_HANDLE) {
+            vkDestroyDescriptorPool(m_device->logical(), resources->descriptorPool, nullptr);
+        }
+    }
+    m_dynamicMaterialCache.clear();
+
     for (auto& [mesh, buffers] : m_dynamicMeshCache) {
         if (buffers.vb) buffers.vb->destroy(*m_device);
         if (buffers.ib) buffers.ib->destroy(*m_device);
     }
     m_dynamicMeshCache.clear();
 
-    m_texture.destroy(*m_device);
+    for (auto& texture : m_materialTextures) {
+        if (texture.handle() != m_fallbackTexture.handle()) {
+            texture.destroy(*m_device);
+        }
+    }
+    m_fallbackTexture.destroy(*m_device);
     cleanupSwapchain();
 
     if (m_descriptorPool != VK_NULL_HANDLE) {
@@ -180,35 +240,126 @@ void VulkanRenderer::createMaterialBuffer() {
 }
 
 void VulkanRenderer::createTextureImage() {
-    std::string texturePath = "textures/grid_texture.png";
-    for (const auto& mat : m_mesh.materials) {
-        if (!mat.texturePath.empty()) {
-            texturePath = mat.texturePath;
-            break;
+    m_materialTextures.clear();
+    m_materialTextures.reserve(render::kMaterialTextureSlots);
+    const auto white = whiteTextureData();
+    m_fallbackTexture = VulkanImage::fromTextureData(
+        *m_device, m_commandPool, m_device->graphicsQueue(), white);
+    for (uint32_t slot = 0; slot < render::kMaterialTextureSlots; ++slot) {
+        const std::string path = slot < m_mesh.materials.size()
+            ? m_mesh.materials[slot].texturePath : std::string{};
+        if (path.empty()) {
+            m_materialTextures.push_back(m_fallbackTexture);
+        } else {
+            m_materialTextures.push_back(loadMaterialTexture(
+                *m_device, m_commandPool, m_device->graphicsQueue(), path));
         }
-    }
-
-    try {
-        const auto resolved = AssetLoader::resolveAssetPath(texturePath);
-        TextureData data = loadTextureFile(resolved.string());
-        m_texture = VulkanImage::fromTextureData(*m_device, m_commandPool, m_device->graphicsQueue(), data);
-    } catch (...) {
-        TextureData dummy;
-        dummy.width = 2; dummy.height = 2; dummy.channels = 4;
-        dummy.pixels = { 255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255 };
-        m_texture = VulkanImage::fromTextureData(*m_device, m_commandPool, m_device->graphicsQueue(), dummy);
     }
 }
 
+VulkanRenderer::DynamicMaterialResources& VulkanRenderer::getOrCreateDynamicMaterialResources(
+    const std::shared_ptr<Material>& material) {
+    auto existing = m_dynamicMaterialCache.find(material.get());
+    if (existing != m_dynamicMaterialCache.end()) {
+        return *existing->second;
+    }
+
+    auto resources = std::make_unique<DynamicMaterialResources>();
+    resources->material = material;
+    resources->texture = loadMaterialTexture(
+        *m_device, m_commandPool, m_device->graphicsQueue(), material->texturePath);
+    resources->materialBuffers.resize(kMaxFramesInFlight);
+    resources->materialBuffersMapped.resize(kMaxFramesInFlight, nullptr);
+
+    MaterialBufferObject materialData{};
+    fillMaterialBuffer(std::vector<Material>{*material}, materialData);
+    for (int frame = 0; frame < kMaxFramesInFlight; ++frame) {
+        resources->materialBuffers[frame] = std::make_unique<VulkanBuffer>();
+        resources->materialBuffers[frame]->create(*m_device, sizeof(MaterialBufferObject),
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        const VkResult mapResult = vkMapMemory(m_device->logical(),
+            resources->materialBuffers[frame]->memory(), 0, sizeof(MaterialBufferObject),
+            0, &resources->materialBuffersMapped[frame]);
+        if (mapResult != VK_SUCCESS) {
+            throw std::runtime_error("Failed to map dynamic material buffer");
+        }
+        std::memcpy(resources->materialBuffersMapped[frame], &materialData, sizeof(materialData));
+    }
+
+    const auto poolSizes = render::rendererDescriptorPoolSizes(kMaxFramesInFlight);
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.pPoolSizes = poolSizes.data();
+    poolInfo.maxSets = kMaxFramesInFlight;
+    if (vkCreateDescriptorPool(m_device->logical(), &poolInfo, nullptr,
+                               &resources->descriptorPool) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create dynamic material descriptor pool");
+    }
+
+    const VkDescriptorSetLayout setLayout =
+        m_materialSystem->getDefaultEffect()->getPipeline().descriptorSetLayout();
+    std::vector<VkDescriptorSetLayout> layouts(kMaxFramesInFlight, setLayout);
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = resources->descriptorPool;
+    allocInfo.descriptorSetCount = kMaxFramesInFlight;
+    allocInfo.pSetLayouts = layouts.data();
+    resources->descriptorSets.resize(kMaxFramesInFlight);
+    if (vkAllocateDescriptorSets(m_device->logical(), &allocInfo,
+                                 resources->descriptorSets.data()) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to allocate dynamic material descriptor sets");
+    }
+
+    std::array<VkDescriptorImageInfo, render::kMaterialTextureSlots> imageInfos{};
+    for (auto& imageInfo : imageInfos) {
+        imageInfo = {resources->texture.sampler(), resources->texture.view(),
+                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    }
+    for (int frame = 0; frame < kMaxFramesInFlight; ++frame) {
+        VkDescriptorBufferInfo sceneInfo{m_sceneBuffers[frame]->handle(), 0, sizeof(SceneUbo)};
+        VkDescriptorBufferInfo materialInfo{
+            resources->materialBuffers[frame]->handle(), 0, sizeof(MaterialBufferObject)};
+        std::array<VkWriteDescriptorSet, 2 + render::kMaterialTextureSlots> writes{};
+        writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[0].dstSet = resources->descriptorSets[frame];
+        writes[0].dstBinding = 0;
+        writes[0].descriptorCount = 1;
+        writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writes[0].pBufferInfo = &sceneInfo;
+
+        writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[1].dstSet = resources->descriptorSets[frame];
+        writes[1].dstBinding = 1;
+        writes[1].descriptorCount = 1;
+        writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writes[1].pBufferInfo = &materialInfo;
+
+        for (uint32_t slot = 0; slot < render::kMaterialTextureSlots; ++slot) {
+            VkWriteDescriptorSet& write = writes[slot + 2];
+            write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            write.dstSet = resources->descriptorSets[frame];
+            write.dstBinding = slot + 2;
+            write.descriptorCount = 1;
+            write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            write.pImageInfo = &imageInfos[slot];
+        }
+        vkUpdateDescriptorSets(m_device->logical(), static_cast<uint32_t>(writes.size()),
+                               writes.data(), 0, nullptr);
+    }
+
+    auto [inserted, wasCreated] = m_dynamicMaterialCache.emplace(material.get(), std::move(resources));
+    (void)wasCreated;
+    return *inserted->second;
+}
+
 void VulkanRenderer::createDescriptorPool() {
-    std::array<VkDescriptorPoolSize, 3> poolSizes{};
-    poolSizes[0] = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, static_cast<uint32_t>(kMaxFramesInFlight) * 2 };
-    poolSizes[1] = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, static_cast<uint32_t>(kMaxFramesInFlight) * 2 };
-    poolSizes[2] = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, static_cast<uint32_t>(kMaxFramesInFlight) * 2 };
+    const auto poolSizes = render::rendererDescriptorPoolSizes(kMaxFramesInFlight);
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = 3;
+    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
     poolInfo.maxSets = static_cast<uint32_t>(kMaxFramesInFlight) * 2;
 
@@ -238,67 +389,49 @@ void VulkanRenderer::createDescriptorSets() {
     }
 
     for (int i = 0; i < kMaxFramesInFlight; ++i) {
-        // Main set
-        {
-            VkDescriptorBufferInfo sceneInfo{ m_sceneBuffers[i]->handle(), 0, sizeof(SceneUbo) };
-            VkDescriptorBufferInfo materialInfo{ m_materialBuffer->handle(), 0, sizeof(MaterialBufferObject) };
-            VkDescriptorImageInfo imageInfo{ m_texture.sampler(), m_texture.view(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+        VkDescriptorBufferInfo sceneInfo{ m_sceneBuffers[i]->handle(), 0, sizeof(SceneUbo) };
+        VkDescriptorBufferInfo materialInfo{ m_materialBuffer->handle(), 0, sizeof(MaterialBufferObject) };
 
-            std::array<VkWriteDescriptorSet, 3> writes{};
+        const auto updateSet = [&](VkDescriptorSet set, const std::vector<VulkanImage>& textures) {
+            std::array<VkWriteDescriptorSet, 2 + render::kMaterialTextureSlots> writes{};
+            std::vector<VkDescriptorImageInfo> imageInfos;
+            imageInfos.reserve(render::kMaterialTextureSlots);
+            for (const VulkanImage& texture : textures) {
+                imageInfos.push_back({
+                    texture.sampler(), texture.view(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                });
+            }
+
             writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writes[0].dstSet = m_descriptorSets[i];
+            writes[0].dstSet = set;
             writes[0].dstBinding = 0;
             writes[0].descriptorCount = 1;
             writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
             writes[0].pBufferInfo = &sceneInfo;
 
             writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writes[1].dstSet = m_descriptorSets[i];
+            writes[1].dstSet = set;
             writes[1].dstBinding = 1;
             writes[1].descriptorCount = 1;
             writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
             writes[1].pBufferInfo = &materialInfo;
 
-            writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writes[2].dstSet = m_descriptorSets[i];
-            writes[2].dstBinding = 2;
-            writes[2].descriptorCount = 1;
-            writes[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            writes[2].pImageInfo = &imageInfo;
+            for (uint32_t slot = 0; slot < render::kMaterialTextureSlots; ++slot) {
+                VkWriteDescriptorSet& write = writes[slot + 2];
+                write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                write.dstSet = set;
+                write.dstBinding = slot + 2;
+                write.descriptorCount = 1;
+                write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                write.pImageInfo = &imageInfos[slot];
+            }
 
             vkUpdateDescriptorSets(m_device->logical(), static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
-        }
+        };
 
-        // UI set (uses font texture)
-        {
-            VkDescriptorBufferInfo sceneInfo{ m_sceneBuffers[i]->handle(), 0, sizeof(SceneUbo) };
-            VkDescriptorBufferInfo materialInfo{ m_materialBuffer->handle(), 0, sizeof(MaterialBufferObject) };
-            VkDescriptorImageInfo imageInfo{ m_fontTexture.sampler(), m_fontTexture.view(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-
-            std::array<VkWriteDescriptorSet, 3> writes{};
-            writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writes[0].dstSet = m_uiDescriptorSets[i];
-            writes[0].dstBinding = 0;
-            writes[0].descriptorCount = 1;
-            writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            writes[0].pBufferInfo = &sceneInfo;
-
-            writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writes[1].dstSet = m_uiDescriptorSets[i];
-            writes[1].dstBinding = 1;
-            writes[1].descriptorCount = 1;
-            writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            writes[1].pBufferInfo = &materialInfo;
-
-            writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writes[2].dstSet = m_uiDescriptorSets[i];
-            writes[2].dstBinding = 2;
-            writes[2].descriptorCount = 1;
-            writes[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            writes[2].pImageInfo = &imageInfo;
-
-            vkUpdateDescriptorSets(m_device->logical(), static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
-        }
+        updateSet(m_descriptorSets[i], m_materialTextures);
+        std::vector<VulkanImage> fontTextures(render::kMaterialTextureSlots, m_fontTexture);
+        updateSet(m_uiDescriptorSets[i], fontTextures);
     }
 }
 
@@ -407,12 +540,20 @@ void VulkanRenderer::drawFrame() {
     }
     m_imagesInFlight[imageIndex] = m_inFlightFences[m_currentFrame];
 
+    for (auto& [material, resources] : m_dynamicMaterialCache) {
+        (void)material;
+        MaterialBufferObject materialData{};
+        fillMaterialBuffer(std::vector<Material>{*resources->material}, materialData);
+        std::memcpy(resources->materialBuffersMapped[m_currentFrame],
+                    &materialData, sizeof(materialData));
+    }
+
     const float aspect = m_swapchain->extent().width / static_cast<float>(m_swapchain->extent().height);
 
     SceneUbo scene{};
     scene.model = m_modelMatrix;
-    glm::mat4 proj = glm::perspective(glm::radians(90.0f), aspect, 0.1f, 1000.0f);
-    proj[1][1] *= -1.0f;
+    const glm::mat4 proj = render::vulkanPerspective(
+        glm::radians(90.0f), aspect, 0.1f, 1000.0f);
     scene.viewProj = proj * glm::lookAt(m_cameraPosition, m_cameraPosition + m_cameraFront, m_cameraUp);
     scene.normalMatrix = glm::transpose(glm::inverse(m_modelMatrix));
     scene.lightDir = m_sceneLights.directional.direction;
@@ -465,6 +606,9 @@ void VulkanRenderer::drawFrame() {
 }
 
 void VulkanRenderer::addDynamicObject(const glm::mat4& transform, std::shared_ptr<Material> material, const MeshData* mesh) {
+    if (material) {
+        getOrCreateDynamicMaterialResources(material);
+    }
     m_dynamicObjects.push_back({transform, material, mesh});
 }
 
@@ -539,7 +683,9 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer cb, uint32_t idx) {
         vkCmdBindVertexBuffers(cb, 0, 1, vbs, offsets);
         vkCmdBindIndexBuffer(cb, m_indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
 
-        ge::ScenePushConstants push { m_modelMatrix, glm::transpose(glm::inverse(m_modelMatrix)) };
+        ge::ScenePushConstants push{};
+        push.model = m_modelMatrix;
+        push.normal = glm::transpose(glm::inverse(m_modelMatrix));
         vkCmdPushConstants(cb, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
         vkCmdDrawIndexed(cb, m_indexCount, 1, 0, 0, 0);
     }
@@ -583,12 +729,19 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer cb, uint32_t idx) {
         if (!effect) continue;
 
         vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, effect->getPipeline().handle());
+        const VkDescriptorSet materialSet = obj.material
+            ? getOrCreateDynamicMaterialResources(obj.material).descriptorSets[m_currentFrame]
+            : m_descriptorSets[m_currentFrame];
+        vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            effect->getPipeline().layout(), 0, 1, &materialSet, 0, nullptr);
         VkBuffer vbs[] = { buf.vb->handle() };
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(cb, 0, 1, vbs, offsets);
         vkCmdBindIndexBuffer(cb, buf.ib->handle(), 0, VK_INDEX_TYPE_UINT32);
 
-        ge::ScenePushConstants push { obj.transform, glm::transpose(glm::inverse(obj.transform)) };
+        ge::ScenePushConstants push{};
+        push.model = obj.transform;
+        push.normal = glm::transpose(glm::inverse(obj.transform));
         vkCmdPushConstants(cb, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
         vkCmdDrawIndexed(cb, buf.indexCount, 1, 0, 0, 0);
     }
@@ -715,7 +868,7 @@ void VulkanRenderer::createFontTexture() {
         int startY = gridY * 8;
         for (int y = 0; y < 8; ++y) {
             for (int x = 0; x < 8; ++x) {
-                if (charData[y] & (1 << (4 - x))) {
+                if (render::fontPixel(charData[y], x)) {
                     pixels[(startY + y) * texSize + (startX + x)] = 255;
                 }
             }

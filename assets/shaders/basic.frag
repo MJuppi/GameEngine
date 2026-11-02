@@ -47,7 +47,22 @@ layout(set = 0, binding = 1) uniform MaterialUbo {
     Material items[16];
 } materials;
 
-layout(set = 0, binding = 2) uniform sampler2D texSampler;
+layout(set = 0, binding = 2) uniform sampler2D texSampler0;
+layout(set = 0, binding = 3) uniform sampler2D texSampler1;
+layout(set = 0, binding = 4) uniform sampler2D texSampler2;
+layout(set = 0, binding = 5) uniform sampler2D texSampler3;
+layout(set = 0, binding = 6) uniform sampler2D texSampler4;
+layout(set = 0, binding = 7) uniform sampler2D texSampler5;
+layout(set = 0, binding = 8) uniform sampler2D texSampler6;
+layout(set = 0, binding = 9) uniform sampler2D texSampler7;
+layout(set = 0, binding = 10) uniform sampler2D texSampler8;
+layout(set = 0, binding = 11) uniform sampler2D texSampler9;
+layout(set = 0, binding = 12) uniform sampler2D texSampler10;
+layout(set = 0, binding = 13) uniform sampler2D texSampler11;
+layout(set = 0, binding = 14) uniform sampler2D texSampler12;
+layout(set = 0, binding = 15) uniform sampler2D texSampler13;
+layout(set = 0, binding = 16) uniform sampler2D texSampler14;
+layout(set = 0, binding = 17) uniform sampler2D texSampler15;
 
 layout(location = 0) in vec3 fragNormal;
 layout(location = 1) in vec2 fragTexCoord;
@@ -56,6 +71,27 @@ layout(location = 3) in vec3 fragPos;
 
 layout(location = 0) out vec4 outColor;
 
+vec4 sampleMaterialTexture(uint idx, vec2 uv) {
+    switch (idx) {
+        case 0u: return texture(texSampler0, uv);
+        case 1u: return texture(texSampler1, uv);
+        case 2u: return texture(texSampler2, uv);
+        case 3u: return texture(texSampler3, uv);
+        case 4u: return texture(texSampler4, uv);
+        case 5u: return texture(texSampler5, uv);
+        case 6u: return texture(texSampler6, uv);
+        case 7u: return texture(texSampler7, uv);
+        case 8u: return texture(texSampler8, uv);
+        case 9u: return texture(texSampler9, uv);
+        case 10u: return texture(texSampler10, uv);
+        case 11u: return texture(texSampler11, uv);
+        case 12u: return texture(texSampler12, uv);
+        case 13u: return texture(texSampler13, uv);
+        case 14u: return texture(texSampler14, uv);
+        default: return texture(texSampler15, uv);
+    }
+}
+
 void main() {
     uint idx = min(fragMaterialIndex, 15u);
     Material mat = materials.items[idx];
@@ -63,7 +99,7 @@ void main() {
     vec3 N = normalize(fragNormal);
     vec4 baseColor = mat.diffuse;
     if (mat.hasTexture != 0) {
-        baseColor *= texture(texSampler, fragTexCoord);
+        baseColor *= sampleMaterialTexture(idx, fragTexCoord);
     }
 
     vec3 ambientLight = baseColor.rgb * scene.lights.ambient.color.rgb * scene.lights.ambient.intensity;

@@ -229,4 +229,15 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME PhysicsShowcaseTests COMMAND PhysicsShowcaseTests)
+
+    add_executable(RenderingSupportTests tests/RenderingSupportTests.cpp)
+    target_link_libraries(RenderingSupportTests PRIVATE game_engine_lib glm::glm Vulkan::Vulkan)
+
+    if(MSVC)
+        target_compile_options(RenderingSupportTests PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(RenderingSupportTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+
+    add_test(NAME RenderingSupportTests COMMAND RenderingSupportTests)
 endif()

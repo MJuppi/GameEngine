@@ -100,6 +100,12 @@ public:
     void addVisual(std::string name, std::string meshPath, const glm::vec3& location, const glm::vec3& halfExtents = kAutoExtents);
     void addStatic(std::string name, std::string meshPath, const glm::vec3& location, const glm::vec3& halfExtents = kAutoExtents, const RigidBodyProps& props = {});
     void addActive(std::string name, std::string meshPath, const glm::vec3& location, const glm::vec3& halfExtents = kAutoExtents, const RigidBodyProps& props = {1.0f});
+    void addBox(std::string name,
+                const glm::vec3& size,
+                const glm::vec3& location = {0.0f, 0.0f, 0.0f},
+                ObjectType type = ObjectType::Static,
+                const RigidBodyProps& props = {},
+                Material material = {});
 
     void load(AssetManager& assetManager);
     void unload();

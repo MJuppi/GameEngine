@@ -32,10 +32,14 @@ bool loadObjectMesh(PhysicsMeshObject& object,
     const bool isAuto = (object.halfExtents.x < 0.0f);
 
     if (object.meshPath.empty()) {
-        if (isAuto) {
-            object.halfExtents = {0.5f, 0.5f, 0.5f};
+        if (object.mesh.vertices.empty()) {
+            if (isAuto) {
+                object.halfExtents = {0.5f, 0.5f, 0.5f};
+            }
+            object.mesh = makeFallbackMesh(object.halfExtents);
+        } else if (isAuto) {
+            object.halfExtents = computeMeshBounds(object.mesh).getHalfExtents();
         }
-        object.mesh = makeFallbackMesh(object.halfExtents);
         postProcessMesh(object.mesh);
         return true;
     }
@@ -183,6 +187,16 @@ void Level::addStatic(std::string name, std::string meshPath, const glm::vec3& l
 
 void Level::addActive(std::string name, std::string meshPath, const glm::vec3& location, const glm::vec3& halfExtents, const RigidBodyProps& props) {
     addObject(ObjectBuilder::createActive(std::move(name), std::move(meshPath), location, halfExtents, props));
+}
+
+void Level::addBox(std::string name,
+                   const glm::vec3& size,
+                   const glm::vec3& location,
+                   ObjectType type,
+                   const RigidBodyProps& props,
+                   Material material) {
+    addObject(ObjectBuilder::createBox(
+        std::move(name), size, location, type, props, std::move(material)));
 }
 
 void Level::load(AssetManager& assetManager) {

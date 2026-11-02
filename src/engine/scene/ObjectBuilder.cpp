@@ -66,6 +66,30 @@ PhysicsMeshObject ObjectBuilder::createObject(
     return obj;
 }
 
+PhysicsMeshObject ObjectBuilder::createBox(
+    std::string name,
+    const glm::vec3& size,
+    const glm::vec3& location,
+    ObjectType type,
+    const RigidBodyProps& physicsProps,
+    Material material) {
+    if (name.empty()) {
+        name = "box";
+    }
+
+    RigidBodyProps props = physicsProps;
+    if (type == ObjectType::Static && props.mass == 1.0f && !props.isKinematic) {
+        props.mass = 0.0f;
+        props.isKinematic = true;
+        props.useGravity = false;
+    }
+
+    PhysicsMeshObject object(
+        name, "", location, size * 0.5f, type, props);
+    object.mesh = makeBoxMesh(size, material);
+    return object;
+}
+
 RigidBody* ObjectBuilder::attachPhysics(PhysicsEngine& physicsEngine, PhysicsMeshObject& object) {
     if (!object.hasPhysicsBody()) {
         return nullptr;

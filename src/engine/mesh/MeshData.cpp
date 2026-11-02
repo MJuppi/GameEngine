@@ -1,6 +1,8 @@
 #include "engine/mesh/MeshData.h"
 #include <algorithm>
+#include <cmath>
 #include <limits>
+#include <stdexcept>
 
 namespace ge {
 
@@ -55,6 +57,51 @@ MeshData makeUnitCubeMesh() {
         mesh.indices.push_back(base + 2);
         mesh.indices.push_back(base + 3);
         mesh.indices.push_back(base + 0);
+    }
+    return mesh;
+}
+
+MeshData makeBoxMesh(const glm::vec3& size, const Material& material) {
+    if (!std::isfinite(size.x) || !std::isfinite(size.y) || !std::isfinite(size.z) ||
+        size.x <= 0.0f || size.y <= 0.0f || size.z <= 0.0f) {
+        throw std::invalid_argument("Box dimensions must be finite and greater than zero");
+    }
+
+    MeshData mesh;
+    Material boxMaterial = material;
+    if (boxMaterial.name.empty()) {
+        boxMaterial.name = "box";
+    }
+    mesh.materials.push_back(std::move(boxMaterial));
+
+    const glm::vec3 half = size * 0.5f;
+    mesh.vertices = {
+        // Front (+Z)
+        makeV( half.x,  half.y,  half.z,  0,  0,  1, 1, 1, 0), makeV(-half.x,  half.y,  half.z,  0,  0,  1, 0, 1, 0),
+        makeV(-half.x, -half.y,  half.z,  0,  0,  1, 0, 0, 0), makeV( half.x, -half.y,  half.z,  0,  0,  1, 1, 0, 0),
+        // Back (-Z)
+        makeV(-half.x,  half.y, -half.z,  0,  0, -1, 1, 1, 0), makeV( half.x,  half.y, -half.z,  0,  0, -1, 0, 1, 0),
+        makeV( half.x, -half.y, -half.z,  0,  0, -1, 0, 0, 0), makeV(-half.x, -half.y, -half.z,  0,  0, -1, 1, 0, 0),
+        // Top (+Y)
+        makeV( half.x,  half.y, -half.z,  0,  1,  0, 1, 1, 0), makeV(-half.x,  half.y, -half.z,  0,  1,  0, 0, 1, 0),
+        makeV(-half.x,  half.y,  half.z,  0,  1,  0, 0, 0, 0), makeV( half.x,  half.y,  half.z,  0,  1,  0, 1, 0, 0),
+        // Bottom (-Y)
+        makeV( half.x, -half.y,  half.z,  0, -1,  0, 1, 1, 0), makeV(-half.x, -half.y,  half.z,  0, -1,  0, 0, 1, 0),
+        makeV(-half.x, -half.y, -half.z,  0, -1,  0, 0, 0, 0), makeV( half.x, -half.y, -half.z,  0, -1,  0, 1, 0, 0),
+        // Right (+X)
+        makeV( half.x,  half.y, -half.z,  1,  0,  0, 1, 1, 0), makeV( half.x,  half.y,  half.z,  1,  0,  0, 0, 1, 0),
+        makeV( half.x, -half.y,  half.z,  1,  0,  0, 0, 0, 0), makeV( half.x, -half.y, -half.z,  1,  0,  0, 1, 0, 0),
+        // Left (-X)
+        makeV(-half.x,  half.y,  half.z, -1,  0,  0, 1, 1, 0), makeV(-half.x,  half.y, -half.z, -1,  0,  0, 0, 1, 0),
+        makeV(-half.x, -half.y, -half.z, -1,  0,  0, 0, 0, 0), makeV(-half.x, -half.y,  half.z, -1,  0,  0, 1, 0, 0)
+    };
+
+    mesh.indices.reserve(36);
+    for (uint32_t face = 0; face < 6; ++face) {
+        const uint32_t base = face * 4;
+        mesh.indices.insert(mesh.indices.end(), {
+            base, base + 1, base + 2, base + 2, base + 3, base
+        });
     }
     return mesh;
 }

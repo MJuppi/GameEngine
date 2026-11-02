@@ -57,6 +57,23 @@ Quick check without opening the window:
 
 The loader triangulates face lines (`f`) with a fan, reads **`mtllib` / `usemtl`**, and loads companion **`.mtl`** files (`Kd`, `Ks`, `Ns`, …). Shading uses a simple **Blinn-Phong** model per material. Models are **centered** (not squashed), oriented from Blender **Y-up** to **Z-up**, and the camera is fitted to the mesh bounding sphere. A **depth buffer** sorts front/back faces correctly. OBJ texture maps (`map_Kd`) are not loaded yet; the glTF loader reads base color factors but does not sample external image textures yet.
 
+## Procedural boxes
+
+Levels can add boxes without a model file. Box dimensions are full width, height, and depth; geometry and physics collider half-extents are derived from those dimensions. Boxes can be visual, static, or active, and accept a material:
+
+```cpp
+ge::Level level("Room");
+ge::Material material;
+material.diffuse = {0.2f, 0.6f, 0.9f};
+
+level.addBox("wall", {8.0f, 3.0f, 0.3f}, {0.0f, 1.5f, -4.0f},
+             ge::ObjectType::Static, {}, material);
+level.addBox("crate", {1.0f, 1.0f, 1.0f}, {0.0f, 4.0f, 0.0f},
+             ge::ObjectType::Active);
+```
+
+For lower-level use, `ge::makeBoxMesh(size, material)` creates a centered mesh, and `ge::ObjectBuilder::createBox(...)` creates a level object with matching collider extents.
+
 ## Project layout
 
 ```

@@ -9,6 +9,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <iomanip>
 #include <sstream>
+#include <utility>
 #include <vector>
 #include <memory>
 
@@ -24,6 +25,22 @@ RigidBody* findBodyByName(Engine& engine, const std::string& name) {
         }
     }
     return nullptr;
+}
+
+void addBoxFromHalfExtents(Level& level,
+                           std::string name,
+                           const glm::vec3& location,
+                           const glm::vec3& halfExtents,
+                           ObjectType type,
+                           const RigidBodyProps& props = {},
+                           Material material = {}) {
+    level.addBox(std::move(name), halfExtents * 2.0f, location, type, props, std::move(material));
+}
+
+RigidBodyProps boxPropsWithMass(float mass = 1.0f) {
+    RigidBodyProps props;
+    props.mass = mass;
+    return props;
 }
 
 } // namespace
@@ -46,18 +63,24 @@ void SceneFactory::configureCombatMission(Level& level) {
     aircraft.linearDamping = 0.02f;
     aircraft.angularDamping = 0.9f;
 
-    level.add("").name("Terrain").at(0.0f, -1.0f, 0.0f).extents({150.0f, 1.0f, 150.0f}).asStatic();
-    level.add("test_cube").name("PlayerJet").at(0.0f, 30.0f, 20.0f).extents({1.8f, 0.45f, 3.2f}).asActive(aircraft);
-    level.add("test_cube").name("EnemyJet0").at(-34.0f, 34.0f, -75.0f).extents({1.6f, 0.4f, 2.8f}).asActive(aircraft);
-    level.add("test_cube").name("EnemyJet1").at(38.0f, 42.0f, -120.0f).extents({1.6f, 0.4f, 2.8f}).asActive(aircraft);
-    level.add("test_cube").name("EnemyJet2").at(-62.0f, 27.0f, -155.0f).extents({1.6f, 0.4f, 2.8f}).asActive(aircraft);
-    level.add("test_cube").name("EnemyJet3").at(74.0f, 50.0f, -190.0f).extents({1.6f, 0.4f, 2.8f}).asActive(aircraft);
+    addBoxFromHalfExtents(level, "Terrain", {0.0f, -1.0f, 0.0f},
+                          {150.0f, 1.0f, 150.0f}, ObjectType::Static);
+    addBoxFromHalfExtents(level, "PlayerJet", {0.0f, 30.0f, 20.0f},
+                          {1.8f, 0.45f, 3.2f}, ObjectType::Active, aircraft);
+    addBoxFromHalfExtents(level, "EnemyJet0", {-34.0f, 34.0f, -75.0f},
+                          {1.6f, 0.4f, 2.8f}, ObjectType::Active, aircraft);
+    addBoxFromHalfExtents(level, "EnemyJet1", {38.0f, 42.0f, -120.0f},
+                          {1.6f, 0.4f, 2.8f}, ObjectType::Active, aircraft);
+    addBoxFromHalfExtents(level, "EnemyJet2", {-62.0f, 27.0f, -155.0f},
+                          {1.6f, 0.4f, 2.8f}, ObjectType::Active, aircraft);
+    addBoxFromHalfExtents(level, "EnemyJet3", {74.0f, 50.0f, -190.0f},
+                          {1.6f, 0.4f, 2.8f}, ObjectType::Active, aircraft);
 
     for (int i = 0; i < 12; ++i) {
         const float x = static_cast<float>((i % 4) * 38 - 57);
         const float z = static_cast<float>((i / 4) * -55 - 35);
-        level.add("test_cube").name("TerrainMarker" + std::to_string(i)).at(x, 0.0f, z)
-            .extents({1.5f, 4.0f, 1.5f}).asStatic();
+        addBoxFromHalfExtents(level, "TerrainMarker" + std::to_string(i), {x, 0.0f, z},
+                              {1.5f, 4.0f, 1.5f}, ObjectType::Static);
     }
 }
 
@@ -76,13 +99,13 @@ void SceneFactory::configurePhysicsShowcaseLevel(Level& level) {
     lights.pointLights[1].color = {1.0f, 0.35f, 0.16f, 1.0f};
     lights.pointLights[1].parameters = {1.0f, 0.03f, 0.01f, 2.0f};
 
-    level.add("test_cube").name("ShowcaseGround").at(0.0f, -1.0f, 0.0f)
-        .extents({30.0f, 1.0f, 25.0f}).asStatic();
+    addBoxFromHalfExtents(level, "ShowcaseGround", {0.0f, -1.0f, 0.0f},
+                          {30.0f, 1.0f, 25.0f}, ObjectType::Static);
 
     for (int i = 0; i < 5; ++i) {
-        level.add("test_cube").name("Stack_" + std::to_string(i))
-            .at(-12.0f, 0.8f + static_cast<float>(i) * 1.62f, 0.0f)
-            .extents({0.8f, 0.8f, 0.8f}).mass(1.0f).asActive();
+        addBoxFromHalfExtents(level, "Stack_" + std::to_string(i),
+            {-12.0f, 0.8f + static_cast<float>(i) * 1.62f, 0.0f},
+            {0.8f, 0.8f, 0.8f}, ObjectType::Active);
     }
 
     RigidBodyProps lowFriction = makeDynamicBoxProps(1.0f, 0.03f, 0.0f);
@@ -95,10 +118,10 @@ void SceneFactory::configurePhysicsShowcaseLevel(Level& level) {
     highFriction.linearDamping = 0.0f;
     Material highFrictionMaterial = makeDefaultMaterial("ShowcaseHighFriction");
     highFrictionMaterial.diffuse = {1.0f, 0.2f, 0.15f};
-    level.add("test_cube").name("LowFrictionSlider").at(-13.0f, 0.55f, -10.0f)
-        .extents({0.55f, 0.55f, 0.55f}).material(lowFrictionMaterial).asActive(lowFriction);
-    level.add("test_cube").name("HighFrictionSlider").at(-13.0f, 0.55f, -6.0f)
-        .extents({0.55f, 0.55f, 0.55f}).material(highFrictionMaterial).asActive(highFriction);
+    addBoxFromHalfExtents(level, "LowFrictionSlider", {-13.0f, 0.55f, -10.0f},
+                          {0.55f, 0.55f, 0.55f}, ObjectType::Active, lowFriction, lowFrictionMaterial);
+    addBoxFromHalfExtents(level, "HighFrictionSlider", {-13.0f, 0.55f, -6.0f},
+                          {0.55f, 0.55f, 0.55f}, ObjectType::Active, highFriction, highFrictionMaterial);
 
     RigidBodyProps lowBounce = makeDynamicBoxProps(1.0f, 0.4f, 0.05f);
     lowBounce.linearDamping = 0.0f;
@@ -108,10 +131,10 @@ void SceneFactory::configurePhysicsShowcaseLevel(Level& level) {
     highBounce.linearDamping = 0.0f;
     Material highBounceMaterial = makeDefaultMaterial("ShowcaseHighBounce");
     highBounceMaterial.diffuse = {0.2f, 0.9f, 0.35f};
-    level.add("test_cube").name("LowBounceBlock").at(6.0f, 9.0f, -5.0f)
-        .extents({0.7f, 0.7f, 0.7f}).material(lowBounceMaterial).asActive(lowBounce);
-    level.add("test_cube").name("HighBounceBlock").at(11.0f, 9.0f, -5.0f)
-        .extents({0.7f, 0.7f, 0.7f}).material(highBounceMaterial).asActive(highBounce);
+    addBoxFromHalfExtents(level, "LowBounceBlock", {6.0f, 9.0f, -5.0f},
+                          {0.7f, 0.7f, 0.7f}, ObjectType::Active, lowBounce, lowBounceMaterial);
+    addBoxFromHalfExtents(level, "HighBounceBlock", {11.0f, 9.0f, -5.0f},
+                          {0.7f, 0.7f, 0.7f}, ObjectType::Active, highBounce, highBounceMaterial);
 
     RigidBodyProps triggerProps;
     triggerProps.mass = 0.1f;
@@ -121,8 +144,8 @@ void SceneFactory::configurePhysicsShowcaseLevel(Level& level) {
     triggerProps.staticFriction = 0.0f;
     Material triggerMaterial = makeDefaultMaterial("ShowcaseTrigger");
     triggerMaterial.diffuse = {0.1f, 0.85f, 0.95f};
-    level.add("test_cube").name("SensorGate").at(-3.0f, 0.6f, -10.0f)
-        .extents({0.15f, 0.6f, 1.2f}).material(triggerMaterial).asActive(triggerProps);
+    addBoxFromHalfExtents(level, "SensorGate", {-3.0f, 0.6f, -10.0f},
+                          {0.15f, 0.6f, 1.2f}, ObjectType::Active, triggerProps, triggerMaterial);
 
     RigidBodyProps kinematicProps;
     kinematicProps.mass = 1.0f;
@@ -131,22 +154,23 @@ void SceneFactory::configurePhysicsShowcaseLevel(Level& level) {
     kinematicProps.linearDamping = 0.0f;
     Material platformMaterial = makeDefaultMaterial("ShowcaseKinematic");
     platformMaterial.diffuse = {0.55f, 0.3f, 0.95f};
-    level.add("test_cube").name("KinematicPlatform").at(0.0f, 0.0f, 6.0f)
-        .extents({2.5f, 0.25f, 1.5f}).material(platformMaterial).asActive(kinematicProps);
-    level.add("test_cube").name("PlatformRider").at(0.0f, 1.0f, 6.0f)
-        .extents({0.6f, 0.6f, 0.6f}).mass(1.0f).asActive();
+    addBoxFromHalfExtents(level, "KinematicPlatform", {0.0f, 0.0f, 6.0f},
+                          {2.5f, 0.25f, 1.5f}, ObjectType::Active, kinematicProps, platformMaterial);
+    addBoxFromHalfExtents(level, "PlatformRider", {0.0f, 1.0f, 6.0f},
+                          {0.6f, 0.6f, 0.6f}, ObjectType::Active);
 
-    level.add("test_cube").name("HingePost").at(-10.0f, 2.5f, 7.0f)
-        .extents({0.25f, 2.5f, 0.25f}).asStatic();
+    addBoxFromHalfExtents(level, "HingePost", {-10.0f, 2.5f, 7.0f},
+                          {0.25f, 2.5f, 0.25f}, ObjectType::Static);
     Material hingeDoorMaterial = makeDefaultMaterial("ShowcaseHingeDoor");
     hingeDoorMaterial.diffuse = {0.95f, 0.75f, 0.2f};
-    level.add("test_cube").name("HingeDoor").at(-8.0f, 2.5f, 7.0f)
-        .extents({1.75f, 2.0f, 0.25f}).material(hingeDoorMaterial).mass(2.0f).asActive();
+    RigidBodyProps hingeDoorProps = makeDynamicBoxProps(2.0f);
+    addBoxFromHalfExtents(level, "HingeDoor", {-8.0f, 2.5f, 7.0f},
+                          {1.75f, 2.0f, 0.25f}, ObjectType::Active, hingeDoorProps, hingeDoorMaterial);
 
-    level.add("test_cube").name("DistanceAnchor").at(13.0f, 10.0f, 5.0f)
-        .extents({0.35f, 0.35f, 0.35f}).asStatic();
-    level.add("test_cube").name("DistanceWeight").at(13.0f, 6.0f, 5.0f)
-        .extents({0.55f, 0.55f, 0.55f}).mass(1.5f).asActive();
+    addBoxFromHalfExtents(level, "DistanceAnchor", {13.0f, 10.0f, 5.0f},
+                          {0.35f, 0.35f, 0.35f}, ObjectType::Static);
+    addBoxFromHalfExtents(level, "DistanceWeight", {13.0f, 6.0f, 5.0f},
+                          {0.55f, 0.55f, 0.55f}, ObjectType::Active, boxPropsWithMass(1.5f));
 }
 
 void SceneFactory::configureTestLevel(Level& level) {
@@ -177,16 +201,17 @@ void SceneFactory::configureTestLevel(Level& level) {
 
     // Stacking test for stability
     for (int i = 0; i < 5; ++i) {
-        level.add("test_cube").name("Stack_" + std::to_string(i))
-             .at(0.0f, 2.0f + i * 2.1f, 0.0f).extents({1.0f, 1.0f, 1.0f}).mass(1.0f).asActive();
+        addBoxFromHalfExtents(level, "Stack_" + std::to_string(i),
+            {0.0f, 2.0f + i * 2.1f, 0.0f}, {1.0f, 1.0f, 1.0f},
+            ObjectType::Active);
     }
 
     // Trigger test: A ghost cube that doesn't block
     RigidBodyProps triggerProps;
     triggerProps.isTrigger = true;
     triggerProps.isKinematic = true;
-    level.add("test_cube").name("GhostCube").at(5.0f, 2.0f, 0.0f)
-         .props(triggerProps).asActive();
+    addBoxFromHalfExtents(level, "GhostCube", {5.0f, 2.0f, 0.0f},
+                          {0.5f, 0.5f, 0.5f}, ObjectType::Active, triggerProps);
 
     // Example of using the new material refactor
     Material redMat = makeDefaultMaterial("RedMaterial");
@@ -195,7 +220,8 @@ void SceneFactory::configureTestLevel(Level& level) {
     level.add("suomi").name("Suomi").at(2.0f, 6.0f, 0.0f).extents({5.0f, 5.0f, 5.0f}).asVisual();
 
     // Add static ground
-    level.add("").name("Ground").at(0.0f, -4.0f, 0.0f).extents({50.0f, 2.0f, 50.0f}).asStatic();
+    addBoxFromHalfExtents(level, "Ground", {0.0f, -4.0f, 0.0f},
+                          {50.0f, 2.0f, 50.0f}, ObjectType::Static);
 }
 
 void SceneFactory::configureConstraintParityLevel(Level& level) {
@@ -216,15 +242,18 @@ void SceneFactory::configureConstraintParityLevel(Level& level) {
     lights.pointLights[1].color = {0.25f, 0.45f, 1.0f, 1.0f};
     lights.pointLights[1].parameters = {1.0f, 0.09f, 0.032f, 1.5f};
 
-    level.add("test_cube").name("Ground").at(0.0f, -4.0f, 0.0f).extents({50.0f, 2.0f, 50.0f}).asStatic();
-
-    level.add("test_cube").name("HingeAnchor").at(-4.0f, 1.0f, 0.0f).extents({0.5f, 2.0f, 0.5f}).asStatic();
-    level.add("test_cube").name("HingeDoor").at(-2.0f, 1.0f, 0.0f).extents({1.0f, 2.0f, 0.25f}).mass(2.0f).asActive();
-
-    level.add("test_cube").name("ConeRoot").at(4.0f, 3.0f, 0.0f).extents({0.75f, 0.75f, 0.75f}).mass(2.0f).asActive();
-    level.add("test_cube").name("ConeTip").at(4.0f, 1.0f, 0.0f).extents({0.75f, 0.75f, 0.75f}).mass(1.5f).asActive();
-
-    level.add("test_cube").name("BalanceBlock").at(0.0f, 6.0f, 0.0f).extents({0.75f, 0.75f, 0.75f}).mass(1.0f).asActive();
+    addBoxFromHalfExtents(level, "Ground", {0.0f, -4.0f, 0.0f},
+                          {50.0f, 2.0f, 50.0f}, ObjectType::Static);
+    addBoxFromHalfExtents(level, "HingeAnchor", {-4.0f, 1.0f, 0.0f},
+                          {0.5f, 2.0f, 0.5f}, ObjectType::Static);
+    addBoxFromHalfExtents(level, "HingeDoor", {-2.0f, 1.0f, 0.0f},
+                          {1.0f, 2.0f, 0.25f}, ObjectType::Active, boxPropsWithMass(2.0f));
+    addBoxFromHalfExtents(level, "ConeRoot", {4.0f, 3.0f, 0.0f},
+                          {0.75f, 0.75f, 0.75f}, ObjectType::Active, boxPropsWithMass(2.0f));
+    addBoxFromHalfExtents(level, "ConeTip", {4.0f, 1.0f, 0.0f},
+                          {0.75f, 0.75f, 0.75f}, ObjectType::Active, boxPropsWithMass(1.5f));
+    addBoxFromHalfExtents(level, "BalanceBlock", {0.0f, 6.0f, 0.0f},
+                          {0.75f, 0.75f, 0.75f}, ObjectType::Active);
 }
 
 void SceneFactory::configurePairOrderingLevel(Level& level) {
@@ -240,10 +269,14 @@ void SceneFactory::configurePairOrderingLevel(Level& level) {
     lights.pointLights[0].color = {0.4f, 0.7f, 1.0f, 1.0f};
     lights.pointLights[0].parameters = {1.0f, 0.09f, 0.032f, 2.0f};
 
-    level.add("test_cube").name("PairAnchorA").at(-4.0f, 0.0f, 0.0f).extents({1.0f, 1.0f, 1.0f}).asStatic();
-    level.add("test_cube").name("PairBlockA").at(-4.0f, 0.0f, 0.0f).extents({1.0f, 1.0f, 1.0f}).mass(1.0f).asActive();
-    level.add("test_cube").name("PairAnchorB").at(4.0f, 0.0f, 0.0f).extents({1.0f, 1.0f, 1.0f}).asStatic();
-    level.add("test_cube").name("PairBlockB").at(4.0f, 0.0f, 0.0f).extents({1.0f, 1.0f, 1.0f}).mass(1.0f).asActive();
+    addBoxFromHalfExtents(level, "PairAnchorA", {-4.0f, 0.0f, 0.0f},
+                          {1.0f, 1.0f, 1.0f}, ObjectType::Static);
+    addBoxFromHalfExtents(level, "PairBlockA", {-4.0f, 0.0f, 0.0f},
+                          {1.0f, 1.0f, 1.0f}, ObjectType::Active);
+    addBoxFromHalfExtents(level, "PairAnchorB", {4.0f, 0.0f, 0.0f},
+                          {1.0f, 1.0f, 1.0f}, ObjectType::Static);
+    addBoxFromHalfExtents(level, "PairBlockB", {4.0f, 0.0f, 0.0f},
+                          {1.0f, 1.0f, 1.0f}, ObjectType::Active);
 }
 
 void SceneFactory::setupConstraintParityPhysics(Engine& engine) {

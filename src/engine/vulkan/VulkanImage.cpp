@@ -1,6 +1,7 @@
 #include "engine/vulkan/VulkanImage.h"
 #include "engine/vulkan/VulkanDevice.h"
 #include "engine/vulkan/VulkanBuffer.h"
+#include "engine/vulkan/RenderSupport.h"
 #include <stdexcept>
 
 namespace ge {
@@ -138,11 +139,15 @@ void VulkanImage::createSampler(VulkanDevice& device, bool nearestClamp) {
 }
 
 VulkanImage VulkanImage::fromTextureData(VulkanDevice& device, VkCommandPool pool, VkQueue queue, const TextureData& data, bool nearestClamp) {
-    VulkanBuffer staging; staging.create(device, data.pixels.size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    VulkanBuffer::write(device, staging.handle(), staging.memory(), data.pixels.data(), data.pixels.size());
+    const size_t byteCount = render::textureByteCount(data);
+    VulkanBuffer staging;
+    staging.create(device, byteCount, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    VulkanBuffer::write(device, staging.handle(), staging.memory(), data.pixels.data(), byteCount);
 
-    VkFormat format = (data.channels == 4) ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8_UNORM;
-
+    const VkFormat format = device.findSupportedFormat(
+        {render::textureFormat(data)}, VK_IMAGE_TILING_OPTIMAL,
+        VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT);
     VulkanImage img; img.create(device, data.width, data.height, format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     img.transitionLayout(device, pool, queue, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     img.copyFromBuffer(device, pool, queue, staging.handle(), data.width, data.height);
